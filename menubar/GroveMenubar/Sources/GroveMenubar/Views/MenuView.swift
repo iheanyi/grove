@@ -566,15 +566,10 @@ struct ServerRowView: View {
                 }
 
                 if let port = server.port, port > 0 {
-                    HStack(spacing: 4) {
-                        Text(":")
-                            .foregroundColor(.secondary)
-                            .font(.system(size: 10))
-                        Text("\(port)")
-                            .font(.system(.callout, design: .monospaced))
-                            .foregroundColor(.grovePrimary)
-                            .fontWeight(.medium)
-                    }
+                    Text(":\(String(port))")
+                        .font(.system(.callout, design: .monospaced))
+                        .foregroundColor(.grovePrimary)
+                        .fontWeight(.medium)
                 }
             }
 
