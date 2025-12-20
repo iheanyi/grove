@@ -24,12 +24,9 @@ class ServerManager: ObservableObject {
     var isSubdomainMode: Bool { urlMode == "subdomain" }
 
     init() {
-        // Find grove binary
-        if let path = Self.findGroveBinary() {
-            self.grovePath = path
-        } else {
-            self.grovePath = "/usr/local/bin/grove"
-        }
+        // Find grove binary synchronously from known paths (fast, no process spawn)
+        // We avoid running `which` here to prevent blocking the main thread
+        self.grovePath = Self.findGroveBinaryFast() ?? "/usr/local/bin/grove"
 
         refresh()
         startAutoRefresh()
@@ -82,12 +79,13 @@ class ServerManager: ObservableObject {
         error = nil
 
         runGrove(["ls", "--json"]) { [weak self] result in
-            DispatchQueue.main.async {
-                self?.isLoading = false
-                switch result {
-                case .success(let output):
-                    self?.parseStatus(output)
-                case .failure(let err):
+            switch result {
+            case .success(let output):
+                // Parse and filter on background thread to avoid blocking main thread
+                self?.parseStatusAsync(output)
+            case .failure(let err):
+                DispatchQueue.main.async {
+                    self?.isLoading = false
                     self?.error = err.localizedDescription
                 }
             }
@@ -237,64 +235,70 @@ class ServerManager: ObservableObject {
         // Open configured terminal with grove TUI command
         // Get the directory of the grove binary and run it
         let groveDir = (grovePath as NSString).deletingLastPathComponent
+        let grovePath = self.grovePath
+        let terminal = preferences.defaultTerminal
 
-        switch preferences.defaultTerminal {
-        case "com.apple.Terminal":
-            let script = """
-            tell application "Terminal"
-                activate
-                do script "cd '\(groveDir)' && \(grovePath)"
-            end tell
-            """
-            if let appleScript = NSAppleScript(source: script) {
-                var error: NSDictionary?
-                appleScript.executeAndReturnError(&error)
-            }
-        case "com.googlecode.iterm2":
-            let script = """
-            tell application "iTerm"
-                activate
-                try
-                    set newWindow to (create window with default profile)
-                    tell current session of newWindow
-                        write text "cd '\(groveDir)' && \(grovePath)"
-                    end tell
-                on error
-                    tell current window
-                        create tab with default profile
-                        tell current session
+        // Run on background thread to prevent blocking main thread
+        DispatchQueue.global(qos: .userInitiated).async {
+            switch terminal {
+            case "com.apple.Terminal":
+                let script = """
+                tell application "Terminal"
+                    activate
+                    do script "cd '\(groveDir)' && \(grovePath)"
+                end tell
+                """
+                Self.runAppleScriptAsync(script)
+            case "com.googlecode.iterm2":
+                let script = """
+                tell application "iTerm"
+                    activate
+                    try
+                        set newWindow to (create window with default profile)
+                        tell current session of newWindow
                             write text "cd '\(groveDir)' && \(grovePath)"
                         end tell
-                    end tell
-                end try
-            end tell
-            """
-            if let appleScript = NSAppleScript(source: script) {
-                var error: NSDictionary?
-                appleScript.executeAndReturnError(&error)
+                    on error
+                        tell current window
+                            create tab with default profile
+                            tell current session
+                                write text "cd '\(groveDir)' && \(grovePath)"
+                            end tell
+                        end tell
+                    end try
+                end tell
+                """
+                Self.runAppleScriptAsync(script)
+            case "com.mitchellh.ghostty":
+                let task = Process()
+                task.executableURL = URL(fileURLWithPath: "/usr/bin/open")
+                task.arguments = ["-a", "Ghostty", "--args", "-e", grovePath]
+                try? task.run()
+            case "dev.warp.Warp-Stable":
+                let task = Process()
+                task.executableURL = URL(fileURLWithPath: "/usr/bin/open")
+                task.arguments = ["-a", "Warp", groveDir]
+                try? task.run()
+            default:
+                // Fallback to Terminal.app
+                let script = """
+                tell application "Terminal"
+                    activate
+                    do script "\(grovePath)"
+                end tell
+                """
+                Self.runAppleScriptAsync(script)
             }
-        case "com.mitchellh.ghostty":
-            let task = Process()
-            task.executableURL = URL(fileURLWithPath: "/usr/bin/open")
-            task.arguments = ["-a", "Ghostty", "--args", "-e", grovePath]
-            try? task.run()
-        case "dev.warp.Warp-Stable":
-            let task = Process()
-            task.executableURL = URL(fileURLWithPath: "/usr/bin/open")
-            task.arguments = ["-a", "Warp", groveDir]
-            try? task.run()
-            // After Warp opens, we can't easily run a command in it
-        default:
-            // Fallback to Terminal.app
-            let script = """
-            tell application "Terminal"
-                activate
-                do script "\(grovePath)"
-            end tell
-            """
-            if let appleScript = NSAppleScript(source: script) {
-                var error: NSDictionary?
-                appleScript.executeAndReturnError(&error)
+        }
+    }
+
+    /// Run AppleScript on background thread - never blocks main thread
+    private static func runAppleScriptAsync(_ script: String) {
+        if let appleScript = NSAppleScript(source: script) {
+            var error: NSDictionary?
+            appleScript.executeAndReturnError(&error)
+            if let error = error {
+                print("AppleScript error: \(error)")
             }
         }
     }
@@ -365,22 +369,25 @@ class ServerManager: ObservableObject {
         guard let server = selectedServerForLogs,
               let logFile = server.logFile else { return }
 
-        // Check if the server's path still exists (worktree might have been deleted)
-        guard FileManager.default.fileExists(atPath: server.path) else {
-            DispatchQueue.main.async { [weak self] in
-                self?.logLines.append("[Server path no longer exists - worktree may have been deleted]")
-                self?.stopStreamingLogs()
-            }
-            return
-        }
+        let serverPath = server.path
 
-        // Check if log file still exists
-        guard FileManager.default.fileExists(atPath: logFile) else {
-            return // Log file doesn't exist yet, keep waiting
-        }
-
+        // Do ALL file operations on background thread
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             guard let self = self else { return }
+
+            // Check if the server's path still exists (worktree might have been deleted)
+            guard FileManager.default.fileExists(atPath: serverPath) else {
+                DispatchQueue.main.async {
+                    self.logLines.append("[Server path no longer exists - worktree may have been deleted]")
+                    self.stopStreamingLogs()
+                }
+                return
+            }
+
+            // Check if log file still exists
+            guard FileManager.default.fileExists(atPath: logFile) else {
+                return // Log file doesn't exist yet, keep waiting
+            }
 
             do {
                 let attributes = try FileManager.default.attributesOfItem(atPath: logFile)
@@ -436,13 +443,20 @@ class ServerManager: ObservableObject {
         startAutoRefresh()
     }
 
-    private func parseStatus(_ output: String) {
-        guard let data = output.data(using: .utf8) else { return }
+    /// Parse status on background thread, then update UI on main thread
+    private func parseStatusAsync(_ output: String) {
+        // Already on background thread from runGrove
+        guard let data = output.data(using: .utf8) else {
+            DispatchQueue.main.async { [weak self] in
+                self?.isLoading = false
+            }
+            return
+        }
 
         do {
             let status = try JSONDecoder().decode(WTStatus.self, from: data)
 
-            // Filter out worktrees whose paths no longer exist (deleted worktrees)
+            // Filter out worktrees whose paths no longer exist (done on background thread)
             let validServers = status.servers.filter { server in
                 let exists = FileManager.default.fileExists(atPath: server.path)
                 if !exists {
@@ -452,21 +466,33 @@ class ServerManager: ObservableObject {
             }
 
             let newServers = validServers.sorted { $0.name < $1.name }
+            let proxy = status.proxy
+            let urlMode = status.urlMode
 
-            // Check for status changes and send notifications
-            checkForStatusChanges(newServers: newServers)
+            // Update UI on main thread
+            DispatchQueue.main.async { [weak self] in
+                guard let self = self else { return }
 
-            // Clean up previousServerStates for removed servers
-            cleanupRemovedServers(currentServers: newServers)
+                self.isLoading = false
 
-            self.servers = newServers
-            self.proxy = status.proxy
-            self.urlMode = status.urlMode
+                // Check for status changes and send notifications
+                self.checkForStatusChanges(newServers: newServers)
 
-            // Fetch GitHub info for all servers in background
-            fetchGitHubInfoForServers()
+                // Clean up previousServerStates for removed servers
+                self.cleanupRemovedServers(currentServers: newServers)
+
+                self.servers = newServers
+                self.proxy = proxy
+                self.urlMode = urlMode
+
+                // Fetch GitHub info for all servers in background
+                self.fetchGitHubInfoForServers()
+            }
         } catch {
-            self.error = "Failed to parse status: \(error.localizedDescription)"
+            DispatchQueue.main.async { [weak self] in
+                self?.isLoading = false
+                self?.error = "Failed to parse status: \(error.localizedDescription)"
+            }
         }
     }
 
@@ -535,68 +561,102 @@ class ServerManager: ObservableObject {
         }
     }
 
-    private func runGrove(_ args: [String], completion: @escaping (Result<String, Error>) -> Void) {
+    /// Default timeout for grove commands (10 seconds should be plenty for ls --json)
+    private static let commandTimeout: TimeInterval = 10.0
+
+    private func runGrove(_ args: [String], timeout: TimeInterval = commandTimeout, completion: @escaping (Result<String, Error>) -> Void) {
+        let grovePath = self.grovePath
+
         DispatchQueue.global(qos: .userInitiated).async {
-            let task = Process()
-            task.executableURL = URL(fileURLWithPath: self.grovePath)
-            task.arguments = args
-
-            let pipe = Pipe()
-            task.standardOutput = pipe
-            task.standardError = pipe
-
-            do {
-                try task.run()
-                task.waitUntilExit()
-
-                let data = pipe.fileHandleForReading.readDataToEndOfFile()
-                let output = String(data: data, encoding: .utf8) ?? ""
-
-                if task.terminationStatus == 0 {
-                    completion(.success(output))
-                } else {
-                    completion(.failure(NSError(domain: "GroveMenubar", code: Int(task.terminationStatus),
-                        userInfo: [NSLocalizedDescriptionKey: output])))
-                }
-            } catch {
-                completion(.failure(error))
-            }
+            Self.runProcessWithTimeout(
+                executablePath: grovePath,
+                args: args,
+                workingDirectory: nil,
+                timeout: timeout,
+                completion: completion
+            )
         }
     }
 
     /// Run grove command from a specific working directory (needed for `grove start` which requires being in the worktree)
+    /// Uses a longer timeout since start can take time
     private func runGroveInDirectory(_ directory: String, args: [String], completion: @escaping (Result<String, Error>) -> Void) {
+        let grovePath = self.grovePath
+
         DispatchQueue.global(qos: .userInitiated).async {
-            let task = Process()
-            task.executableURL = URL(fileURLWithPath: self.grovePath)
-            task.arguments = args
-            task.currentDirectoryURL = URL(fileURLWithPath: directory)
-
-            let pipe = Pipe()
-            task.standardOutput = pipe
-            task.standardError = pipe
-
-            do {
-                try task.run()
-                task.waitUntilExit()
-
-                let data = pipe.fileHandleForReading.readDataToEndOfFile()
-                let output = String(data: data, encoding: .utf8) ?? ""
-
-                if task.terminationStatus == 0 {
-                    completion(.success(output))
-                } else {
-                    completion(.failure(NSError(domain: "GroveMenubar", code: Int(task.terminationStatus),
-                        userInfo: [NSLocalizedDescriptionKey: output])))
-                }
-            } catch {
-                completion(.failure(error))
-            }
+            Self.runProcessWithTimeout(
+                executablePath: grovePath,
+                args: args,
+                workingDirectory: directory,
+                timeout: 30.0, // Longer timeout for start commands
+                completion: completion
+            )
         }
     }
 
-    private static func findGroveBinary() -> String? {
-        // Order matters - check development path first
+    /// Run a process with timeout to prevent indefinite hangs
+    private static func runProcessWithTimeout(
+        executablePath: String,
+        args: [String],
+        workingDirectory: String?,
+        timeout: TimeInterval,
+        completion: @escaping (Result<String, Error>) -> Void
+    ) {
+        let task = Process()
+        task.executableURL = URL(fileURLWithPath: executablePath)
+        task.arguments = args
+
+        if let workingDirectory = workingDirectory {
+            task.currentDirectoryURL = URL(fileURLWithPath: workingDirectory)
+        }
+
+        let pipe = Pipe()
+        task.standardOutput = pipe
+        task.standardError = pipe
+
+        // Set up timeout
+        var timedOut = false
+        let timeoutWorkItem = DispatchWorkItem {
+            timedOut = true
+            if task.isRunning {
+                task.terminate()
+            }
+        }
+
+        do {
+            try task.run()
+
+            // Schedule timeout
+            DispatchQueue.global().asyncAfter(deadline: .now() + timeout, execute: timeoutWorkItem)
+
+            task.waitUntilExit()
+
+            // Cancel timeout if process finished in time
+            timeoutWorkItem.cancel()
+
+            if timedOut {
+                completion(.failure(NSError(domain: "GroveMenubar", code: -1,
+                    userInfo: [NSLocalizedDescriptionKey: "Command timed out after \(Int(timeout)) seconds"])))
+                return
+            }
+
+            let data = pipe.fileHandleForReading.readDataToEndOfFile()
+            let output = String(data: data, encoding: .utf8) ?? ""
+
+            if task.terminationStatus == 0 {
+                completion(.success(output))
+            } else {
+                completion(.failure(NSError(domain: "GroveMenubar", code: Int(task.terminationStatus),
+                    userInfo: [NSLocalizedDescriptionKey: output.isEmpty ? "Command failed with exit code \(task.terminationStatus)" : output])))
+            }
+        } catch {
+            timeoutWorkItem.cancel()
+            completion(.failure(error))
+        }
+    }
+
+    /// Fast path lookup that doesn't spawn any processes - safe for main thread
+    private static func findGroveBinaryFast() -> String? {
         let paths = [
             "\(NSHomeDirectory())/development/claude-helper/cli/grove",
             "\(NSHomeDirectory())/development/go/bin/grove",
@@ -611,26 +671,6 @@ class ServerManager: ObservableObject {
                 return path
             }
         }
-
-        // Try which command
-        let task = Process()
-        task.executableURL = URL(fileURLWithPath: "/usr/bin/which")
-        task.arguments = ["grove"]
-
-        let pipe = Pipe()
-        task.standardOutput = pipe
-
-        do {
-            try task.run()
-            task.waitUntilExit()
-
-            let data = pipe.fileHandleForReading.readDataToEndOfFile()
-            let output = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines)
-
-            if task.terminationStatus == 0, let path = output, !path.isEmpty {
-                return path
-            }
-        } catch {}
 
         return nil
     }

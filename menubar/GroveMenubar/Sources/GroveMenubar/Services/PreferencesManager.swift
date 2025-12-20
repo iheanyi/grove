@@ -172,34 +172,41 @@ class PreferencesManager: ObservableObject {
         return terminals
     }
 
-    // Open a path in the configured terminal
+    // Open a path in the configured terminal - runs on background thread to avoid blocking
     func openInTerminal(path: String) {
-        switch defaultTerminal {
-        case "com.apple.Terminal":
-            openInAppleTerminal(path: path)
-        case "com.googlecode.iterm2":
-            openInITerm(path: path)
-        case "com.mitchellh.ghostty":
-            openInGhostty(path: path)
-        case "dev.warp.Warp-Stable":
-            openInWarp(path: path)
-        default:
-            // For other terminals, try generic approach
-            openInGenericTerminal(path: path, bundleId: defaultTerminal)
+        let terminal = defaultTerminal
+
+        // Run all terminal operations on background thread to prevent main thread blocking
+        DispatchQueue.global(qos: .userInitiated).async {
+            switch terminal {
+            case "com.apple.Terminal":
+                Self.openInAppleTerminalAsync(path: path)
+            case "com.googlecode.iterm2":
+                Self.openInITermAsync(path: path)
+            case "com.mitchellh.ghostty":
+                Self.openInGhostty(path: path)
+            case "dev.warp.Warp-Stable":
+                Self.openInWarp(path: path)
+            default:
+                // For other terminals, try generic approach
+                DispatchQueue.main.async {
+                    Self.openInGenericTerminal(path: path, bundleId: terminal)
+                }
+            }
         }
     }
 
-    private func openInAppleTerminal(path: String) {
+    private static func openInAppleTerminalAsync(path: String) {
         let script = """
         tell application "Terminal"
             activate
             do script "cd '\(path)'"
         end tell
         """
-        runAppleScript(script)
+        runAppleScriptAsync(script)
     }
 
-    private func openInITerm(path: String) {
+    private static func openInITermAsync(path: String) {
         let script = """
         tell application "iTerm"
             activate
@@ -218,10 +225,10 @@ class PreferencesManager: ObservableObject {
             end try
         end tell
         """
-        runAppleScript(script)
+        runAppleScriptAsync(script)
     }
 
-    private func openInGhostty(path: String) {
+    private static func openInGhostty(path: String) {
         // Ghostty supports opening with a working directory via CLI or just activate and cd
         let task = Process()
         task.executableURL = URL(fileURLWithPath: "/usr/bin/open")
@@ -230,14 +237,16 @@ class PreferencesManager: ObservableObject {
         do {
             try task.run()
         } catch {
-            // Fallback: just open Ghostty and hope for the best
-            if let appURL = NSWorkspace.shared.urlForApplication(withBundleIdentifier: "com.mitchellh.ghostty") {
-                NSWorkspace.shared.open(appURL)
+            // Fallback: just open Ghostty
+            DispatchQueue.main.async {
+                if let appURL = NSWorkspace.shared.urlForApplication(withBundleIdentifier: "com.mitchellh.ghostty") {
+                    NSWorkspace.shared.open(appURL)
+                }
             }
         }
     }
 
-    private func openInWarp(path: String) {
+    private static func openInWarp(path: String) {
         // Warp can be opened with a directory
         let task = Process()
         task.executableURL = URL(fileURLWithPath: "/usr/bin/open")
@@ -247,13 +256,15 @@ class PreferencesManager: ObservableObject {
             try task.run()
         } catch {
             // Fallback
-            if let appURL = NSWorkspace.shared.urlForApplication(withBundleIdentifier: "dev.warp.Warp-Stable") {
-                NSWorkspace.shared.open(appURL)
+            DispatchQueue.main.async {
+                if let appURL = NSWorkspace.shared.urlForApplication(withBundleIdentifier: "dev.warp.Warp-Stable") {
+                    NSWorkspace.shared.open(appURL)
+                }
             }
         }
     }
 
-    private func openInGenericTerminal(path: String, bundleId: String) {
+    private static func openInGenericTerminal(path: String, bundleId: String) {
         // Try to open the terminal app at the given path
         if let appURL = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleId) {
             let config = NSWorkspace.OpenConfiguration()
@@ -261,10 +272,14 @@ class PreferencesManager: ObservableObject {
         }
     }
 
-    private func runAppleScript(_ script: String) {
+    /// Run AppleScript on background thread - never blocks main thread
+    private static func runAppleScriptAsync(_ script: String) {
         if let appleScript = NSAppleScript(source: script) {
             var error: NSDictionary?
             appleScript.executeAndReturnError(&error)
+            if let error = error {
+                print("AppleScript error: \(error)")
+            }
         }
     }
 
