@@ -61,6 +61,10 @@ func init() {
 	rootCmd.AddCommand(pruneCmd)
 	rootCmd.AddCommand(cloneCmd)
 	rootCmd.AddCommand(infoCmd)
+
+	// Server attachment commands
+	rootCmd.AddCommand(attachCmd)
+	rootCmd.AddCommand(detachCmd)
 }
 
 func initConfig() {
