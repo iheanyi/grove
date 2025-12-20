@@ -10,7 +10,7 @@ struct WTMenubarApp: App {
                 .environmentObject(serverManager)
         } label: {
             Label {
-                Text("wt")
+                Text("Grove")
             } icon: {
                 // Use ZStack to overlay status indicator on icon
                 ZStack(alignment: .bottomTrailing) {

@@ -47,7 +47,7 @@ struct LogsView: View {
                 if let server = serverManager.selectedServerForLogs {
                     Text(server.name)
                         .font(.headline)
-                        .foregroundColor(.wtPrimary)
+                        .foregroundColor(.grovePrimary)
                 }
 
                 Spacer()

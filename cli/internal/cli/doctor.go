@@ -25,7 +25,7 @@ This command checks:
 }
 
 func runDoctor(cmd *cobra.Command, args []string) error {
-	fmt.Println("wt doctor")
+	fmt.Println("grove doctor")
 	fmt.Println("=========")
 	fmt.Println()
 

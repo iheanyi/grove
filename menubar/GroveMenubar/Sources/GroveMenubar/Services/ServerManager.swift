@@ -15,7 +15,7 @@ class ServerManager: ObservableObject {
     private var refreshTimer: Timer?
     private var logTimer: Timer?
     private var lastLogPosition: UInt64 = 0
-    private let wtPath: String
+    private let grovePath: String
     private var previousServerStates: [String: String] = [:]  // Track previous server statuses
     private let githubService = GitHubService.shared
     private let preferences = PreferencesManager.shared
@@ -24,11 +24,11 @@ class ServerManager: ObservableObject {
     var isSubdomainMode: Bool { urlMode == "subdomain" }
 
     init() {
-        // Find wt binary
-        if let path = Self.findWTBinary() {
-            self.wtPath = path
+        // Find grove binary
+        if let path = Self.findGroveBinary() {
+            self.grovePath = path
         } else {
-            self.wtPath = "/usr/local/bin/wt"
+            self.grovePath = "/usr/local/bin/grove"
         }
 
         refresh()
@@ -81,7 +81,7 @@ class ServerManager: ObservableObject {
         isLoading = true
         error = nil
 
-        runWT(["ls", "--json"]) { [weak self] result in
+        runGrove(["ls", "--json"]) { [weak self] result in
             DispatchQueue.main.async {
                 self?.isLoading = false
                 switch result {
@@ -95,7 +95,7 @@ class ServerManager: ObservableObject {
     }
 
     func stopServer(_ server: Server) {
-        runWT(["stop", server.name]) { [weak self] _ in
+        runGrove(["stop", server.name]) { [weak self] _ in
             DispatchQueue.main.async {
                 self?.refresh()
             }
@@ -107,7 +107,7 @@ class ServerManager: ObservableObject {
         guard !runningServers.isEmpty else { return }
 
         for server in runningServers {
-            runWT(["stop", server.name]) { _ in }
+            runGrove(["stop", server.name]) { _ in }
         }
 
         // Refresh after a short delay to allow all stops to complete
@@ -117,7 +117,7 @@ class ServerManager: ObservableObject {
     }
 
     func startServer(_ server: Server) {
-        runWT(["start", server.name]) { [weak self] _ in
+        runGrove(["start", server.name]) { [weak self] _ in
             DispatchQueue.main.async {
                 self?.refresh()
             }
@@ -131,7 +131,7 @@ class ServerManager: ObservableObject {
         guard !stoppedServers.isEmpty else { return }
 
         for server in stoppedServers {
-            runWT(["start", server.name]) { _ in }
+            runGrove(["start", server.name]) { _ in }
         }
 
         // Refresh after a short delay
@@ -145,7 +145,7 @@ class ServerManager: ObservableObject {
         guard !runningServers.isEmpty else { return }
 
         for server in runningServers {
-            runWT(["stop", server.name]) { _ in }
+            runGrove(["stop", server.name]) { _ in }
         }
 
         // Refresh after a short delay
@@ -219,7 +219,7 @@ class ServerManager: ObservableObject {
     }
 
     func startProxy() {
-        runWT(["proxy", "start"]) { [weak self] _ in
+        runGrove(["proxy", "start"]) { [weak self] _ in
             DispatchQueue.main.async {
                 self?.refresh()
             }
@@ -227,7 +227,7 @@ class ServerManager: ObservableObject {
     }
 
     func stopProxy() {
-        runWT(["proxy", "stop"]) { [weak self] _ in
+        runGrove(["proxy", "stop"]) { [weak self] _ in
             DispatchQueue.main.async {
                 self?.refresh()
             }
@@ -235,11 +235,11 @@ class ServerManager: ObservableObject {
     }
 
     func openTUI() {
-        // Open Terminal with wt command
+        // Open Terminal with grove command
         let script = """
         tell application "Terminal"
             activate
-            do script "\(wtPath)"
+            do script "\(grovePath)"
         end tell
         """
         if let appleScript = NSAppleScript(source: script) {
@@ -448,10 +448,10 @@ class ServerManager: ObservableObject {
         }
     }
 
-    private func runWT(_ args: [String], completion: @escaping (Result<String, Error>) -> Void) {
+    private func runGrove(_ args: [String], completion: @escaping (Result<String, Error>) -> Void) {
         DispatchQueue.global(qos: .userInitiated).async {
             let task = Process()
-            task.executableURL = URL(fileURLWithPath: self.wtPath)
+            task.executableURL = URL(fileURLWithPath: self.grovePath)
             task.arguments = args
 
             let pipe = Pipe()
@@ -468,7 +468,7 @@ class ServerManager: ObservableObject {
                 if task.terminationStatus == 0 {
                     completion(.success(output))
                 } else {
-                    completion(.failure(NSError(domain: "WTMenubar", code: Int(task.terminationStatus),
+                    completion(.failure(NSError(domain: "GroveMenubar", code: Int(task.terminationStatus),
                         userInfo: [NSLocalizedDescriptionKey: output])))
                 }
             } catch {
@@ -477,14 +477,15 @@ class ServerManager: ObservableObject {
         }
     }
 
-    private static func findWTBinary() -> String? {
+    private static func findGroveBinary() -> String? {
         // Order matters - check development path first
         let paths = [
-            "\(NSHomeDirectory())/development/go/bin/wt",
-            "/usr/local/bin/wt",
-            "/opt/homebrew/bin/wt",
-            "\(NSHomeDirectory())/go/bin/wt",
-            "\(NSHomeDirectory())/.local/bin/wt"
+            "\(NSHomeDirectory())/development/claude-helper/cli/grove",
+            "\(NSHomeDirectory())/development/go/bin/grove",
+            "/usr/local/bin/grove",
+            "/opt/homebrew/bin/grove",
+            "\(NSHomeDirectory())/go/bin/grove",
+            "\(NSHomeDirectory())/.local/bin/grove"
         ]
 
         for path in paths {
@@ -496,7 +497,7 @@ class ServerManager: ObservableObject {
         // Try which command
         let task = Process()
         task.executableURL = URL(fileURLWithPath: "/usr/bin/which")
-        task.arguments = ["wt"]
+        task.arguments = ["grove"]
 
         let pipe = Pipe()
         task.standardOutput = pipe

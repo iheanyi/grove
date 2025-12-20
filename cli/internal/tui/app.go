@@ -129,7 +129,7 @@ func New(cfg *config.Config) (*Model, error) {
 	delegate.Styles.SelectedDesc = lipgloss.NewStyle().Foreground(lipgloss.Color("#A78BFA"))
 
 	l := list.New(items, delegate, 0, 0)
-	l.Title = "wt - Worktree Server Manager"
+	l.Title = "grove - Worktree Server Manager"
 	l.SetShowStatusBar(false)
 	l.SetFilteringEnabled(true)
 	l.Styles.Title = titleStyle
@@ -345,7 +345,7 @@ func (m *Model) viewLogs() tea.Cmd {
 	}
 
 	// Use wt logs command which has syntax highlighting
-	wtPath, _ := exec.LookPath("wt")
+	wtPath, _ := exec.LookPath("grove")
 	if wtPath == "" {
 		// Fall back to less if wt not found
 		return tea.ExecProcess(exec.Command("less", "+F", server.LogFile), func(err error) tea.Msg {

@@ -64,9 +64,9 @@ struct MenuView: View {
         VStack(alignment: .leading, spacing: 0) {
             // Header
             HStack {
-                Text("wt")
+                Text("Grove")
                     .font(.headline)
-                    .foregroundColor(.wtPrimary)
+                    .foregroundColor(.grovePrimary)
                 Spacer()
                 if serverManager.isLoading {
                     ProgressView()
@@ -173,7 +173,7 @@ struct MenuView: View {
                         .foregroundColor(.gray)
                     Text("No servers registered")
                         .foregroundColor(.secondary)
-                    Text("Run 'wt start' in terminal")
+                    Text("Run 'grove start' in terminal")
                         .font(.caption)
                         .foregroundColor(.secondary)
                 }
@@ -357,7 +357,7 @@ struct ServerRowView: View {
         for (index, part) in parts.enumerated() {
             result = result + Text(part)
             if index < parts.count - 1 {
-                result = result + Text(searchText).foregroundColor(.wtPrimary).bold()
+                result = result + Text(searchText).foregroundColor(.grovePrimary).bold()
             }
         }
         return result
@@ -436,7 +436,7 @@ struct ServerRowView: View {
                         .font(.system(size: 10))
                     Text("\(server.port)")
                         .font(.system(.callout, design: .monospaced))
-                        .foregroundColor(.wtPrimary)
+                        .foregroundColor(.grovePrimary)
                         .fontWeight(.medium)
                 }
             }

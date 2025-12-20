@@ -10,7 +10,7 @@ struct PreferencesView: View {
             HStack {
                 Text("Preferences")
                     .font(.headline)
-                    .foregroundColor(.wtPrimary)
+                    .foregroundColor(.grovePrimary)
 
                 Spacer()
 

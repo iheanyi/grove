@@ -85,7 +85,7 @@ func runMCPInstall(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		// Check if it's because it already exists
 		if strings.Contains(string(output), "already exists") {
-			fmt.Println("wt MCP server is already installed.")
+			fmt.Println("grove MCP server is already installed.")
 			fmt.Println("\nTo reinstall, first remove it with: claude mcp remove wt")
 			return nil
 		}

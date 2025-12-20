@@ -196,7 +196,7 @@ func runDiscover(cmd *cobra.Command, args []string) error {
 		if start && cmdToUse != "" {
 			// Start the server
 			fmt.Printf("    Starting with: %s\n", cmdToUse)
-			startCmd := exec.Command("wt", "start", cmdToUse)
+			startCmd := exec.Command("grove", "start", cmdToUse)
 			startCmd.Dir = wt.Path
 			if err := startCmd.Run(); err != nil {
 				fmt.Printf("    ✗ Failed to start: %v\n", err)
