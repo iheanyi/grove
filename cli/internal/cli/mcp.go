@@ -11,35 +11,35 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/iheanyi/wt/internal/port"
-	"github.com/iheanyi/wt/internal/registry"
-	"github.com/iheanyi/wt/internal/worktree"
+	"github.com/iheanyi/grove/internal/port"
+	"github.com/iheanyi/grove/internal/registry"
+	"github.com/iheanyi/grove/internal/worktree"
 	"github.com/spf13/cobra"
 )
 
 var mcpCmd = &cobra.Command{
 	Use:   "mcp",
 	Short: "Run as an MCP server for Claude Code integration",
-	Long: `Run wt as an MCP (Model Context Protocol) server.
+	Long: `Run grove as an MCP (Model Context Protocol) server.
 
 This allows Claude Code to manage your dev servers directly. Configure
 Claude Code to use this command as an MCP server:
 
   {
     "mcpServers": {
-      "wt": {
-        "command": "wt",
+      "grove": {
+        "command": "grove",
         "args": ["mcp"]
       }
     }
   }
 
 Available tools:
-  - wt_list: List all registered dev servers
-  - wt_start: Start a dev server for a git worktree
-  - wt_stop: Stop a running dev server
-  - wt_url: Get the URL for a worktree's dev server
-  - wt_status: Get detailed status of a dev server`,
+  - grove_list: List all registered dev servers
+  - grove_start: Start a dev server for a git worktree
+  - grove_stop: Stop a running dev server
+  - grove_url: Get the URL for a worktree's dev server
+  - grove_status: Get detailed status of a dev server`,
 	Run: func(cmd *cobra.Command, args []string) {
 		runMCPServer()
 	},
@@ -47,10 +47,10 @@ Available tools:
 
 var mcpInstallCmd = &cobra.Command{
 	Use:   "install",
-	Short: "Install wt as an MCP server in Claude Code",
-	Long: `Configure Claude Code to use wt as an MCP server.
+	Short: "Install grove as an MCP server in Claude Code",
+	Long: `Configure Claude Code to use grove as an MCP server.
 
-This command adds the wt MCP server configuration to your Claude Code
+This command adds the grove MCP server configuration to your Claude Code
 settings file (~/.claude/settings.json).
 
 After installation, restart Claude Code to load the MCP server.`,
@@ -64,23 +64,23 @@ func init() {
 
 func runMCPInstall(cmd *cobra.Command, args []string) error {
 	// Find wt binary path
-	wtPath, err := exec.LookPath("wt")
+	grovePath, err := exec.LookPath("grove")
 	if err != nil {
 		// Fall back to current executable
-		wtPath, err = os.Executable()
+		grovePath, err = os.Executable()
 		if err != nil {
-			return fmt.Errorf("failed to find wt binary: %w", err)
+			return fmt.Errorf("failed to find grove binary: %w", err)
 		}
 	}
 
 	// Resolve symlinks to get actual path
-	wtPath, err = filepath.EvalSymlinks(wtPath)
+	grovePath, err = filepath.EvalSymlinks(grovePath)
 	if err != nil {
-		return fmt.Errorf("failed to resolve wt path: %w", err)
+		return fmt.Errorf("failed to resolve grove path: %w", err)
 	}
 
 	// Use claude mcp add command to properly register the MCP server
-	claudeCmd := exec.Command("claude", "mcp", "add", "-s", "user", "-t", "stdio", "wt", wtPath, "mcp")
+	claudeCmd := exec.Command("claude", "mcp", "add", "-s", "user", "-t", "stdio", "grove", grovePath, "mcp")
 	output, err := claudeCmd.CombinedOutput()
 	if err != nil {
 		// Check if it's because it already exists
@@ -92,15 +92,15 @@ func runMCPInstall(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to install MCP server: %w\nOutput: %s", err, string(output))
 	}
 
-	fmt.Printf("✓ Installed wt MCP server in Claude Code\n\n")
-	fmt.Printf("  Binary path: %s\n\n", wtPath)
+	fmt.Printf("✓ Installed grove MCP server in Claude Code\n\n")
+	fmt.Printf("  Binary path: %s\n\n", grovePath)
 	fmt.Println("The MCP server is now available. Run 'claude mcp list' to verify.")
 	fmt.Println("\nAvailable tools:")
-	fmt.Println("  - wt_list:   List all registered dev servers")
-	fmt.Println("  - wt_start:  Start a dev server for a git worktree")
-	fmt.Println("  - wt_stop:   Stop a running dev server")
-	fmt.Println("  - wt_url:    Get the URL for a worktree's dev server")
-	fmt.Println("  - wt_status: Get detailed status of a dev server")
+	fmt.Println("  - grove_list:   List all registered dev servers")
+	fmt.Println("  - grove_start:  Start a dev server for a git worktree")
+	fmt.Println("  - grove_stop:   Stop a running dev server")
+	fmt.Println("  - grove_url:    Get the URL for a worktree's dev server")
+	fmt.Println("  - grove_status: Get detailed status of a dev server")
 
 	return nil
 }
@@ -227,7 +227,7 @@ func (s *mcpServer) handleInitialize(req *jsonRPCRequest) {
 	result := initializeResult{
 		ProtocolVersion: "2024-11-05",
 		ServerInfo: serverInfo{
-			Name:    "wt",
+			Name:    "grove",
 			Version: Version,
 		},
 		Capabilities: capabilities{
@@ -240,7 +240,7 @@ func (s *mcpServer) handleInitialize(req *jsonRPCRequest) {
 func (s *mcpServer) handleToolsList(req *jsonRPCRequest) {
 	tools := []tool{
 		{
-			Name:        "wt_list",
+			Name:        "grove_list",
 			Description: "List all registered dev servers and their URLs. Returns server names, URLs, ports, and status.",
 			InputSchema: inputSchema{
 				Type:       "object",
@@ -248,7 +248,7 @@ func (s *mcpServer) handleToolsList(req *jsonRPCRequest) {
 			},
 		},
 		{
-			Name:        "wt_start",
+			Name:        "grove_start",
 			Description: "Start a dev server for a git worktree. The server will be accessible at https://<worktree-name>.localhost with wildcard subdomain support.",
 			InputSchema: inputSchema{
 				Type: "object",
@@ -266,21 +266,21 @@ func (s *mcpServer) handleToolsList(req *jsonRPCRequest) {
 			},
 		},
 		{
-			Name:        "wt_stop",
+			Name:        "grove_stop",
 			Description: "Stop a running dev server by name.",
 			InputSchema: inputSchema{
 				Type: "object",
 				Properties: map[string]property{
 					"name": {
 						Type:        "string",
-						Description: "Name of the server to stop (from wt_list)",
+						Description: "Name of the server to stop (from grove_list)",
 					},
 				},
 				Required: []string{"name"},
 			},
 		},
 		{
-			Name:        "wt_url",
+			Name:        "grove_url",
 			Description: "Get the URL for a worktree's dev server. Useful for browser automation.",
 			InputSchema: inputSchema{
 				Type: "object",
@@ -293,7 +293,7 @@ func (s *mcpServer) handleToolsList(req *jsonRPCRequest) {
 			},
 		},
 		{
-			Name:        "wt_status",
+			Name:        "grove_status",
 			Description: "Get detailed status of a dev server including health, uptime, and logs path.",
 			InputSchema: inputSchema{
 				Type: "object",
@@ -320,15 +320,15 @@ func (s *mcpServer) handleToolsCall(req *jsonRPCRequest) {
 	var result callToolResult
 
 	switch params.Name {
-	case "wt_list":
+	case "grove_list":
 		result = s.toolList()
-	case "wt_start":
+	case "grove_start":
 		result = s.toolStart(params.Arguments)
-	case "wt_stop":
+	case "grove_stop":
 		result = s.toolStop(params.Arguments)
-	case "wt_url":
+	case "grove_url":
 		result = s.toolURL(params.Arguments)
-	case "wt_status":
+	case "grove_status":
 		result = s.toolStatus(params.Arguments)
 	default:
 		result = callToolResult{
@@ -352,7 +352,7 @@ func (s *mcpServer) toolList() callToolResult {
 	servers := reg.List()
 
 	if len(servers) == 0 {
-		return mcpTextResult("No servers registered. Use wt_start to start a server.")
+		return mcpTextResult("No servers registered. Use grove_start to start a server.")
 	}
 
 	var sb strings.Builder
@@ -554,9 +554,9 @@ func (s *mcpServer) toolURL(args map[string]interface{}) callToolResult {
 	if !ok {
 		// Server not registered - show what URL would be
 		if cfg.IsSubdomainMode() {
-			return mcpTextResult(fmt.Sprintf("Server '%s' is not registered, but would be available at:\n\n- URL: https://%s.%s\n- Subdomains: %s\n\nUse wt_start to start the server.", name, name, cfg.TLD, cfg.SubdomainURL(name)))
+			return mcpTextResult(fmt.Sprintf("Server '%s' is not registered, but would be available at:\n\n- URL: https://%s.%s\n- Subdomains: %s\n\nUse grove_start to start the server.", name, name, cfg.TLD, cfg.SubdomainURL(name)))
 		}
-		return mcpTextResult(fmt.Sprintf("Server '%s' is not registered.\n\nUse wt_start to start the server. It will be available at http://localhost:PORT", name))
+		return mcpTextResult(fmt.Sprintf("Server '%s' is not registered.\n\nUse grove_start to start the server. It will be available at http://localhost:PORT", name))
 	}
 
 	status := "stopped"
@@ -595,7 +595,7 @@ func (s *mcpServer) toolStatus(args map[string]interface{}) callToolResult {
 
 	server, ok := reg.Get(name)
 	if !ok {
-		return mcpTextResult(fmt.Sprintf("Server '%s' is not registered. Use wt_start to start a server.", name))
+		return mcpTextResult(fmt.Sprintf("Server '%s' is not registered. Use grove_start to start a server.", name))
 	}
 
 	// Use URL based on configured mode

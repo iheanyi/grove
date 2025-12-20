@@ -3,9 +3,9 @@ package cli
 import (
 	"fmt"
 
-	"github.com/iheanyi/wt/internal/registry"
-	"github.com/iheanyi/wt/internal/worktree"
-	"github.com/iheanyi/wt/pkg/browser"
+	"github.com/iheanyi/grove/internal/registry"
+	"github.com/iheanyi/grove/internal/worktree"
+	"github.com/iheanyi/grove/pkg/browser"
 	"github.com/spf13/cobra"
 )
 

@@ -8,8 +8,8 @@ import (
 	"strings"
 	"text/tabwriter"
 
-	"github.com/iheanyi/wt/internal/github"
-	"github.com/iheanyi/wt/internal/registry"
+	"github.com/iheanyi/grove/internal/github"
+	"github.com/iheanyi/grove/internal/registry"
 	"github.com/spf13/cobra"
 )
 
@@ -20,10 +20,10 @@ var lsCmd = &cobra.Command{
 	Long: `List all registered servers and their status.
 
 Examples:
-  wt ls           # List all servers
-  wt ls --full    # Include CI status and PR links (requires gh CLI)
-  wt ls --json    # Output as JSON (for MCP/tooling)
-  wt ls --running # Only show running servers`,
+  grove ls           # List all servers
+  grove ls --full    # Include CI status and PR links (requires gh CLI)
+  grove ls --json    # Output as JSON (for MCP/tooling)
+  grove ls --running # Only show running servers`,
 	RunE: runLs,
 }
 
@@ -175,7 +175,7 @@ func outputJSONFormat(servers []*registry.Server, proxy *registry.ProxyInfo, ghI
 func outputTableFormat(servers []*registry.Server, proxy *registry.ProxyInfo, showFull bool, ghInfo map[string]*github.BranchInfo) error {
 	if len(servers) == 0 {
 		fmt.Println("No servers registered")
-		fmt.Println("\nUse 'wt start <command>' to start a server")
+		fmt.Println("\nUse 'grove start <command>' to start a server")
 		return nil
 	}
 
@@ -244,7 +244,7 @@ func outputTableFormat(servers []*registry.Server, proxy *registry.ProxyInfo, sh
 			fmt.Printf("Proxy: running on :%d/:%d (PID: %d)\n",
 				proxy.HTTPPort, proxy.HTTPSPort, proxy.PID)
 		} else {
-			fmt.Println("Proxy: not running (use 'wt proxy start' to start)")
+			fmt.Println("Proxy: not running (use 'grove proxy start' to start)")
 		}
 	} else {
 		fmt.Printf("URL mode: port (access servers directly via http://localhost:PORT)\n")

@@ -7,9 +7,9 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/iheanyi/wt/internal/port"
-	"github.com/iheanyi/wt/internal/registry"
-	"github.com/iheanyi/wt/internal/worktree"
+	"github.com/iheanyi/grove/internal/port"
+	"github.com/iheanyi/grove/internal/registry"
+	"github.com/iheanyi/grove/internal/worktree"
 	"github.com/spf13/cobra"
 )
 
@@ -35,7 +35,7 @@ func init() {
 	discoverCmd.Flags().BoolP("recursive", "r", false, "Scan recursively (unlimited depth)")
 	discoverCmd.Flags().Bool("register", false, "Register all discovered worktrees")
 	discoverCmd.Flags().Bool("start", false, "Start all discovered worktrees (implies --register)")
-	discoverCmd.Flags().StringP("command", "c", "", "Command to use when starting (default: from .wt.yaml or prompt)")
+	discoverCmd.Flags().StringP("command", "c", "", "Command to use when starting (default: from .grove.yaml or prompt)")
 	rootCmd.AddCommand(discoverCmd)
 }
 
@@ -44,7 +44,7 @@ type discoveredWorktree struct {
 	Name       string
 	Branch     string
 	IsWorktree bool // true if linked worktree, false if main repo
-	HasConfig  bool // true if .wt.yaml exists
+	HasConfig  bool // true if .grove.yaml exists
 	Registered bool // true if already in registry
 	Running    bool // true if currently running
 	Port       int  // allocated port if registered
@@ -171,7 +171,7 @@ func runDiscover(cmd *cobra.Command, args []string) error {
 		// Determine command
 		cmdToUse := command
 		if cmdToUse == "" && wt.HasConfig {
-			// Try to load from .wt.yaml
+			// Try to load from .grove.yaml
 			// For now, just note it has a config
 			cmdToUse = "" // Will be loaded when starting
 		}
@@ -300,7 +300,7 @@ func analyzeGitRepo(path string, isMainRepo bool, reg *registry.Registry) *disco
 		Name:       name,
 		Branch:     wt.Branch,
 		IsWorktree: wt.IsWorktree,
-		HasConfig:  fileExists(filepath.Join(path, ".wt.yaml")),
+		HasConfig:  fileExists(filepath.Join(path, ".grove.yaml")),
 	}
 
 	// Check if already registered
@@ -344,7 +344,7 @@ func findLinkedWorktrees(mainRepoPath string) []discoveredWorktree {
 					Name:       name,
 					Branch:     currentBranch,
 					IsWorktree: true,
-					HasConfig:  fileExists(filepath.Join(currentPath, ".wt.yaml")),
+					HasConfig:  fileExists(filepath.Join(currentPath, ".grove.yaml")),
 				})
 			}
 			currentPath = ""

@@ -16,7 +16,7 @@ struct MenuView: View {
         VStack(alignment: .leading, spacing: 0) {
             // Header
             HStack {
-                Text("wt")
+                Text("grove")
                     .font(.headline)
                     .foregroundColor(.wtPrimary)
                 Spacer()

@@ -81,8 +81,8 @@ jobs:
 
       - name: Build
         working-directory: cli
-        run: go build -v -o wt ./cmd/wt
+        run: go build -v -o grove ./cmd/grove
 
       - name: Verify binary
         working-directory: cli
-        run: ./wt version
+        run: ./grove version

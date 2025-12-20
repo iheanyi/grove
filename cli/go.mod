@@ -1,4 +1,4 @@
-module github.com/iheanyi/wt
+module github.com/iheanyi/grove
 
 go 1.24.0
 

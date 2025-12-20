@@ -70,7 +70,7 @@ struct ProxyInfo: Codable {
     }
 }
 
-struct WTStatus: Codable {
+struct GroveStatus: Codable {
     let servers: [Server]
     let proxy: ProxyInfo?  // Only present in subdomain mode
     let urlMode: String    // "port" or "subdomain"

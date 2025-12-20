@@ -8,7 +8,7 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// Config represents a .wt.yaml project configuration
+// Config represents a .grove.yaml project configuration
 type Config struct {
 	// Name overrides the auto-detected worktree name
 	Name string `yaml:"name,omitempty"`
@@ -78,7 +78,7 @@ type ServiceConfig struct {
 }
 
 // ConfigFileName is the name of the project config file
-const ConfigFileName = ".wt.yaml"
+const ConfigFileName = ".grove.yaml"
 
 // Load loads the project configuration from the given directory
 func Load(dir string) (*Config, error) {
@@ -109,7 +109,7 @@ func LoadFile(path string) (*Config, error) {
 	return cfg, nil
 }
 
-// Exists checks if a .wt.yaml file exists in the given directory
+// Exists checks if a .grove.yaml file exists in the given directory
 func Exists(dir string) bool {
 	path := filepath.Join(dir, ConfigFileName)
 	_, err := os.Stat(path)

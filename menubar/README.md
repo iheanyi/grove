@@ -1,6 +1,6 @@
-# WTMenubar
+# GroveMenubar
 
-A native macOS menubar companion app for the `wt` CLI tool.
+A native macOS menubar companion app for the `grove` CLI tool.
 
 ## Features
 
@@ -18,12 +18,12 @@ A native macOS menubar companion app for the `wt` CLI tool.
 ## Requirements
 
 - macOS 13.0 (Ventura) or later
-- `wt` CLI installed
+- `grove` CLI installed
 
 ## Building
 
 ```bash
-cd WTMenubar
+cd GroveMenubar
 
 # Build the app bundle
 make build
@@ -35,7 +35,7 @@ make run
 make clean
 ```
 
-The app bundle will be created at `.build/WTMenubar.app`.
+The app bundle will be created at `.build/GroveMenubar.app`.
 
 ## Installation
 
@@ -43,52 +43,52 @@ After building:
 
 ```bash
 # Run directly
-open .build/WTMenubar.app
+open .build/GroveMenubar.app
 
 # Or copy to Applications
-cp -r .build/WTMenubar.app /Applications/
+cp -r .build/GroveMenubar.app /Applications/
 ```
 
 ## Auto-launch on Login
 
 1. Open System Settings > General > Login Items
 2. Click "+" under "Open at Login"
-3. Navigate to and select WTMenubar.app
+3. Navigate to and select GroveMenubar.app
 
 ## Configuration
 
-The menubar app looks for the `wt` binary in these locations (in order):
+The menubar app looks for the `grove` binary in these locations (in order):
 
-1. `~/development/go/bin/wt`
-2. `/usr/local/bin/wt`
-3. `/opt/homebrew/bin/wt`
-4. `~/go/bin/wt`
-5. `~/.local/bin/wt`
+1. `~/development/go/bin/grove`
+2. `/usr/local/bin/grove`
+3. `/opt/homebrew/bin/grove`
+4. `~/go/bin/grove`
+5. `~/.local/bin/grove`
 
-If not found in any of these locations, it falls back to `/usr/local/bin/wt`.
+If not found in any of these locations, it falls back to `/usr/local/bin/grove`.
 
 ## How It Works
 
-The app communicates with the `wt` CLI by running `wt ls --json` to get server status. It automatically refreshes every 5 seconds.
+The app communicates with the `grove` CLI by running `grove ls --json` to get server status. It automatically refreshes every 5 seconds.
 
 ## Project Structure
 
 ```
-WTMenubar/
+GroveMenubar/
 ├── Package.swift              # Swift Package Manager manifest
 ├── Makefile                   # Build commands
-├── Sources/WTMenubar/
+├── Sources/GroveMenubar/
 │   ├── App/
-│   │   └── WTMenubarApp.swift # App entry point (MenuBarExtra)
+│   │   └── GroveMenubarApp.swift # App entry point (MenuBarExtra)
 │   ├── Models/
 │   │   └── Server.swift       # Data models for JSON parsing
 │   ├── Services/
-│   │   └── ServerManager.swift # wt CLI communication
+│   │   └── ServerManager.swift # grove CLI communication
 │   └── Views/
 │       ├── MenuView.swift     # Main menu dropdown
 │       └── LogsView.swift     # Log viewer
 └── Tests/
-    └── WTMenubarTests/
+    └── GroveMenubarTests/
 ```
 
 ## URL Modes
@@ -98,4 +98,4 @@ The app supports both URL modes:
 - **Port mode** (default): Shows `http://localhost:PORT` URLs
 - **Subdomain mode**: Shows `https://name.localhost` URLs with proxy controls
 
-The mode is determined by your `wt` configuration (`~/.config/wt/config.yaml`).
+The mode is determined by your `grove` configuration (`~/.config/grove/config.yaml`).

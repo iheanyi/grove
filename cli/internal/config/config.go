@@ -19,7 +19,7 @@ const (
 	URLModeSubdomain URLMode = "subdomain"
 )
 
-// Config holds the global configuration for wt
+// Config holds the global configuration for grove
 type Config struct {
 	// Port allocation
 	PortMin int `yaml:"port_min"`
@@ -77,7 +77,7 @@ func Default() *Config {
 		TLD:                "localhost",
 		ProxyHTTPPort:      80,
 		ProxyHTTPSPort:     443,
-		LogDir:             filepath.Join(xdg.ConfigHome, "wt", "logs"),
+		LogDir:             filepath.Join(xdg.ConfigHome, "grove", "logs"),
 		LogMaxSize:         "10MB",
 		LogRetention:       "7d",
 		IdleTimeout:        30 * time.Minute,
@@ -96,9 +96,9 @@ func Default() *Config {
 	}
 }
 
-// ConfigDir returns the wt configuration directory
+// ConfigDir returns the grove configuration directory
 func ConfigDir() string {
-	return filepath.Join(xdg.ConfigHome, "wt")
+	return filepath.Join(xdg.ConfigHome, "grove")
 }
 
 // ConfigPath returns the path to the config file
@@ -113,7 +113,7 @@ func RegistryPath() string {
 
 // SocketPath returns the path to the Unix socket
 func SocketPath() string {
-	return filepath.Join(os.TempDir(), "wt.sock")
+	return filepath.Join(os.TempDir(), "grove.sock")
 }
 
 // Load loads configuration from the specified file, or the default location

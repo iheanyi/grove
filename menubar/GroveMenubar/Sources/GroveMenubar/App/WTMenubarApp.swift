@@ -1,7 +1,7 @@
 import SwiftUI
 
 @main
-struct WTMenubarApp: App {
+struct GroveMenubarApp: App {
     @StateObject private var serverManager = ServerManager()
 
     var body: some Scene {
@@ -10,7 +10,7 @@ struct WTMenubarApp: App {
                 .environmentObject(serverManager)
         } label: {
             Label {
-                Text("wt")
+                Text("grove")
             } icon: {
                 Image(systemName: serverManager.statusIcon)
                     .symbolRenderingMode(.palette)
