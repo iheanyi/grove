@@ -58,6 +58,7 @@ extension EnvironmentValues {
 struct MenuView: View {
     @EnvironmentObject var serverManager: ServerManager
     @Environment(\.openWindow) private var openWindow
+    @Environment(\.openSettings) private var openSettings
     @State private var selectedServerIndex: Int?
     @FocusState private var isFocused: Bool
     @State private var searchText = ""
@@ -225,8 +226,7 @@ struct MenuView: View {
                 Spacer()
 
                 Button {
-                    // Open native settings window (works on macOS 13+)
-                    NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
+                    openSettings()
                 } label: {
                     Image(systemName: "gear")
                 }
