@@ -177,16 +177,7 @@ class ServerManager: ObservableObject {
     // MARK: - Quick Navigation
 
     func openInTerminal(_ server: Server) {
-        let script = """
-        tell application "Terminal"
-            activate
-            do script "cd '\(server.path)'"
-        end tell
-        """
-        if let appleScript = NSAppleScript(source: script) {
-            var error: NSDictionary?
-            appleScript.executeAndReturnError(&error)
-        }
+        PreferencesManager.shared.openInTerminal(path: server.path)
     }
 
     func openInVSCode(_ server: Server) {

@@ -5,8 +5,9 @@ import UserNotifications
 class NotificationService: NSObject, UNUserNotificationCenterDelegate {
     static let shared = NotificationService()
 
-    private let center = UNUserNotificationCenter.current()
+    private var center: UNUserNotificationCenter?
     private let preferences = PreferencesManager.shared
+    private var isAvailable = false
 
     // Notification types
     enum NotificationType: String, CaseIterable {
@@ -36,14 +37,26 @@ class NotificationService: NSObject, UNUserNotificationCenterDelegate {
 
     private override init() {
         super.init()
-        center.delegate = self
+        setupNotificationCenter()
+    }
+
+    private func setupNotificationCenter() {
+        // Only initialize notifications if we have a proper bundle
+        guard Bundle.main.bundleIdentifier != nil else {
+            print("NotificationService: Running without bundle, notifications disabled")
+            return
+        }
+
+        center = UNUserNotificationCenter.current()
+        center?.delegate = self
+        isAvailable = true
         requestAuthorization()
     }
 
     // MARK: - Authorization
 
     private func requestAuthorization() {
-        center.requestAuthorization(options: [.alert, .sound, .badge, .criticalAlert]) { granted, error in
+        center?.requestAuthorization(options: [.alert, .sound, .badge]) { granted, error in
             if let error = error {
                 print("Notification authorization error: \(error.localizedDescription)")
             }
@@ -66,18 +79,17 @@ class NotificationService: NSObject, UNUserNotificationCenterDelegate {
     // MARK: - Send Notifications
 
     func sendNotification(type: NotificationType, serverName: String, message: String) {
-        // Check if notifications are enabled for this type
-        guard isEnabled(for: type) else { return }
+        // Check if notifications are available and enabled
+        guard isAvailable, let center = center, isEnabled(for: type) else { return }
 
         let content = UNMutableNotificationContent()
         content.title = type.title
         content.body = "\(serverName): \(message)"
         content.sound = .default
 
-        // Set critical alert for crashed servers
+        // Set interruption level for different notification types
         if type == .serverCrashed {
-            content.interruptionLevel = .critical
-            content.sound = UNNotificationSound.defaultCritical
+            content.interruptionLevel = .timeSensitive
         } else if type == .serverHealthy {
             content.interruptionLevel = .passive
         } else {

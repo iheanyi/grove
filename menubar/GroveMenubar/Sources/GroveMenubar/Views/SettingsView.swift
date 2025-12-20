@@ -69,6 +69,15 @@ struct GeneralSettingsTab: View {
                     }
                     .frame(width: 180)
                 }
+
+                LabeledContent("Default terminal") {
+                    Picker("", selection: $preferences.defaultTerminal) {
+                        ForEach(preferences.getInstalledTerminals()) { terminal in
+                            Text(terminal.name).tag(terminal.bundleId)
+                        }
+                    }
+                    .frame(width: 180)
+                }
             }
         }
         .formStyle(.grouped)

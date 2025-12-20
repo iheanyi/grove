@@ -15,6 +15,7 @@ class PreferencesManager: ObservableObject {
         static let notifyOnServerCrash = "notifyOnServerCrash"
         static let refreshInterval = "refreshInterval"
         static let defaultBrowser = "defaultBrowser"
+        static let defaultTerminal = "defaultTerminal"
         static let theme = "theme"
         static let showDockIcon = "showDockIcon"
     }
@@ -50,6 +51,11 @@ class PreferencesManager: ObservableObject {
         didSet { defaults.set(defaultBrowser, forKey: Keys.defaultBrowser) }
     }
 
+    // Default terminal (bundle identifier)
+    @Published var defaultTerminal: String {
+        didSet { defaults.set(defaultTerminal, forKey: Keys.defaultTerminal) }
+    }
+
     // Theme selection
     @Published var theme: AppTheme {
         didSet {
@@ -74,6 +80,7 @@ class PreferencesManager: ObservableObject {
         self.notifyOnServerCrash = defaults.object(forKey: Keys.notifyOnServerCrash) as? Bool ?? true
         self.refreshInterval = defaults.object(forKey: Keys.refreshInterval) as? Double ?? 5.0
         self.defaultBrowser = defaults.string(forKey: Keys.defaultBrowser) ?? "system"
+        self.defaultTerminal = defaults.string(forKey: Keys.defaultTerminal) ?? "com.apple.Terminal"
 
         let themeString = defaults.string(forKey: Keys.theme) ?? AppTheme.system.rawValue
         self.theme = AppTheme(rawValue: themeString) ?? .system
@@ -142,6 +149,125 @@ class PreferencesManager: ObservableObject {
         return browsers
     }
 
+    // Get list of installed terminals
+    func getInstalledTerminals() -> [TerminalApp] {
+        var terminals: [TerminalApp] = []
+
+        let commonTerminals = [
+            TerminalApp(name: "Terminal", bundleId: "com.apple.Terminal"),
+            TerminalApp(name: "Ghostty", bundleId: "com.mitchellh.ghostty"),
+            TerminalApp(name: "iTerm", bundleId: "com.googlecode.iterm2"),
+            TerminalApp(name: "Warp", bundleId: "dev.warp.Warp-Stable"),
+            TerminalApp(name: "Alacritty", bundleId: "org.alacritty"),
+            TerminalApp(name: "Kitty", bundleId: "net.kovidgoyal.kitty"),
+            TerminalApp(name: "Hyper", bundleId: "co.zeit.hyper")
+        ]
+
+        for terminal in commonTerminals {
+            if NSWorkspace.shared.urlForApplication(withBundleIdentifier: terminal.bundleId) != nil {
+                terminals.append(terminal)
+            }
+        }
+
+        return terminals
+    }
+
+    // Open a path in the configured terminal
+    func openInTerminal(path: String) {
+        switch defaultTerminal {
+        case "com.apple.Terminal":
+            openInAppleTerminal(path: path)
+        case "com.googlecode.iterm2":
+            openInITerm(path: path)
+        case "com.mitchellh.ghostty":
+            openInGhostty(path: path)
+        case "dev.warp.Warp-Stable":
+            openInWarp(path: path)
+        default:
+            // For other terminals, try generic approach
+            openInGenericTerminal(path: path, bundleId: defaultTerminal)
+        }
+    }
+
+    private func openInAppleTerminal(path: String) {
+        let script = """
+        tell application "Terminal"
+            activate
+            do script "cd '\(path)'"
+        end tell
+        """
+        runAppleScript(script)
+    }
+
+    private func openInITerm(path: String) {
+        let script = """
+        tell application "iTerm"
+            activate
+            try
+                set newWindow to (create window with default profile)
+                tell current session of newWindow
+                    write text "cd '\(path)'"
+                end tell
+            on error
+                tell current window
+                    create tab with default profile
+                    tell current session
+                        write text "cd '\(path)'"
+                    end tell
+                end tell
+            end try
+        end tell
+        """
+        runAppleScript(script)
+    }
+
+    private func openInGhostty(path: String) {
+        // Ghostty supports opening with a working directory via CLI or just activate and cd
+        let task = Process()
+        task.executableURL = URL(fileURLWithPath: "/usr/bin/open")
+        task.arguments = ["-a", "Ghostty", "--args", "-e", "cd '\(path)' && exec $SHELL"]
+
+        do {
+            try task.run()
+        } catch {
+            // Fallback: just open Ghostty and hope for the best
+            if let appURL = NSWorkspace.shared.urlForApplication(withBundleIdentifier: "com.mitchellh.ghostty") {
+                NSWorkspace.shared.open(appURL)
+            }
+        }
+    }
+
+    private func openInWarp(path: String) {
+        // Warp can be opened with a directory
+        let task = Process()
+        task.executableURL = URL(fileURLWithPath: "/usr/bin/open")
+        task.arguments = ["-a", "Warp", path]
+
+        do {
+            try task.run()
+        } catch {
+            // Fallback
+            if let appURL = NSWorkspace.shared.urlForApplication(withBundleIdentifier: "dev.warp.Warp-Stable") {
+                NSWorkspace.shared.open(appURL)
+            }
+        }
+    }
+
+    private func openInGenericTerminal(path: String, bundleId: String) {
+        // Try to open the terminal app at the given path
+        if let appURL = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleId) {
+            let config = NSWorkspace.OpenConfiguration()
+            NSWorkspace.shared.open([URL(fileURLWithPath: path)], withApplicationAt: appURL, configuration: config)
+        }
+    }
+
+    private func runAppleScript(_ script: String) {
+        if let appleScript = NSAppleScript(source: script) {
+            var error: NSDictionary?
+            appleScript.executeAndReturnError(&error)
+        }
+    }
+
     func openURL(_ url: URL) {
         if defaultBrowser == "system" {
             NSWorkspace.shared.open(url)
@@ -167,6 +293,13 @@ enum AppTheme: String, CaseIterable {
 }
 
 struct Browser: Identifiable {
+    let name: String
+    let bundleId: String
+
+    var id: String { bundleId }
+}
+
+struct TerminalApp: Identifiable {
     let name: String
     let bundleId: String
 
