@@ -24,9 +24,9 @@ jobs:
         run: sudo xcode-select -s /Applications/Xcode_15.2.app/Contents/Developer
 
       - name: Build
-        working-directory: menubar/WTMenubar
+        working-directory: menubar/GroveMenubar
         run: swift build -c release
 
       - name: Run tests
-        working-directory: menubar/WTMenubar
+        working-directory: menubar/GroveMenubar
         run: swift test

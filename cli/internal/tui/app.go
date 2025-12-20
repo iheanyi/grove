@@ -12,9 +12,9 @@ import (
 	"github.com/charmbracelet/bubbles/list"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-	"github.com/iheanyi/wt/internal/config"
-	"github.com/iheanyi/wt/internal/registry"
-	"github.com/iheanyi/wt/pkg/browser"
+	"github.com/iheanyi/grove/internal/config"
+	"github.com/iheanyi/grove/internal/registry"
+	"github.com/iheanyi/grove/pkg/browser"
 )
 
 // KeyMap defines the keybindings for the TUI

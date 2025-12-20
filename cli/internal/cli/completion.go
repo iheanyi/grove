@@ -3,7 +3,7 @@ package cli
 import (
 	"os"
 
-	"github.com/iheanyi/wt/internal/registry"
+	"github.com/iheanyi/grove/internal/registry"
 	"github.com/spf13/cobra"
 )
 

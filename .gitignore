@@ -1,5 +1,5 @@
 # =============================================================================
-# wt - Worktree Server Manager
+# grove - Worktree Server Manager
 # =============================================================================
 
 # =============================================================================
@@ -11,7 +11,7 @@
 *.dll
 *.so
 *.dylib
-/cli/wt
+/cli/grove
 /cli/bin/
 
 # Test binary
@@ -32,8 +32,8 @@ go.work.sum
 # Swift / Xcode / macOS App
 # =============================================================================
 # Build products
-/menubar/WTMenubar/.build/
-/menubar/WTMenubar/.swiftpm/
+/menubar/GroveMenubar/.build/
+/menubar/GroveMenubar/.swiftpm/
 DerivedData/
 *.xcworkspace
 !*.xcworkspace/contents.xcworkspacedata

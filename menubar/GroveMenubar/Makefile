@@ -1,6 +1,6 @@
 .PHONY: build run clean
 
-APP_NAME = WTMenubar
+APP_NAME = GroveMenubar
 BUILD_DIR = .build
 APP_BUNDLE = $(BUILD_DIR)/$(APP_NAME).app
 BINARY = $(BUILD_DIR)/arm64-apple-macosx/debug/$(APP_NAME)
@@ -15,7 +15,7 @@ build:
 		echo '<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">' >> "$(APP_BUNDLE)/Contents/Info.plist"; \
 		echo '<plist version="1.0"><dict>' >> "$(APP_BUNDLE)/Contents/Info.plist"; \
 		echo '<key>CFBundleExecutable</key><string>$(APP_NAME)</string>' >> "$(APP_BUNDLE)/Contents/Info.plist"; \
-		echo '<key>CFBundleIdentifier</key><string>com.iheanyi.wtmenubar</string>' >> "$(APP_BUNDLE)/Contents/Info.plist"; \
+		echo '<key>CFBundleIdentifier</key><string>com.iheanyi.grovemenubar</string>' >> "$(APP_BUNDLE)/Contents/Info.plist"; \
 		echo '<key>CFBundleName</key><string>$(APP_NAME)</string>' >> "$(APP_BUNDLE)/Contents/Info.plist"; \
 		echo '<key>CFBundlePackageType</key><string>APPL</string>' >> "$(APP_BUNDLE)/Contents/Info.plist"; \
 		echo '<key>LSUIElement</key><true/>' >> "$(APP_BUNDLE)/Contents/Info.plist"; \

@@ -16,6 +16,7 @@ class PreferencesManager: ObservableObject {
         static let refreshInterval = "refreshInterval"
         static let defaultBrowser = "defaultBrowser"
         static let theme = "theme"
+        static let showDockIcon = "showDockIcon"
     }
 
     // Launch at login
@@ -57,6 +58,14 @@ class PreferencesManager: ObservableObject {
         }
     }
 
+    // Show dock icon
+    @Published var showDockIcon: Bool {
+        didSet {
+            defaults.set(showDockIcon, forKey: Keys.showDockIcon)
+            updateDockIcon()
+        }
+    }
+
     private init() {
         // Load from defaults
         self.launchAtLogin = defaults.bool(forKey: Keys.launchAtLogin)
@@ -68,8 +77,10 @@ class PreferencesManager: ObservableObject {
 
         let themeString = defaults.string(forKey: Keys.theme) ?? AppTheme.system.rawValue
         self.theme = AppTheme(rawValue: themeString) ?? .system
+        self.showDockIcon = defaults.bool(forKey: Keys.showDockIcon)
 
         applyTheme()
+        updateDockIcon()
     }
 
     private func updateLaunchAtLogin() {
@@ -94,6 +105,14 @@ class PreferencesManager: ObservableObject {
             NSApp.appearance = NSAppearance(named: .aqua)
         case .dark:
             NSApp.appearance = NSAppearance(named: .darkAqua)
+        }
+    }
+
+    private func updateDockIcon() {
+        if showDockIcon {
+            NSApp.setActivationPolicy(.regular)
+        } else {
+            NSApp.setActivationPolicy(.accessory)
         }
     }
 

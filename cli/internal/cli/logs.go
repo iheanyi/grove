@@ -6,9 +6,9 @@ import (
 	"io"
 	"os"
 
-	"github.com/iheanyi/wt/internal/loghighlight"
-	"github.com/iheanyi/wt/internal/registry"
-	"github.com/iheanyi/wt/internal/worktree"
+	"github.com/iheanyi/grove/internal/loghighlight"
+	"github.com/iheanyi/grove/internal/registry"
+	"github.com/iheanyi/grove/internal/worktree"
 	"github.com/spf13/cobra"
 )
 

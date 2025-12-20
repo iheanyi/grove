@@ -7,9 +7,9 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/iheanyi/wt/internal/config"
-	"github.com/iheanyi/wt/internal/registry"
-	"github.com/iheanyi/wt/internal/worktree"
+	"github.com/iheanyi/grove/internal/config"
+	"github.com/iheanyi/grove/internal/registry"
+	"github.com/iheanyi/grove/internal/worktree"
 	"github.com/spf13/cobra"
 )
 

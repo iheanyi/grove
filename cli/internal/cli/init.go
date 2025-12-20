@@ -5,15 +5,15 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/iheanyi/wt/internal/project"
-	"github.com/iheanyi/wt/internal/worktree"
+	"github.com/iheanyi/grove/internal/project"
+	"github.com/iheanyi/grove/internal/worktree"
 	"github.com/spf13/cobra"
 )
 
 var initCmd = &cobra.Command{
 	Use:   "init [template]",
-	Short: "Create a .wt.yaml configuration file",
-	Long: `Create a .wt.yaml configuration file in the current directory.
+	Short: "Create a .grove.yaml configuration file",
+	Long: `Create a .grove.yaml configuration file in the current directory.
 
 Available templates:
   rails   - Ruby on Rails project
@@ -22,21 +22,21 @@ Available templates:
   go      - Go project
 
 Examples:
-  wt init           # Create basic .wt.yaml
-  wt init rails     # Create Rails-specific .wt.yaml
-  wt init node      # Create Node.js-specific .wt.yaml`,
+  wt init           # Create basic .grove.yaml
+  wt init rails     # Create Rails-specific .grove.yaml
+  wt init node      # Create Node.js-specific .grove.yaml`,
 	RunE:      runInit,
 	ValidArgs: []string{"rails", "node", "python", "go"},
 }
 
 func init() {
-	initCmd.Flags().BoolP("force", "f", false, "Overwrite existing .wt.yaml")
+	initCmd.Flags().BoolP("force", "f", false, "Overwrite existing .grove.yaml")
 }
 
 func runInit(cmd *cobra.Command, args []string) error {
 	force, _ := cmd.Flags().GetBool("force")
 
-	// Check if .wt.yaml already exists
+	// Check if .grove.yaml already exists
 	cwd, err := os.Getwd()
 	if err != nil {
 		return fmt.Errorf("failed to get current directory: %w", err)
@@ -44,7 +44,7 @@ func runInit(cmd *cobra.Command, args []string) error {
 
 	configPath := filepath.Join(cwd, project.ConfigFileName)
 	if _, err := os.Stat(configPath); err == nil && !force {
-		return fmt.Errorf(".wt.yaml already exists\nUse --force to overwrite")
+		return fmt.Errorf(".grove.yaml already exists\nUse --force to overwrite")
 	}
 
 	// Detect worktree for name suggestion
@@ -65,7 +65,7 @@ func runInit(cmd *cobra.Command, args []string) error {
 
 	// Save config
 	if err := cfg.Save(cwd); err != nil {
-		return fmt.Errorf("failed to write .wt.yaml: %w", err)
+		return fmt.Errorf("failed to write .grove.yaml: %w", err)
 	}
 
 	fmt.Printf("Created %s\n", configPath)

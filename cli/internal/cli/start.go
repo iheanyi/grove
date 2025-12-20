@@ -10,10 +10,10 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/iheanyi/wt/internal/port"
-	"github.com/iheanyi/wt/internal/project"
-	"github.com/iheanyi/wt/internal/registry"
-	"github.com/iheanyi/wt/internal/worktree"
+	"github.com/iheanyi/grove/internal/port"
+	"github.com/iheanyi/grove/internal/project"
+	"github.com/iheanyi/grove/internal/registry"
+	"github.com/iheanyi/grove/internal/worktree"
 	"github.com/spf13/cobra"
 )
 
@@ -22,14 +22,14 @@ var startCmd = &cobra.Command{
 	Short: "Start a dev server for the current worktree",
 	Long: `Start a dev server for the current worktree.
 
-If a .wt.yaml file exists and defines a command, it will be used by default.
+If a .grove.yaml file exists and defines a command, it will be used by default.
 Otherwise, you must provide a command.
 
 Examples:
-  wt start                  # Use command from .wt.yaml
-  wt start bin/dev          # Start with specific command
-  wt start rails s          # Start Rails server
-  wt start npm run dev      # Start npm dev server`,
+  grove start                  # Use command from .grove.yaml
+  grove start bin/dev          # Start with specific command
+  grove start rails s          # Start Rails server
+  grove start npm run dev      # Start npm dev server`,
 	RunE: runStart,
 }
 
@@ -55,7 +55,7 @@ func runStart(cmd *cobra.Command, args []string) error {
 	} else if projConfig != nil && projConfig.Command != "" {
 		command = []string{projConfig.Command}
 	} else {
-		return fmt.Errorf("no command specified and no .wt.yaml found\nUsage: wt start <command>")
+		return fmt.Errorf("no command specified and no .grove.yaml found\nUsage: grove start <command>")
 	}
 
 	// Load registry
@@ -66,7 +66,7 @@ func runStart(cmd *cobra.Command, args []string) error {
 
 	// Check if already running
 	if existing, ok := reg.Get(wt.Name); ok && existing.IsRunning() {
-		return fmt.Errorf("server '%s' is already running at %s (port %d)\nUse 'wt stop' to stop it first, or 'wt restart' to restart",
+		return fmt.Errorf("server '%s' is already running at %s (port %d)\nUse 'grove stop' to stop it first, or 'grove restart' to restart",
 			wt.Name, existing.URL, existing.Port)
 	}
 
@@ -183,7 +183,7 @@ func runForeground(server *registry.Server, reg *registry.Registry, projConfig *
 	if cfg.IsSubdomainMode() {
 		if err := ReloadProxy(); err != nil {
 			fmt.Printf("Warning: failed to reload proxy: %v\n", err)
-			fmt.Println("Run 'wt proxy stop && wt proxy start' to update routes manually")
+			fmt.Println("Run 'grove proxy stop && grove proxy start' to update routes manually")
 		}
 	}
 
@@ -300,7 +300,7 @@ func runDaemon(server *registry.Server, reg *registry.Registry, projConfig *proj
 	if cfg.IsSubdomainMode() {
 		if err := ReloadProxy(); err != nil {
 			fmt.Printf("Warning: failed to reload proxy: %v\n", err)
-			fmt.Println("Run 'wt proxy stop && wt proxy start' to update routes manually")
+			fmt.Println("Run 'grove proxy stop && grove proxy start' to update routes manually")
 		}
 	}
 

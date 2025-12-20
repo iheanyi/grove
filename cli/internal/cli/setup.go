@@ -6,7 +6,7 @@ import (
 	"os/exec"
 	"runtime"
 
-	"github.com/iheanyi/wt/internal/config"
+	"github.com/iheanyi/grove/internal/config"
 	"github.com/spf13/cobra"
 )
 

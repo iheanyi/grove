@@ -124,7 +124,7 @@ func detectLinkedWorktree(path string) (bool, string) {
 }
 
 // FindProjectRoot walks up the directory tree to find the project root
-// (directory containing .wt.yaml, .git, or common project markers)
+// (directory containing .grove.yaml, .git, or common project markers)
 func FindProjectRoot(startPath string) (string, error) {
 	absPath, err := filepath.Abs(startPath)
 	if err != nil {
@@ -134,7 +134,7 @@ func FindProjectRoot(startPath string) (string, error) {
 	current := absPath
 	for {
 		// Check for common project root markers
-		markers := []string{".wt.yaml", ".git", "go.mod", "package.json", "Gemfile", "Cargo.toml"}
+		markers := []string{".grove.yaml", ".git", "go.mod", "package.json", "Gemfile", "Cargo.toml"}
 		for _, marker := range markers {
 			if _, err := os.Stat(filepath.Join(current, marker)); err == nil {
 				return current, nil

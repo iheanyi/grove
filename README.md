@@ -1,4 +1,4 @@
-# wt - Worktree Server Manager
+# grove - Worktree Server Manager
 
 A CLI tool with TUI to automatically manage dev servers across git worktrees with clean localhost URLs.
 
@@ -9,6 +9,9 @@ A CLI tool with TUI to automatically manage dev servers across git worktrees wit
 - **Automatic port allocation**: Hash-based port assignment means the same worktree always gets the same port
 - **Works with any framework**: Rails, Node, Python, Go, or anything else
 - **Interactive TUI**: Beautiful terminal dashboard for managing all your servers
+- **fzf-style selector**: Quick fuzzy-find picker for server selection
+- **GitHub integration**: View CI status and PR links for each worktree
+- **Syntax-highlighted logs**: Colorized log output for Rails, JSON, and common patterns
 - **macOS Menubar App**: Native menubar app for quick server management
 - **MCP Integration**: Claude Code can manage your dev servers directly
 - **JSON output**: Machine-readable output for scripting and automation
@@ -18,20 +21,20 @@ A CLI tool with TUI to automatically manage dev servers across git worktrees wit
 ### Homebrew (macOS)
 
 ```bash
-brew install iheanyi/tap/wt
+brew install iheanyi/tap/grove
 ```
 
 ### From source
 
 ```bash
-go install github.com/iheanyi/wt/cli/cmd/wt@latest
+go install github.com/iheanyi/grove/cli/cmd/wt@latest
 ```
 
 ### Build locally
 
 ```bash
-git clone https://github.com/iheanyi/wt.git
-cd wt/cli
+git clone https://github.com/iheanyi/grove.git
+cd grove/cli
 make build
 ```
 
@@ -42,10 +45,10 @@ make build
 cd ~/projects/myapp
 
 # Start the dev server
-wt start bin/dev
+grove start bin/dev
 
 # Your server is now available at http://localhost:PORT
-# wt automatically allocates a consistent port based on worktree name
+# grove automatically allocates a consistent port based on worktree name
 ```
 
 That's it! No proxy setup required in the default port mode.
@@ -54,10 +57,10 @@ That's it! No proxy setup required in the default port mode.
 
 ```bash
 # List all servers
-wt ls
+grove ls
 
 # Launch the interactive TUI
-wt
+grove
 ```
 
 ### Optional: Subdomain Mode
@@ -69,13 +72,13 @@ If you want pretty URLs like `https://myapp.localhost`, enable subdomain mode:
 brew install caddy
 
 # Trust the local CA certificate
-wt setup
+grove setup
 
 # Edit config to enable subdomain mode
-# ~/.config/wt/config.yaml -> url_mode: subdomain
+# ~/.config/grove/config.yaml -> url_mode: subdomain
 
 # Start the proxy
-wt proxy start
+grove proxy start
 
 # Now servers are available at https://name.localhost
 ```
@@ -86,43 +89,72 @@ wt proxy start
 
 ```bash
 # Start with a command
-wt start bin/dev
-wt start rails s
-wt start npm run dev
+grove start bin/dev
+grove start rails s
+grove start npm run dev
 
-# Use .wt.yaml config (auto-detected)
-wt start
+# Use .grove.yaml config (auto-detected)
+grove start
 
 # Run in foreground (useful for debugging)
-wt start --foreground bin/dev
+grove start --foreground bin/dev
 ```
 
 ### Managing servers
 
 ```bash
 # List all servers
-wt ls
-wt ls --json  # MCP-friendly output
+grove ls
+grove ls --full  # Include CI status and PR links (requires gh CLI)
+grove ls --json  # MCP-friendly output
+
+# Interactive selector (fzf-style)
+grove select                    # Pick a server interactively
+grove open $(grove select)      # Open selected server in browser
+grove logs $(grove select)      # View logs for selected server
+
+# Navigate to worktree directory
+grove cd feature-auth           # Print path (use with shell function)
 
 # Stop servers
-wt stop              # Stop current worktree's server
-wt stop feature-auth # Stop by name
-wt stop --all        # Stop all servers
+grove stop              # Stop current worktree's server
+grove stop feature-auth # Stop by name
+grove stop --all        # Stop all servers
 
 # Restart
-wt restart
+grove restart
 
 # View status
-wt status
-wt url
+grove status
+grove url
 
 # Open in browser
-wt open
+grove open
+
+# View logs with syntax highlighting
+grove logs              # Current worktree
+grove logs feature-auth # Named worktree
+grove logs -f           # Follow mode (like tail -f)
+grove logs --no-color   # Disable highlighting
 ```
+
+### Shell Integration
+
+Add these to your shell config for quick navigation:
+
+```bash
+# Bash/Zsh (~/.bashrc or ~/.zshrc)
+grovecd() { cd "$(grove cd "$@")" }
+
+# Fish (~/.config/fish/config.fish)
+function grovecd; cd (grove cd $argv); end
+```
+
+Then use `grovecd feature-auth` to jump to a worktree's directory.
 
 ### Project configuration
 
-Create a `.wt.yaml` in your project root:
+Create a `.grove.yaml` in your project root:
 
 ```yaml
 # Simple project
@@ -149,26 +181,26 @@ hooks:
 Or use a template:
 
 ```bash
-wt init rails   # Rails project
-wt init node    # Node.js project
-wt init python  # Python project
-wt init go      # Go project
+grove init rails   # Rails project
+grove init node    # Node.js project
+grove init python  # Python project
+grove init go      # Go project
 ```
 
 ### Proxy management
 
 ```bash
-wt proxy start   # Start the reverse proxy
-wt proxy stop    # Stop the proxy
-wt proxy status  # Check status
-wt proxy routes  # List all registered routes
+grove proxy start   # Start the reverse proxy
+grove proxy stop    # Stop the proxy
+grove proxy status  # Check status
+grove proxy routes  # List all registered routes
 ```
 
 ### Diagnostics
 
 ```bash
-wt doctor   # Diagnose common issues
-wt cleanup  # Remove stale registry entries
+grove doctor   # Diagnose common issues
+grove cleanup  # Remove stale registry entries
 ```
 
 ## TUI
@@ -176,8 +208,8 @@ wt cleanup  # Remove stale registry entries
 Launch the interactive dashboard:
 
 ```bash
-wt      # or
-wt ui
+grove      # or
+grove ui
 ```
 
 Keyboard shortcuts:
@@ -199,7 +231,7 @@ Keyboard shortcuts:
                       │ HTTPS (port 443)
                       ▼
 ┌─────────────────────────────────────────────────────────────┐
-│                    wt proxy (Caddy)                          │
+│                    grove proxy (Caddy)                          │
 │  *.feature-auth.localhost → localhost:3042                  │
 │  *.main.localhost → localhost:3000                          │
 └─────────────────────┬───────────────────────────────────────┘
@@ -213,7 +245,7 @@ Keyboard shortcuts:
 
 ## Configuration
 
-Global config: `~/.config/wt/config.yaml`
+Global config: `~/.config/grove/config.yaml`
 
 ```yaml
 # URL mode: "port" (default) or "subdomain"
@@ -242,7 +274,7 @@ notifications:
 
 ### URL Modes
 
-wt supports two URL modes:
+grove supports two URL modes:
 
 **Port Mode (default)**
 - URLs: `http://localhost:3042`
@@ -253,10 +285,10 @@ wt supports two URL modes:
 **Subdomain Mode**
 - URLs: `https://feature-auth.localhost`
 - Wildcard subdomains: `https://tenant.feature-auth.localhost`
-- Requires running `wt proxy start`
+- Requires running `grove proxy start`
 - HTTPS with automatic local certificates
 
-To switch modes, edit `~/.config/wt/config.yaml`:
+To switch modes, edit `~/.config/grove/config.yaml`:
 
 ```yaml
 # For port mode (default)
@@ -268,7 +300,7 @@ url_mode: subdomain
 
 ## MCP Server for Claude Code
 
-The `wt mcp` command runs wt as an MCP server, allowing Claude Code to manage your dev servers directly. This enables seamless browser automation workflows where Claude can:
+The `grove mcp` command runs grove as an MCP server, allowing Claude Code to manage your dev servers directly. This enables seamless browser automation workflows where Claude can:
 
 1. Start a dev server for your current worktree
 2. Get the URL for browser testing
@@ -279,10 +311,10 @@ The `wt mcp` command runs wt as an MCP server, allowing Claude Code to manage yo
 The easiest way to install is using the built-in command:
 
 ```bash
-wt mcp install
+grove mcp install
 ```
 
-This automatically registers wt with Claude Code. Verify with:
+This automatically registers grove with Claude Code. Verify with:
 
 ```bash
 claude mcp list
@@ -291,7 +323,7 @@ claude mcp list
 Alternatively, manually add to your Claude Code configuration:
 
 ```bash
-claude mcp add -s user -t stdio wt /path/to/wt mcp
+claude mcp add -s user -t stdio grove /path/to/wt mcp
 ```
 
 **Restart Claude Code** to load the MCP server.
@@ -323,7 +355,7 @@ Claude: [Uses wt_start to start the server]
 The `--json` flag provides machine-readable output for scripting:
 
 ```bash
-wt ls --json
+grove ls --json
 ```
 
 **Port mode (default):**
@@ -337,7 +369,7 @@ wt ls --json
       "status": "running",
       "path": "/Users/you/projects/myapp-feature-auth",
       "uptime": "2h 15m",
-      "log_file": "~/.config/wt/logs/feature-auth.log"
+      "log_file": "~/.config/grove/logs/feature-auth.log"
     }
   ],
   "proxy": null,
@@ -383,12 +415,12 @@ A native macOS menubar app is available for quick server management without the 
 ### Building
 
 ```bash
-cd menubar/WTMenubar
+cd menubar/GroveMenubar
 make build   # Build the app
 make run     # Build and run
 ```
 
-The app bundle will be at `.build/WTMenubar.app`. You can drag it to your Applications folder.
+The app bundle will be at `.build/GroveMenubar.app`. You can drag it to your Applications folder.
 
 ### Note
 
@@ -402,11 +434,11 @@ The menubar app communicates with the `wt` CLI. Make sure `wt` is installed and 
 
 ### Docker Desktop Port Conflict
 
-Docker Desktop on macOS binds to ports 80 and 443 by default, which conflicts with the wt proxy. You have several options:
+Docker Desktop on macOS binds to ports 80 and 443 by default, which conflicts with the grove proxy. You have several options:
 
-**Option 1: Use alternate ports for wt (recommended)**
+**Option 1: Use alternate ports for grove (recommended)**
 
-Edit `~/.config/wt/config.yaml`:
+Edit `~/.config/grove/config.yaml`:
 
 ```yaml
 proxy_http_port: 8080
@@ -419,7 +451,7 @@ Then access your servers at `https://myapp.localhost:8443` instead.
 
 1. Open Docker Desktop → Settings → Resources → Network
 2. Uncheck "Use kernel networking for UDP" and related options
-3. Or quit Docker Desktop when using wt
+3. Or quit Docker Desktop when using grove
 
 **Option 3: Stop Docker's internal proxy**
 
@@ -444,7 +476,7 @@ Or use [dnsmasq](https://thekelleys.org.uk/dnsmasq/doc.html) for wildcard DNS.
 
 ## E2E Testing Guide
 
-Here's how to test wt end-to-end:
+Here's how to test grove end-to-end:
 
 ### 1. Build and Install
 
@@ -461,15 +493,15 @@ sudo make install-local  # Installs to /usr/local/bin
 brew install caddy
 
 # Trust the CA certificate (one-time)
-wt setup
+grove setup
 # Answer 'y' when prompted to trust the CA
 ```
 
 ### 3. Start the Proxy
 
 ```bash
-wt proxy start
-wt proxy status  # Verify it's running
+grove proxy start
+grove proxy status  # Verify it's running
 ```
 
 ### 4. Start a Dev Server
@@ -479,10 +511,10 @@ wt proxy status  # Verify it's running
 cd ~/your-project
 
 # Start the server
-wt start bin/dev  # or: npm run dev, rails s, etc.
+grove start bin/dev  # or: npm run dev, rails s, etc.
 
 # Check it's running
-wt ls
+grove ls
 ```
 
 ### 5. Test Access
@@ -499,26 +531,26 @@ curl -k https://your-project.localhost
 
 ```bash
 # Test MCP server directly
-echo '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","clientInfo":{"name":"test","version":"1.0"}}}' | wt mcp
+echo '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","clientInfo":{"name":"test","version":"1.0"}}}' | grove mcp
 
 # Should return: {"jsonrpc":"2.0","id":1,"result":{"protocolVersion":"2024-11-05",...}}
 
 # List tools
-echo '{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}' | wt mcp
+echo '{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}' | grove mcp
 ```
 
 ### 7. Cleanup
 
 ```bash
-wt stop           # Stop current server
-wt stop --all     # Stop all servers
-wt proxy stop     # Stop the proxy
+grove stop           # Stop current server
+grove stop --all     # Stop all servers
+grove proxy stop     # Stop the proxy
 ```
 
 ## Requirements
 
 - Go 1.21+
-- [Caddy](https://caddyserver.com/) (installed via `wt setup` or `brew install caddy`)
+- [Caddy](https://caddyserver.com/) (installed via `grove setup` or `brew install caddy`)
 - macOS or Linux
 
 ## License

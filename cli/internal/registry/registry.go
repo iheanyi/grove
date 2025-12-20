@@ -8,8 +8,8 @@ import (
 	"sync"
 	"syscall"
 
-	"github.com/iheanyi/wt/internal/config"
-	"github.com/iheanyi/wt/internal/discovery"
+	"github.com/iheanyi/grove/internal/config"
+	"github.com/iheanyi/grove/internal/discovery"
 )
 
 // Registry manages the server registry

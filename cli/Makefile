@@ -1,11 +1,11 @@
 .PHONY: build install clean test lint run help
 
 # Build variables
-BINARY_NAME=wt
+BINARY_NAME=grove
 VERSION?=$(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
 COMMIT?=$(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown")
 DATE?=$(shell date -u +"%Y-%m-%dT%H:%M:%SZ")
-LDFLAGS=-ldflags "-X github.com/iheanyi/wt/internal/cli.Version=$(VERSION) -X github.com/iheanyi/wt/internal/cli.Commit=$(COMMIT) -X github.com/iheanyi/wt/internal/cli.Date=$(DATE)"
+LDFLAGS=-ldflags "-X github.com/iheanyi/grove/internal/cli.Version=$(VERSION) -X github.com/iheanyi/grove/internal/cli.Commit=$(COMMIT) -X github.com/iheanyi/grove/internal/cli.Date=$(DATE)"
 
 # Go commands
 GO=go
@@ -18,13 +18,13 @@ GOFMT=$(GO) fmt
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-20s\033[0m %s\n", $$1, $$2}'
 
-build: ## Build the wt binary
-	$(GOBUILD) $(LDFLAGS) -o $(BINARY_NAME) ./cmd/wt
+build: ## Build the grove binary
+	$(GOBUILD) $(LDFLAGS) -o $(BINARY_NAME) ./cmd/grove
 
-install: build ## Install wt to $GOPATH/bin
+install: build ## Install grove to $GOPATH/bin
 	cp $(BINARY_NAME) $(GOPATH)/bin/
 
-install-local: build ## Install wt to /usr/local/bin
+install-local: build ## Install grove to /usr/local/bin
 	sudo cp $(BINARY_NAME) /usr/local/bin/
 
 clean: ## Remove build artifacts

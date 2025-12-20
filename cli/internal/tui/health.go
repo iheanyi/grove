@@ -7,7 +7,7 @@ import (
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/iheanyi/wt/internal/registry"
+	"github.com/iheanyi/grove/internal/registry"
 )
 
 // HealthCheckMsg is sent when a health check completes
