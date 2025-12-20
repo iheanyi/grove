@@ -13,6 +13,10 @@ let package = Package(
         .executableTarget(
             name: "WTMenubar",
             path: "Sources/WTMenubar"
+        ),
+        .testTarget(
+            name: "WTMenubarTests",
+            path: "Tests/WTMenubarTests"
         )
     ]
 )

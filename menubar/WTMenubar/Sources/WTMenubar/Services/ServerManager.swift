@@ -24,8 +24,10 @@ class ServerManager: ObservableObject {
         // Find wt binary
         if let path = Self.findWTBinary() {
             self.wtPath = path
+            print("[WTMenubar] Found wt at: \(path)")
         } else {
             self.wtPath = "/usr/local/bin/wt"
+            print("[WTMenubar] WARNING: wt not found, defaulting to: \(self.wtPath)")
         }
 
         refresh()
@@ -65,14 +67,17 @@ class ServerManager: ObservableObject {
     func refresh() {
         isLoading = true
         error = nil
+        print("[WTMenubar] refresh() called, wtPath=\(wtPath)")
 
         runWT(["ls", "--json"]) { [weak self] result in
             DispatchQueue.main.async {
                 self?.isLoading = false
                 switch result {
                 case .success(let output):
+                    print("[WTMenubar] runWT success, output length: \(output.count)")
                     self?.parseStatus(output)
                 case .failure(let err):
+                    print("[WTMenubar] runWT FAILED: \(err)")
                     self?.error = err.localizedDescription
                 }
             }
@@ -247,15 +252,22 @@ class ServerManager: ObservableObject {
     }
 
     private func parseStatus(_ output: String) {
-        guard let data = output.data(using: .utf8) else { return }
+        print("[WTMenubar] parseStatus called with output length: \(output.count)")
+        guard let data = output.data(using: .utf8) else {
+            print("[WTMenubar] ERROR: Could not convert output to data")
+            return
+        }
 
         do {
             let status = try JSONDecoder().decode(WTStatus.self, from: data)
             self.servers = status.servers.sorted { $0.name < $1.name }
             self.proxy = status.proxy
             self.urlMode = status.urlMode
+            print("[WTMenubar] Parsed \(status.servers.count) servers")
         } catch {
             self.error = "Failed to parse status: \(error.localizedDescription)"
+            print("[WTMenubar] ERROR parsing: \(error)")
+            print("[WTMenubar] Raw output: \(output)")
         }
     }
 
@@ -293,6 +305,7 @@ class ServerManager: ObservableObject {
             "/usr/local/bin/wt",
             "/opt/homebrew/bin/wt",
             "\(NSHomeDirectory())/go/bin/wt",
+            "\(NSHomeDirectory())/development/go/bin/wt",
             "\(NSHomeDirectory())/.local/bin/wt"
         ]
 

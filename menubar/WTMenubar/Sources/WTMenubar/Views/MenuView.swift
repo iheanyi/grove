@@ -141,7 +141,7 @@ struct ServerRowView: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(server.name)
                     .font(.system(.body, design: .monospaced))
-                Text(":\(String(server.port))")
+                Text(String(format: ":%d", server.port))
                     .font(.caption)
                     .foregroundColor(.secondary)
             }
@@ -215,7 +215,7 @@ struct ProxyStatusView: View {
                         Text("Proxy")
                             .font(.caption)
                         if proxy.isRunning {
-                            Text(":\(String(proxy.httpPort))/:\(String(proxy.httpsPort))")
+                            Text(String(format: ":%d/:%d", proxy.httpPort, proxy.httpsPort))
                                 .font(.caption2)
                                 .foregroundColor(.secondary)
                         } else {
