@@ -13,7 +13,7 @@ import (
 var doctorCmd = &cobra.Command{
 	Use:   "doctor",
 	Short: "Diagnose common issues",
-	Long: `Diagnose common issues with wt.
+	Long: `Diagnose common issues with grove.
 
 This command checks:
 - Configuration directory exists
