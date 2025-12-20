@@ -20,14 +20,31 @@ class ServerManager: ObservableObject {
     var isPortMode: Bool { urlMode == "port" }
     var isSubdomainMode: Bool { urlMode == "subdomain" }
 
+    private static func debugLog(_ message: String) {
+        let logFile = "/tmp/wtmenubar-debug.log"
+        let timestamp = ISO8601DateFormatter().string(from: Date())
+        let line = "[\(timestamp)] \(message)\n"
+        if let data = line.data(using: .utf8) {
+            if FileManager.default.fileExists(atPath: logFile) {
+                if let handle = FileHandle(forWritingAtPath: logFile) {
+                    handle.seekToEndOfFile()
+                    handle.write(data)
+                    handle.closeFile()
+                }
+            } else {
+                FileManager.default.createFile(atPath: logFile, contents: data)
+            }
+        }
+    }
+
     init() {
         // Find wt binary
         if let path = Self.findWTBinary() {
             self.wtPath = path
-            print("[WTMenubar] Found wt at: \(path)")
+            Self.debugLog("Found wt at: \(path)")
         } else {
             self.wtPath = "/usr/local/bin/wt"
-            print("[WTMenubar] WARNING: wt not found, defaulting to: \(self.wtPath)")
+            Self.debugLog("WARNING: wt not found, defaulting to: \(self.wtPath)")
         }
 
         refresh()
@@ -67,17 +84,17 @@ class ServerManager: ObservableObject {
     func refresh() {
         isLoading = true
         error = nil
-        print("[WTMenubar] refresh() called, wtPath=\(wtPath)")
+        Self.debugLog("refresh() called, wtPath=\(wtPath)")
 
         runWT(["ls", "--json"]) { [weak self] result in
             DispatchQueue.main.async {
                 self?.isLoading = false
                 switch result {
                 case .success(let output):
-                    print("[WTMenubar] runWT success, output length: \(output.count)")
+                    Self.debugLog("runWT success, output length: \(output.count)")
                     self?.parseStatus(output)
                 case .failure(let err):
-                    print("[WTMenubar] runWT FAILED: \(err)")
+                    Self.debugLog("runWT FAILED: \(err)")
                     self?.error = err.localizedDescription
                 }
             }
@@ -252,9 +269,9 @@ class ServerManager: ObservableObject {
     }
 
     private func parseStatus(_ output: String) {
-        print("[WTMenubar] parseStatus called with output length: \(output.count)")
+        Self.debugLog("parseStatus called with output length: \(output.count)")
         guard let data = output.data(using: .utf8) else {
-            print("[WTMenubar] ERROR: Could not convert output to data")
+            Self.debugLog("ERROR: Could not convert output to data")
             return
         }
 
@@ -263,11 +280,11 @@ class ServerManager: ObservableObject {
             self.servers = status.servers.sorted { $0.name < $1.name }
             self.proxy = status.proxy
             self.urlMode = status.urlMode
-            print("[WTMenubar] Parsed \(status.servers.count) servers")
+            Self.debugLog("Parsed \(status.servers.count) servers")
         } catch {
             self.error = "Failed to parse status: \(error.localizedDescription)"
-            print("[WTMenubar] ERROR parsing: \(error)")
-            print("[WTMenubar] Raw output: \(output)")
+            Self.debugLog("ERROR parsing: \(error)")
+            Self.debugLog("Raw output: \(output.prefix(500))")
         }
     }
 
@@ -301,11 +318,12 @@ class ServerManager: ObservableObject {
     }
 
     private static func findWTBinary() -> String? {
+        // Order matters - check development path first
         let paths = [
+            "\(NSHomeDirectory())/development/go/bin/wt",
             "/usr/local/bin/wt",
             "/opt/homebrew/bin/wt",
             "\(NSHomeDirectory())/go/bin/wt",
-            "\(NSHomeDirectory())/development/go/bin/wt",
             "\(NSHomeDirectory())/.local/bin/wt"
         ]
 
