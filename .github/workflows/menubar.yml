@@ -1,0 +1,32 @@
+name: Menubar App
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'menubar/**'
+      - '.github/workflows/menubar.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'menubar/**'
+      - '.github/workflows/menubar.yml'
+
+jobs:
+  build:
+    name: Build
+    runs-on: macos-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select Xcode
+        run: sudo xcode-select -s /Applications/Xcode_15.2.app/Contents/Developer
+
+      - name: Build
+        working-directory: menubar/WTMenubar
+        run: swift build -c release
+
+      - name: Run tests
+        working-directory: menubar/WTMenubar
+        run: swift test

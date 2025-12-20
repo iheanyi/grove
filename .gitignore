@@ -1,0 +1,163 @@
+# =============================================================================
+# wt - Worktree Server Manager
+# =============================================================================
+
+# =============================================================================
+# Go
+# =============================================================================
+# Binaries
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+/cli/wt
+/cli/bin/
+
+# Test binary
+*.test
+
+# Output of the go coverage tool
+*.out
+coverage.txt
+
+# Dependency directories
+vendor/
+
+# Go workspace file
+go.work
+go.work.sum
+
+# =============================================================================
+# Swift / Xcode / macOS App
+# =============================================================================
+# Build products
+/menubar/WTMenubar/.build/
+/menubar/WTMenubar/.swiftpm/
+DerivedData/
+*.xcworkspace
+!*.xcworkspace/contents.xcworkspacedata
+xcuserdata/
+
+# Xcode user-specific
+*.xcuserstate
+*.moved-aside
+*.mode1v3
+*.mode2v3
+*.perspectivev3
+*.xccheckout
+*.xcscmblueprint
+
+# Swift Package Manager
+.build/
+.swiftpm/xcode/package.xcworkspace/contents.xcworkspacedata
+Package.resolved
+
+# CocoaPods (if used)
+Pods/
+
+# Carthage (if used)
+Carthage/Build/
+
+# fastlane
+fastlane/report.xml
+fastlane/Preview.html
+fastlane/screenshots/**/*.png
+fastlane/test_output
+
+# =============================================================================
+# macOS
+# =============================================================================
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+
+# Thumbnails
+Thumbs.db
+ehthumbs.db
+
+# Files that might appear on external disk
+.Spotlight-V100
+.Trashes
+
+# =============================================================================
+# IDEs and Editors
+# =============================================================================
+# Visual Studio Code
+.vscode/
+*.code-workspace
+
+# JetBrains IDEs (GoLand, AppCode)
+.idea/
+*.iml
+*.ipr
+*.iws
+
+# Vim
+*.swp
+*.swo
+*~
+
+# Emacs
+*~
+\#*\#
+/.emacs.desktop
+/.emacs.desktop.lock
+*.elc
+auto-save-list
+tramp
+
+# Sublime Text
+*.sublime-workspace
+*.sublime-project
+
+# =============================================================================
+# Environment and Secrets
+# =============================================================================
+.env
+.env.local
+.env.*.local
+*.pem
+*.key
+secrets/
+
+# =============================================================================
+# Build and Distribution
+# =============================================================================
+dist/
+release/
+*.tar.gz
+*.zip
+*.dmg
+*.pkg
+*.app
+
+# GoReleaser
+/cli/dist/
+
+# =============================================================================
+# Logs and Debug
+# =============================================================================
+*.log
+logs/
+debug/
+tmp/
+
+# =============================================================================
+# Test artifacts
+# =============================================================================
+coverage/
+.coverage
+htmlcov/
+
+# =============================================================================
+# Misc
+# =============================================================================
+# Backup files
+*.bak
+*.backup
+
+# Local development files
+*.local
+.local/
