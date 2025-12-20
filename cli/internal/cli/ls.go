@@ -8,6 +8,7 @@ import (
 	"strings"
 	"text/tabwriter"
 
+	"github.com/iheanyi/wt/internal/github"
 	"github.com/iheanyi/wt/internal/registry"
 	"github.com/spf13/cobra"
 )
@@ -20,6 +21,7 @@ var lsCmd = &cobra.Command{
 
 Examples:
   wt ls           # List all servers
+  wt ls --full    # Include CI status and PR links (requires gh CLI)
   wt ls --json    # Output as JSON (for MCP/tooling)
   wt ls --running # Only show running servers`,
 	RunE: runLs,
@@ -28,11 +30,13 @@ Examples:
 func init() {
 	lsCmd.Flags().Bool("json", false, "Output as JSON")
 	lsCmd.Flags().Bool("running", false, "Only show running servers")
+	lsCmd.Flags().Bool("full", false, "Show full info including CI status and PR links")
 }
 
 func runLs(cmd *cobra.Command, args []string) error {
 	outputJSON, _ := cmd.Flags().GetBool("json")
 	onlyRunning, _ := cmd.Flags().GetBool("running")
+	showFull, _ := cmd.Flags().GetBool("full")
 
 	// Load registry
 	reg, err := registry.Load()
@@ -56,11 +60,23 @@ func runLs(cmd *cobra.Command, args []string) error {
 		return servers[i].Name < servers[j].Name
 	})
 
-	if outputJSON {
-		return outputJSONFormat(servers, reg.GetProxy())
+	// Fetch GitHub info if --full flag is set
+	var ghInfo map[string]*github.BranchInfo
+	if showFull && len(servers) > 0 {
+		branches := make([]string, 0, len(servers))
+		for _, s := range servers {
+			if s.Branch != "" {
+				branches = append(branches, s.Branch)
+			}
+		}
+		ghInfo = github.GetBranchInfoBatch(branches)
 	}
 
-	return outputTableFormat(servers, reg.GetProxy())
+	if outputJSON {
+		return outputJSONFormat(servers, reg.GetProxy(), ghInfo)
+	}
+
+	return outputTableFormat(servers, reg.GetProxy(), showFull, ghInfo)
 }
 
 type jsonOutput struct {
@@ -77,9 +93,13 @@ type jsonServer struct {
 	Status     string `json:"status"`
 	Health     string `json:"health,omitempty"`
 	Path       string `json:"path"`
+	Branch     string `json:"branch,omitempty"`
 	Uptime     string `json:"uptime,omitempty"`
 	PID        int    `json:"pid,omitempty"`
 	LogFile    string `json:"log_file,omitempty"`
+	CI         string `json:"ci,omitempty"`
+	PRNumber   int    `json:"pr_number,omitempty"`
+	PRURL      string `json:"pr_url,omitempty"`
 }
 
 type jsonProxy struct {
@@ -89,7 +109,7 @@ type jsonProxy struct {
 	PID       int    `json:"pid,omitempty"`
 }
 
-func outputJSONFormat(servers []*registry.Server, proxy *registry.ProxyInfo) error {
+func outputJSONFormat(servers []*registry.Server, proxy *registry.ProxyInfo, ghInfo map[string]*github.BranchInfo) error {
 	output := jsonOutput{
 		Servers: make([]*jsonServer, 0, len(servers)),
 		URLMode: string(cfg.URLMode),
@@ -120,6 +140,7 @@ func outputJSONFormat(servers []*registry.Server, proxy *registry.ProxyInfo) err
 			Status:  string(s.Status),
 			Health:  string(s.Health),
 			Path:    s.Path,
+			Branch:  s.Branch,
 			Uptime:  s.UptimeString(),
 			PID:     s.PID,
 			LogFile: s.LogFile,
@@ -130,6 +151,19 @@ func outputJSONFormat(servers []*registry.Server, proxy *registry.ProxyInfo) err
 			js.Subdomains = cfg.SubdomainURL(s.Name)
 		}
 
+		// Add GitHub info if available
+		if ghInfo != nil && s.Branch != "" {
+			if info := ghInfo[s.Branch]; info != nil {
+				if info.CI != nil {
+					js.CI = info.CI.State
+				}
+				if info.PR != nil {
+					js.PRNumber = info.PR.Number
+					js.PRURL = info.PR.URL
+				}
+			}
+		}
+
 		output.Servers = append(output.Servers, js)
 	}
 
@@ -138,7 +172,7 @@ func outputJSONFormat(servers []*registry.Server, proxy *registry.ProxyInfo) err
 	return enc.Encode(output)
 }
 
-func outputTableFormat(servers []*registry.Server, proxy *registry.ProxyInfo) error {
+func outputTableFormat(servers []*registry.Server, proxy *registry.ProxyInfo, showFull bool, ghInfo map[string]*github.BranchInfo) error {
 	if len(servers) == 0 {
 		fmt.Println("No servers registered")
 		fmt.Println("\nUse 'wt start <command>' to start a server")
@@ -147,9 +181,14 @@ func outputTableFormat(servers []*registry.Server, proxy *registry.ProxyInfo) er
 
 	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
 
-	// Header
-	fmt.Fprintln(w, "NAME\tURL\tPORT\tSTATUS\tUPTIME")
-	fmt.Fprintln(w, strings.Repeat("-", 80))
+	// Header - include CI and PR columns when showing full info
+	if showFull {
+		fmt.Fprintln(w, "NAME\tURL\tPORT\tSTATUS\tCI\tPR\tUPTIME")
+		fmt.Fprintln(w, strings.Repeat("-", 100))
+	} else {
+		fmt.Fprintln(w, "NAME\tURL\tPORT\tSTATUS\tUPTIME")
+		fmt.Fprintln(w, strings.Repeat("-", 80))
+	}
 
 	for _, s := range servers {
 		status := formatStatus(s.Status)
@@ -161,13 +200,39 @@ func outputTableFormat(servers []*registry.Server, proxy *registry.ProxyInfo) er
 		// Generate URL based on current mode
 		url := cfg.ServerURL(s.Name, s.Port)
 
-		fmt.Fprintf(w, "%s\t%s\t%d\t%s\t%s\n",
-			s.Name,
-			url,
-			s.Port,
-			status,
-			uptime,
-		)
+		if showFull {
+			ciStatus := "-"
+			prInfo := "-"
+
+			if ghInfo != nil && s.Branch != "" {
+				if info := ghInfo[s.Branch]; info != nil {
+					if info.CI != nil {
+						ciStatus = github.FormatCIStatus(info.CI)
+					}
+					if info.PR != nil {
+						prInfo = github.FormatPRInfo(info.PR)
+					}
+				}
+			}
+
+			fmt.Fprintf(w, "%s\t%s\t%d\t%s\t%s\t%s\t%s\n",
+				s.Name,
+				url,
+				s.Port,
+				status,
+				ciStatus,
+				prInfo,
+				uptime,
+			)
+		} else {
+			fmt.Fprintf(w, "%s\t%s\t%d\t%s\t%s\n",
+				s.Name,
+				url,
+				s.Port,
+				status,
+				uptime,
+			)
+		}
 	}
 
 	w.Flush()

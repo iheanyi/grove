@@ -9,6 +9,9 @@ A CLI tool with TUI to automatically manage dev servers across git worktrees wit
 - **Automatic port allocation**: Hash-based port assignment means the same worktree always gets the same port
 - **Works with any framework**: Rails, Node, Python, Go, or anything else
 - **Interactive TUI**: Beautiful terminal dashboard for managing all your servers
+- **fzf-style selector**: Quick fuzzy-find picker for server selection
+- **GitHub integration**: View CI status and PR links for each worktree
+- **Syntax-highlighted logs**: Colorized log output for Rails, JSON, and common patterns
 - **macOS Menubar App**: Native menubar app for quick server management
 - **MCP Integration**: Claude Code can manage your dev servers directly
 - **JSON output**: Machine-readable output for scripting and automation
@@ -102,7 +105,16 @@ wt start --foreground bin/dev
 ```bash
 # List all servers
 wt ls
+wt ls --full  # Include CI status and PR links (requires gh CLI)
 wt ls --json  # MCP-friendly output
+
+# Interactive selector (fzf-style)
+wt select                    # Pick a server interactively
+wt open $(wt select)         # Open selected server in browser
+wt logs $(wt select)         # View logs for selected server
+
+# Navigate to worktree directory
+wt cd feature-auth           # Print path (use with shell function)
 
 # Stop servers
 wt stop              # Stop current worktree's server
@@ -118,7 +130,27 @@ wt url
 
 # Open in browser
 wt open
+
+# View logs with syntax highlighting
+wt logs              # Current worktree
+wt logs feature-auth # Named worktree
+wt logs -f           # Follow mode (like tail -f)
+wt logs --no-color   # Disable highlighting
 ```
+
+### Shell Integration
+
+Add these to your shell config for quick navigation:
+
+```bash
+# Bash/Zsh (~/.bashrc or ~/.zshrc)
+wtcd() { cd "$(wt cd "$@")" }
+
+# Fish (~/.config/fish/config.fish)
+function wtcd; cd (wt cd $argv); end
+```
+
+Then use `wtcd feature-auth` to jump to a worktree's directory.
 
 ### Project configuration
 
