@@ -20,31 +20,12 @@ class ServerManager: ObservableObject {
     var isPortMode: Bool { urlMode == "port" }
     var isSubdomainMode: Bool { urlMode == "subdomain" }
 
-    private static func debugLog(_ message: String) {
-        let logFile = "/tmp/wtmenubar-debug.log"
-        let timestamp = ISO8601DateFormatter().string(from: Date())
-        let line = "[\(timestamp)] \(message)\n"
-        if let data = line.data(using: .utf8) {
-            if FileManager.default.fileExists(atPath: logFile) {
-                if let handle = FileHandle(forWritingAtPath: logFile) {
-                    handle.seekToEndOfFile()
-                    handle.write(data)
-                    handle.closeFile()
-                }
-            } else {
-                FileManager.default.createFile(atPath: logFile, contents: data)
-            }
-        }
-    }
-
     init() {
         // Find wt binary
         if let path = Self.findWTBinary() {
             self.wtPath = path
-            Self.debugLog("Found wt at: \(path)")
         } else {
             self.wtPath = "/usr/local/bin/wt"
-            Self.debugLog("WARNING: wt not found, defaulting to: \(self.wtPath)")
         }
 
         refresh()
@@ -84,17 +65,14 @@ class ServerManager: ObservableObject {
     func refresh() {
         isLoading = true
         error = nil
-        Self.debugLog("refresh() called, wtPath=\(wtPath)")
 
         runWT(["ls", "--json"]) { [weak self] result in
             DispatchQueue.main.async {
                 self?.isLoading = false
                 switch result {
                 case .success(let output):
-                    Self.debugLog("runWT success, output length: \(output.count)")
                     self?.parseStatus(output)
                 case .failure(let err):
-                    Self.debugLog("runWT FAILED: \(err)")
                     self?.error = err.localizedDescription
                 }
             }
@@ -269,22 +247,15 @@ class ServerManager: ObservableObject {
     }
 
     private func parseStatus(_ output: String) {
-        Self.debugLog("parseStatus called with output length: \(output.count)")
-        guard let data = output.data(using: .utf8) else {
-            Self.debugLog("ERROR: Could not convert output to data")
-            return
-        }
+        guard let data = output.data(using: .utf8) else { return }
 
         do {
             let status = try JSONDecoder().decode(WTStatus.self, from: data)
             self.servers = status.servers.sorted { $0.name < $1.name }
             self.proxy = status.proxy
             self.urlMode = status.urlMode
-            Self.debugLog("Parsed \(status.servers.count) servers")
         } catch {
             self.error = "Failed to parse status: \(error.localizedDescription)"
-            Self.debugLog("ERROR parsing: \(error)")
-            Self.debugLog("Raw output: \(output.prefix(500))")
         }
     }
 

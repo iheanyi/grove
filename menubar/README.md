@@ -11,80 +11,42 @@ A native macOS menubar companion app for the `wt` CLI tool.
 - **Quick actions**: Start/stop servers without opening terminal
 - **Open in browser**: One-click to open server URL
 - **Copy URL**: Copy server URL to clipboard
-- **Proxy management**: Start/stop the reverse proxy
+- **View logs**: Real-time log streaming for any server
+- **Proxy management**: Start/stop the reverse proxy (subdomain mode)
 - **Open TUI**: Launch the terminal TUI from menubar
 
 ## Requirements
 
 - macOS 13.0 (Ventura) or later
-- `wt` CLI installed and in PATH
+- `wt` CLI installed
 
 ## Building
 
 ```bash
-cd menubar/WTMenubar
-swift build
+cd WTMenubar
+
+# Build the app bundle
+make build
+
+# Build and run
+make run
+
+# Clean build artifacts
+make clean
 ```
 
-The binary will be at `.build/debug/WTMenubar`.
+The app bundle will be created at `.build/WTMenubar.app`.
 
-## Building for Release
+## Installation
 
-```bash
-cd menubar/WTMenubar
-swift build -c release
-```
-
-## Creating an App Bundle
-
-To create a proper `.app` bundle:
+After building:
 
 ```bash
-# Build release
-swift build -c release
+# Run directly
+open .build/WTMenubar.app
 
-# Create app structure
-mkdir -p WTMenubar.app/Contents/MacOS
-mkdir -p WTMenubar.app/Contents/Resources
-
-# Copy binary
-cp .build/release/WTMenubar WTMenubar.app/Contents/MacOS/
-
-# Create Info.plist
-cat > WTMenubar.app/Contents/Info.plist << 'EOF'
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-    <key>CFBundleExecutable</key>
-    <string>WTMenubar</string>
-    <key>CFBundleIdentifier</key>
-    <string>com.iheanyi.wtmenubar</string>
-    <key>CFBundleName</key>
-    <string>WTMenubar</string>
-    <key>CFBundlePackageType</key>
-    <string>APPL</string>
-    <key>CFBundleShortVersionString</key>
-    <string>1.0</string>
-    <key>CFBundleVersion</key>
-    <string>1</string>
-    <key>LSMinimumSystemVersion</key>
-    <string>13.0</string>
-    <key>LSUIElement</key>
-    <true/>
-</dict>
-</plist>
-EOF
-```
-
-## Running
-
-```bash
-# Run from command line
-.build/debug/WTMenubar
-
-# Or if you created an app bundle
-open WTMenubar.app
+# Or copy to Applications
+cp -r .build/WTMenubar.app /Applications/
 ```
 
 ## Auto-launch on Login
@@ -95,18 +57,45 @@ open WTMenubar.app
 
 ## Configuration
 
-The menubar app looks for the `wt` binary in these locations:
-1. `/usr/local/bin/wt`
-2. `/opt/homebrew/bin/wt`
-3. `~/go/bin/wt`
-4. `~/.local/bin/wt`
-5. Falls back to `which wt`
+The menubar app looks for the `wt` binary in these locations (in order):
 
-## Screenshots
+1. `~/development/go/bin/wt`
+2. `/usr/local/bin/wt`
+3. `/opt/homebrew/bin/wt`
+4. `~/go/bin/wt`
+5. `~/.local/bin/wt`
 
-The menubar shows:
-- Server list grouped by running/stopped status
-- Port numbers for each server
-- Quick action buttons on hover
-- Proxy status with start/stop button
-- Open TUI button
+If not found in any of these locations, it falls back to `/usr/local/bin/wt`.
+
+## How It Works
+
+The app communicates with the `wt` CLI by running `wt ls --json` to get server status. It automatically refreshes every 5 seconds.
+
+## Project Structure
+
+```
+WTMenubar/
+├── Package.swift              # Swift Package Manager manifest
+├── Makefile                   # Build commands
+├── Sources/WTMenubar/
+│   ├── App/
+│   │   └── WTMenubarApp.swift # App entry point (MenuBarExtra)
+│   ├── Models/
+│   │   └── Server.swift       # Data models for JSON parsing
+│   ├── Services/
+│   │   └── ServerManager.swift # wt CLI communication
+│   └── Views/
+│       ├── MenuView.swift     # Main menu dropdown
+│       └── LogsView.swift     # Log viewer
+└── Tests/
+    └── WTMenubarTests/
+```
+
+## URL Modes
+
+The app supports both URL modes:
+
+- **Port mode** (default): Shows `http://localhost:PORT` URLs
+- **Subdomain mode**: Shows `https://name.localhost` URLs with proxy controls
+
+The mode is determined by your `wt` configuration (`~/.config/wt/config.yaml`).

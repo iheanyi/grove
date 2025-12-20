@@ -4,12 +4,14 @@ A CLI tool with TUI to automatically manage dev servers across git worktrees wit
 
 ## Features
 
-- **Clean URLs**: Access your dev servers at `https://feature-branch.localhost` instead of `localhost:3001`
-- **Wildcard subdomains**: Multi-tenant apps work out of the box with `https://tenant.feature-branch.localhost`
+- **Simple by default**: Access servers at `http://localhost:PORT` with zero configuration
+- **Optional subdomain mode**: Enable `https://feature-branch.localhost` URLs when needed
 - **Automatic port allocation**: Hash-based port assignment means the same worktree always gets the same port
 - **Works with any framework**: Rails, Node, Python, Go, or anything else
 - **Interactive TUI**: Beautiful terminal dashboard for managing all your servers
-- **JSON output**: MCP-friendly output for browser automation integration
+- **macOS Menubar App**: Native menubar app for quick server management
+- **MCP Integration**: Claude Code can manage your dev servers directly
+- **JSON output**: Machine-readable output for scripting and automation
 
 ## Installation
 
@@ -35,57 +37,20 @@ make build
 
 ## Quick Start
 
-### 1. Install Caddy
-
-The reverse proxy uses Caddy. Install it first:
-
 ```bash
-brew install caddy
-```
-
-### 2. Trust the Local CA Certificate
-
-This allows your browser to trust `*.localhost` HTTPS certificates:
-
-```bash
-# Start Caddy temporarily to generate the CA
-caddy start
-
-# Trust the CA certificate (requires sudo)
-sudo caddy trust
-
-# Stop Caddy (wt will manage it)
-caddy stop
-```
-
-### 3. Run wt setup
-
-```bash
-wt setup
-```
-
-This verifies your environment is configured correctly.
-
-### 4. Start the Reverse Proxy
-
-```bash
-wt proxy start
-```
-
-### 5. Start Your First Server
-
-```bash
-# Navigate to your project
+# Navigate to your project (must be a git repo)
 cd ~/projects/myapp
 
 # Start the dev server
 wt start bin/dev
 
-# Your server is now available at https://myapp.localhost
-# Subdomains work too: https://tenant1.myapp.localhost
+# Your server is now available at http://localhost:PORT
+# wt automatically allocates a consistent port based on worktree name
 ```
 
-### 6. Check Status
+That's it! No proxy setup required in the default port mode.
+
+### Check Status
 
 ```bash
 # List all servers
@@ -93,6 +58,26 @@ wt ls
 
 # Launch the interactive TUI
 wt
+```
+
+### Optional: Subdomain Mode
+
+If you want pretty URLs like `https://myapp.localhost`, enable subdomain mode:
+
+```bash
+# Install Caddy (reverse proxy)
+brew install caddy
+
+# Trust the local CA certificate
+wt setup
+
+# Edit config to enable subdomain mode
+# ~/.config/wt/config.yaml -> url_mode: subdomain
+
+# Start the proxy
+wt proxy start
+
+# Now servers are available at https://name.localhost
 ```
 
 ## Usage
@@ -341,6 +326,26 @@ The `--json` flag provides machine-readable output for scripting:
 wt ls --json
 ```
 
+**Port mode (default):**
+```json
+{
+  "servers": [
+    {
+      "name": "feature-auth",
+      "url": "http://localhost:3042",
+      "port": 3042,
+      "status": "running",
+      "path": "/Users/you/projects/myapp-feature-auth",
+      "uptime": "2h 15m",
+      "log_file": "~/.config/wt/logs/feature-auth.log"
+    }
+  ],
+  "proxy": null,
+  "url_mode": "port"
+}
+```
+
+**Subdomain mode:**
 ```json
 {
   "servers": [
@@ -350,7 +355,6 @@ wt ls --json
       "subdomains": "https://*.feature-auth.localhost",
       "port": 3042,
       "status": "running",
-      "health": "healthy",
       "path": "/Users/you/projects/myapp-feature-auth",
       "uptime": "2h 15m"
     }
@@ -359,9 +363,40 @@ wt ls --json
     "status": "running",
     "http_port": 80,
     "https_port": 443
-  }
+  },
+  "url_mode": "subdomain"
 }
 ```
+
+## macOS Menubar App
+
+A native macOS menubar app is available for quick server management without the terminal.
+
+### Features
+
+- See all running/stopped servers at a glance
+- Start/stop servers with one click
+- Open server URLs in browser
+- View server logs
+- Copy URLs to clipboard
+
+### Building
+
+```bash
+cd menubar/WTMenubar
+make build   # Build the app
+make run     # Build and run
+```
+
+The app bundle will be at `.build/WTMenubar.app`. You can drag it to your Applications folder.
+
+### Note
+
+The menubar app communicates with the `wt` CLI. Make sure `wt` is installed and accessible. The app looks for `wt` in these locations:
+- `~/development/go/bin/wt`
+- `/usr/local/bin/wt`
+- `/opt/homebrew/bin/wt`
+- `~/go/bin/wt`
 
 ## Troubleshooting
 
