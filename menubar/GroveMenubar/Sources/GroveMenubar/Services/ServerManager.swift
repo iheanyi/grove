@@ -24,12 +24,17 @@ class ServerManager: ObservableObject {
     var isSubdomainMode: Bool { urlMode == "subdomain" }
 
     init() {
+        let initStart = CFAbsoluteTimeGetCurrent()
+        print("[DEBUG] ServerManager.init() started")
+
         // Find grove binary synchronously from known paths (fast, no process spawn)
         // We avoid running `which` here to prevent blocking the main thread
         self.grovePath = Self.findGroveBinaryFast() ?? "/usr/local/bin/grove"
+        print("[DEBUG] Found grove at: \(grovePath) (took \(CFAbsoluteTimeGetCurrent() - initStart)s)")
 
         refresh()
         startAutoRefresh()
+        print("[DEBUG] ServerManager.init() completed (took \(CFAbsoluteTimeGetCurrent() - initStart)s)")
     }
 
     deinit {
@@ -75,10 +80,14 @@ class ServerManager: ObservableObject {
     // MARK: - Actions
 
     func refresh() {
+        let refreshStart = CFAbsoluteTimeGetCurrent()
+        print("[DEBUG] refresh() started on thread: \(Thread.isMainThread ? "MAIN" : "background")")
+
         isLoading = true
         error = nil
 
         runGrove(["ls", "--json"]) { [weak self] result in
+            print("[DEBUG] runGrove completed (took \(CFAbsoluteTimeGetCurrent() - refreshStart)s)")
             switch result {
             case .success(let output):
                 // Parse and filter on background thread to avoid blocking main thread
@@ -445,6 +454,9 @@ class ServerManager: ObservableObject {
 
     /// Parse status on background thread, then update UI on main thread
     private func parseStatusAsync(_ output: String) {
+        let parseStart = CFAbsoluteTimeGetCurrent()
+        print("[DEBUG] parseStatusAsync started on thread: \(Thread.isMainThread ? "MAIN" : "background")")
+
         // Already on background thread from runGrove
         guard let data = output.data(using: .utf8) else {
             DispatchQueue.main.async { [weak self] in
@@ -455,6 +467,7 @@ class ServerManager: ObservableObject {
 
         do {
             let status = try JSONDecoder().decode(WTStatus.self, from: data)
+            print("[DEBUG] JSON decode done (took \(CFAbsoluteTimeGetCurrent() - parseStart)s)")
 
             // Filter out worktrees whose paths no longer exist (done on background thread)
             let validServers = status.servers.filter { server in
@@ -464,6 +477,7 @@ class ServerManager: ObservableObject {
                 }
                 return exists
             }
+            print("[DEBUG] FileManager filter done (took \(CFAbsoluteTimeGetCurrent() - parseStart)s)")
 
             let newServers = validServers.sorted { $0.name < $1.name }
             let proxy = status.proxy
@@ -471,6 +485,8 @@ class ServerManager: ObservableObject {
 
             // Update UI on main thread
             DispatchQueue.main.async { [weak self] in
+                let mainStart = CFAbsoluteTimeGetCurrent()
+                print("[DEBUG] Main thread update started")
                 guard let self = self else { return }
 
                 self.isLoading = false
@@ -484,6 +500,7 @@ class ServerManager: ObservableObject {
                 self.servers = newServers
                 self.proxy = proxy
                 self.urlMode = urlMode
+                print("[DEBUG] Main thread update done (took \(CFAbsoluteTimeGetCurrent() - mainStart)s)")
 
                 // Fetch GitHub info for all servers in background
                 self.fetchGitHubInfoForServers()

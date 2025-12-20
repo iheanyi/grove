@@ -226,6 +226,8 @@ struct MenuView: View {
                 Spacer()
 
                 Button {
+                    // Activate app to bring settings window to foreground
+                    NSApp.activate(ignoringOtherApps: true)
                     openSettings()
                 } label: {
                     Image(systemName: "gear")
@@ -349,7 +351,10 @@ struct MenuView: View {
                     title: "View Logs",
                     icon: "doc.text.magnifyingglass",
                     shortcut: "⌘L",
-                    action: { openWindow(id: "log-viewer") }
+                    action: {
+                        NSApp.activate(ignoringOtherApps: true)
+                        openWindow(id: "log-viewer")
+                    }
                 )
 
                 ActionButton(
@@ -639,6 +644,7 @@ struct ServerRowView: View {
                     if server.logFile != nil {
                         Button {
                             serverManager.startStreamingLogs(for: server)
+                            NSApp.activate(ignoringOtherApps: true)
                             openWindow(id: "log-viewer")
                         } label: {
                             Image(systemName: "doc.text")
@@ -728,6 +734,7 @@ struct ServerRowView: View {
             if server.logFile != nil {
                 Button {
                     serverManager.startStreamingLogs(for: server)
+                    NSApp.activate(ignoringOtherApps: true)
                     openWindow(id: "log-viewer")
                 } label: {
                     Label("View Logs", systemImage: "doc.text")
