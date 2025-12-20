@@ -344,8 +344,16 @@ func (m *Model) viewLogs() tea.Cmd {
 		}
 	}
 
-	// Open logs in less
-	return tea.ExecProcess(exec.Command("less", "+F", server.LogFile), func(err error) tea.Msg {
+	// Use wt logs command which has syntax highlighting
+	wtPath, _ := exec.LookPath("wt")
+	if wtPath == "" {
+		// Fall back to less if wt not found
+		return tea.ExecProcess(exec.Command("less", "+F", server.LogFile), func(err error) tea.Msg {
+			return nil
+		})
+	}
+
+	return tea.ExecProcess(exec.Command(wtPath, "logs", "-f", server.Name), func(err error) tea.Msg {
 		return nil
 	})
 }

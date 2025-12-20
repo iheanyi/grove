@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 
+	"github.com/iheanyi/wt/internal/loghighlight"
 	"github.com/iheanyi/wt/internal/registry"
 	"github.com/iheanyi/wt/internal/worktree"
 	"github.com/spf13/cobra"
@@ -16,17 +17,27 @@ var logsCmd = &cobra.Command{
 	Short: "Stream logs for a server",
 	Long: `Stream logs for the current worktree's server or a named server.
 
+Logs are syntax-highlighted with colors for:
+  - Log levels (ERROR, WARN, INFO, DEBUG)
+  - HTTP methods (GET, POST, PUT, DELETE)
+  - Status codes (2xx green, 4xx orange, 5xx red)
+  - Timestamps, durations, Rails patterns
+
 Examples:
   wt logs              # Stream logs for current worktree
   wt logs feature-auth # Stream logs for named server
   wt logs -n 50        # Show last 50 lines
-  wt logs -f           # Follow logs (stream new lines)`,
+  wt logs -f           # Follow logs (stream new lines)
+  wt logs --no-color   # Disable syntax highlighting`,
 	RunE: runLogs,
 }
+
+var logsNoColor bool
 
 func init() {
 	logsCmd.Flags().IntP("lines", "n", 20, "Number of lines to show")
 	logsCmd.Flags().BoolP("follow", "f", false, "Follow logs (stream new lines)")
+	logsCmd.Flags().BoolVar(&logsNoColor, "no-color", false, "Disable syntax highlighting")
 }
 
 func runLogs(cmd *cobra.Command, args []string) error {
@@ -73,6 +84,15 @@ func runLogs(cmd *cobra.Command, args []string) error {
 	return tailLines(server.LogFile, lines)
 }
 
+// printLine prints a log line with optional highlighting
+func printLine(line string) {
+	if logsNoColor {
+		fmt.Println(line)
+	} else {
+		fmt.Println(loghighlight.Highlight(line))
+	}
+}
+
 // tailLines shows the last n lines of a file
 func tailLines(path string, n int) error {
 	file, err := os.Open(path)
@@ -99,7 +119,7 @@ func tailLines(path string, n int) error {
 	}
 
 	for _, line := range allLines[start:] {
-		fmt.Println(line)
+		printLine(line)
 	}
 
 	return nil
@@ -126,6 +146,8 @@ func tailFollow(path string) error {
 			}
 			return err
 		}
-		fmt.Print(line)
+		// Remove trailing newline since printLine adds one
+		line = line[:len(line)-1]
+		printLine(line)
 	}
 }

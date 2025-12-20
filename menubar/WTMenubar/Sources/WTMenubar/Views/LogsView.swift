@@ -106,22 +106,13 @@ struct LogLineView: View {
     let line: String
 
     var body: some View {
-        Text(line)
+        Text(highlightedLine)
             .font(.system(size: 11, design: .monospaced))
-            .foregroundColor(lineColor)
             .textSelection(.enabled)
             .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    private var lineColor: Color {
-        let lowercased = line.lowercased()
-        if lowercased.contains("error") || lowercased.contains("fatal") || lowercased.contains("fail") {
-            return .red
-        } else if lowercased.contains("warn") {
-            return .orange
-        } else if lowercased.contains("debug") {
-            return .gray
-        }
-        return .primary
+    private var highlightedLine: AttributedString {
+        LogHighlighter.highlight(line)
     }
 }
