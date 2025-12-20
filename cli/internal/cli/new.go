@@ -22,9 +22,9 @@ using the pattern: <repo-name>-<branch-name>
 If base-branch is not specified, it defaults to 'main' or 'master' (auto-detected).
 
 Examples:
-  wt new feature-auth              # Create worktree from main/master
-  wt new feature-auth develop      # Create worktree from develop branch
-  wt new bugfix-123 v1.0.0         # Create worktree from v1.0.0 tag`,
+  grove new feature-auth              # Create worktree from main/master
+  grove new feature-auth develop      # Create worktree from develop branch
+  grove new bugfix-123 v1.0.0         # Create worktree from v1.0.0 tag`,
 	Args: cobra.RangeArgs(1, 2),
 	RunE: runNew,
 }
@@ -99,7 +99,7 @@ func runNew(cmd *cobra.Command, args []string) error {
 	fmt.Printf("Path: %s\n", worktreePath)
 	fmt.Printf("\nTo switch to this worktree:\n")
 	fmt.Printf("  cd %s\n", worktreePath)
-	fmt.Printf("  # or use: wt switch %s\n", worktreeName)
+	fmt.Printf("  # or use: grove switch %s\n", worktreeName)
 
 	return nil
 }

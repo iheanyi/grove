@@ -485,7 +485,7 @@ func (m *EnhancedModel) startServer() tea.Cmd {
 		// For now, we just show a message
 		delete(m.starting, server.Name)
 		return NotificationMsg{
-			Message: fmt.Sprintf("Use 'wt start %s' in terminal to start server", server.Name),
+			Message: fmt.Sprintf("Use 'grove start %s' in terminal to start server", server.Name),
 			Type:    NotificationInfo,
 		}
 	}
@@ -547,7 +547,7 @@ func (m *EnhancedModel) restartServer() tea.Cmd {
 			process.Signal(syscall.SIGTERM)
 		}
 		return NotificationMsg{
-			Message: fmt.Sprintf("Restart %s with 'wt start %s'", server.Name, server.Name),
+			Message: fmt.Sprintf("Restart %s with 'grove start %s'", server.Name, server.Name),
 			Type:    NotificationInfo,
 		}
 	}
@@ -618,16 +618,16 @@ func (m *EnhancedModel) viewLogs() tea.Cmd {
 		}
 	}
 
-	// Use wt logs command which has syntax highlighting
-	wtPath, _ := exec.LookPath("grove")
-	if wtPath == "" {
-		// Fall back to less if wt not found
+	// Use grove logs command which has syntax highlighting
+	grovePath, _ := exec.LookPath("grove")
+	if grovePath == "" {
+		// Fall back to less if grove not found
 		return tea.ExecProcess(exec.Command("less", "+F", server.LogFile), func(err error) tea.Msg {
 			return nil
 		})
 	}
 
-	return tea.ExecProcess(exec.Command(wtPath, "logs", "-f", server.Name), func(err error) tea.Msg {
+	return tea.ExecProcess(exec.Command(grovePath, "logs", "-f", server.Name), func(err error) tea.Msg {
 		return nil
 	})
 }
@@ -649,7 +649,7 @@ func (m *EnhancedModel) toggleProxy() tea.Cmd {
 			}
 		}
 		return NotificationMsg{
-			Message: "Use 'wt proxy start' in terminal to start proxy",
+			Message: "Use 'grove proxy start' in terminal to start proxy",
 			Type:    NotificationInfo,
 		}
 	}

@@ -19,11 +19,11 @@ var lsCmd = &cobra.Command{
 	Long: `List all registered servers and discovered worktrees with their status.
 
 Examples:
-  wt ls            # List all discovered worktrees
-  wt ls --json     # Output as JSON (for MCP/tooling)
-  wt ls --servers  # Only show worktrees with servers (old behavior)
-  wt ls --active   # Only show worktrees with any activity
-  wt ls --all      # Show all discovered worktrees (default)`,
+  grove ls            # List all discovered worktrees
+  grove ls --json     # Output as JSON (for MCP/tooling)
+  grove ls --servers  # Only show worktrees with servers (old behavior)
+  grove ls --active   # Only show worktrees with any activity
+  grove ls --all      # Show all discovered worktrees (default)`,
 	RunE: runLs,
 }
 
@@ -200,7 +200,7 @@ func outputJSONFormat(servers []*registry.Server, proxy *registry.ProxyInfo) err
 func outputTableFormat(servers []*registry.Server, proxy *registry.ProxyInfo) error {
 	if len(servers) == 0 {
 		fmt.Println("No servers registered")
-		fmt.Println("\nUse 'wt start <command>' to start a server")
+		fmt.Println("\nUse 'grove start <command>' to start a server")
 		return nil
 	}
 
@@ -238,7 +238,7 @@ func outputTableFormat(servers []*registry.Server, proxy *registry.ProxyInfo) er
 			fmt.Printf("Proxy: running on :%d/:%d (PID: %d)\n",
 				proxy.HTTPPort, proxy.HTTPSPort, proxy.PID)
 		} else {
-			fmt.Println("Proxy: not running (use 'wt proxy start' to start)")
+			fmt.Println("Proxy: not running (use 'grove proxy start' to start)")
 		}
 	} else {
 		fmt.Printf("URL mode: port (access servers directly via http://localhost:PORT)\n")
@@ -347,7 +347,7 @@ func outputJSONFormatNew(views []*WorktreeView, proxy *registry.ProxyInfo) error
 func outputTableFormatNew(views []*WorktreeView, proxy *registry.ProxyInfo) error {
 	if len(views) == 0 {
 		fmt.Println("No worktrees discovered")
-		fmt.Println("\nUse 'wt discover' to scan for git worktrees, or 'wt start <command>' to start a server")
+		fmt.Println("\nUse 'grove discover' to scan for git worktrees, or 'grove start <command>' to start a server")
 		return nil
 	}
 
@@ -421,7 +421,7 @@ func outputTableFormatNew(views []*WorktreeView, proxy *registry.ProxyInfo) erro
 			fmt.Printf("Proxy: running on :%d/:%d (PID: %d)\n",
 				proxy.HTTPPort, proxy.HTTPSPort, proxy.PID)
 		} else {
-			fmt.Println("Proxy: not running (use 'wt proxy start' to start)")
+			fmt.Println("Proxy: not running (use 'grove proxy start' to start)")
 		}
 	} else {
 		fmt.Printf("URL mode: port (access servers directly via http://localhost:PORT)\n")

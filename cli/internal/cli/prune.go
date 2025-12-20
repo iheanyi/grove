@@ -21,9 +21,9 @@ This command identifies worktrees whose branches have been merged into the main 
 and prompts for confirmation before deletion.
 
 Examples:
-  wt prune              # Interactive prune with confirmation
-  wt prune --dry-run    # Show what would be deleted
-  wt prune --force      # Delete without confirmation`,
+  grove prune              # Interactive prune with confirmation
+  grove prune --dry-run    # Show what would be deleted
+  grove prune --force      # Delete without confirmation`,
 	RunE: runPrune,
 }
 

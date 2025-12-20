@@ -69,7 +69,7 @@ func runDoctor(cmd *cobra.Command, args []string) error {
 			fmt.Printf("RUNNING (PID: %d)\n", proxy.PID)
 		} else {
 			fmt.Println("NOT RUNNING")
-			fmt.Println("  Run: wt proxy start")
+			fmt.Println("  Run: grove proxy start")
 			allGood = false
 		}
 	} else {

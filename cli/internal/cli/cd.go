@@ -17,16 +17,16 @@ This command is designed to work with a shell function. Add this to your
 shell configuration:
 
   # Bash/Zsh
-  wtcd() { cd "$(wt cd "$@")" }
+  wtcd() { cd "$(grove cd "$@")" }
 
   # Fish
-  function wtcd; cd (wt cd $argv); end
+  function wtcd; cd (grove cd $argv); end
 
 Then use 'wtcd <name>' to change to a worktree's directory.
 
 Examples:
-  wt cd                # Print path for current worktree
-  wt cd feature-auth   # Print path for named worktree
+  grove cd                # Print path for current worktree
+  grove cd feature-auth   # Print path for named worktree
   wtcd feature-auth    # Change to worktree directory (with shell function)`,
 	Args: cobra.MaximumNArgs(1),
 	RunE: runCd,

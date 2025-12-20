@@ -22,13 +22,13 @@ The selected server's name is printed to stdout.
 
 Useful with shell functions:
   # Start the selected server
-  wt start $(wt select)
+  grove start $(grove select)
 
   # Open the selected server in browser
-  wt open $(wt select)
+  grove open $(grove select)
 
   # Change to selected server's directory
-  cd "$(wt cd $(wt select))"`,
+  cd "$(grove cd $(grove select))"`,
 	RunE: runSelect,
 }
 

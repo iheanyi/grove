@@ -22,11 +22,11 @@ By default, scans the current directory and its subdirectories (1 level deep).
 Use --depth to scan deeper, or --recursive for unlimited depth.
 
 Examples:
-  wt discover                    # Scan current directory
-  wt discover ~/development      # Scan specific directory
-  wt discover --depth 2          # Scan 2 levels deep
-  wt discover --register         # Register all discovered worktrees
-  wt discover --register --start # Register and start all with default command`,
+  grove discover                    # Scan current directory
+  grove discover ~/development      # Scan specific directory
+  grove discover --depth 2          # Scan 2 levels deep
+  grove discover --register         # Register all discovered worktrees
+  grove discover --register --start # Register and start all with default command`,
 	RunE: runDiscover,
 }
 

@@ -306,7 +306,7 @@ func (m *Model) toggleServer() tea.Cmd {
 			return statusMsgCmd(fmt.Sprintf("Stopped %s", server.Name))
 		}
 		// Can't start from TUI without knowing the command
-		return statusMsgCmd(fmt.Sprintf("Use 'wt start' in terminal to start %s", server.Name))
+		return statusMsgCmd(fmt.Sprintf("Use 'grove start' in terminal to start %s", server.Name))
 	}
 }
 
@@ -344,16 +344,16 @@ func (m *Model) viewLogs() tea.Cmd {
 		}
 	}
 
-	// Use wt logs command which has syntax highlighting
-	wtPath, _ := exec.LookPath("grove")
-	if wtPath == "" {
-		// Fall back to less if wt not found
+	// Use grove logs command which has syntax highlighting
+	grovePath, _ := exec.LookPath("grove")
+	if grovePath == "" {
+		// Fall back to less if grove not found
 		return tea.ExecProcess(exec.Command("less", "+F", server.LogFile), func(err error) tea.Msg {
 			return nil
 		})
 	}
 
-	return tea.ExecProcess(exec.Command(wtPath, "logs", "-f", server.Name), func(err error) tea.Msg {
+	return tea.ExecProcess(exec.Command(grovePath, "logs", "-f", server.Name), func(err error) tea.Msg {
 		return nil
 	})
 }
@@ -371,7 +371,7 @@ func (m *Model) toggleProxy() tea.Cmd {
 			m.reg.UpdateProxy(proxy)
 			return statusMsgCmd("Proxy stopped")
 		}
-		return statusMsgCmd("Use 'wt proxy start' in terminal to start proxy")
+		return statusMsgCmd("Use 'grove proxy start' in terminal to start proxy")
 	}
 }
 

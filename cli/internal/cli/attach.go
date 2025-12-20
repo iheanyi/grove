@@ -18,15 +18,15 @@ var attachCmd = &cobra.Command{
 	Long: `Attach to a dev server that is already running on the specified port.
 
 This is useful when:
-- You started a server outside of wt (e.g., directly with npm run dev)
-- You want to add a running server to the wt proxy
+- You started a server outside of grove (e.g., directly with npm run dev)
+- You want to add a running server to the grove proxy
 
 The server will be registered and routed through the proxy like normal.
 
 Examples:
-  wt attach 3000                    # Attach to server on port 3000
-  wt attach 3000 --name my-server   # Use custom name
-  wt attach 8080 --url /api         # Only route /api paths`,
+  grove attach 3000                    # Attach to server on port 3000
+  grove attach 3000 --name my-server   # Use custom name
+  grove attach 8080 --url /api         # Only route /api paths`,
 	Args: cobra.ExactArgs(1),
 	RunE: runAttach,
 }
@@ -149,7 +149,7 @@ func runAttach(cmd *cobra.Command, args []string) error {
 	proxy := reg.GetProxy()
 	if !proxy.IsRunning() || !isProcessRunning(proxy.PID) {
 		fmt.Println()
-		fmt.Println("Note: The proxy is not running. Start it with: wt proxy start")
+		fmt.Println("Note: The proxy is not running. Start it with: grove proxy start")
 	}
 
 	return nil
@@ -172,15 +172,15 @@ func findPIDOnPort(targetPort int) int {
 // DetachCmd removes a server from tracking without stopping it
 var detachCmd = &cobra.Command{
 	Use:   "detach [name]",
-	Short: "Detach a server from wt tracking",
-	Long: `Detach a server from wt tracking without stopping the process.
+	Short: "Detach a server from grove tracking",
+	Long: `Detach a server from grove tracking without stopping the process.
 
 This removes the server from the registry and proxy but leaves
 the actual process running.
 
 Examples:
-  wt detach                  # Detach current worktree's server
-  wt detach my-server        # Detach named server`,
+  grove detach                  # Detach current worktree's server
+  grove detach my-server        # Detach named server`,
 	RunE: runDetach,
 }
 

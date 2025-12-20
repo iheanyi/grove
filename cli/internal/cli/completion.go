@@ -10,26 +10,26 @@ import (
 var completionCmd = &cobra.Command{
 	Use:   "completion [bash|zsh|fish]",
 	Short: "Generate shell completion script",
-	Long: `Generate shell completion script for wt.
+	Long: `Generate shell completion script for grove.
 
 To load completions:
 
 Bash:
-  $ wt completion bash > /etc/bash_completion.d/wt
+  $ grove completion bash > /etc/bash_completion.d/grove
   or
-  $ wt completion bash > /usr/local/etc/bash_completion.d/wt
+  $ grove completion bash > /usr/local/etc/bash_completion.d/grove
 
 Zsh:
-  $ wt completion zsh > "${fpath[1]}/_wt"
+  $ grove completion zsh > "${fpath[1]}/_grove"
   or
-  $ wt completion zsh > /usr/local/share/zsh/site-functions/_wt
+  $ grove completion zsh > /usr/local/share/zsh/site-functions/_grove
 
   You may need to start a new shell for this setup to take effect.
 
 Fish:
-  $ wt completion fish > ~/.config/fish/completions/wt.fish
+  $ grove completion fish > ~/.config/fish/completions/grove.fish
   or
-  $ wt completion fish > /usr/local/share/fish/vendor_completions.d/wt.fish`,
+  $ grove completion fish > /usr/local/share/fish/vendor_completions.d/grove.fish`,
 	DisableFlagsInUseLine: true,
 	ValidArgs:             []string{"bash", "zsh", "fish"},
 	Args:                  cobra.MatchAll(cobra.ExactArgs(1), cobra.OnlyValidArgs),
@@ -49,12 +49,12 @@ func init() {
 var completionBashCmd = &cobra.Command{
 	Use:   "bash",
 	Short: "Generate bash completion script",
-	Long: `Generate bash completion script for wt.
+	Long: `Generate bash completion script for grove.
 
 To load completions:
-  $ wt completion bash > /etc/bash_completion.d/wt
+  $ grove completion bash > /etc/bash_completion.d/grove
   or
-  $ wt completion bash > /usr/local/etc/bash_completion.d/wt`,
+  $ grove completion bash > /usr/local/etc/bash_completion.d/grove`,
 	DisableFlagsInUseLine: true,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		return rootCmd.GenBashCompletion(os.Stdout)
@@ -64,12 +64,12 @@ To load completions:
 var completionZshCmd = &cobra.Command{
 	Use:   "zsh",
 	Short: "Generate zsh completion script",
-	Long: `Generate zsh completion script for wt.
+	Long: `Generate zsh completion script for grove.
 
 To load completions:
-  $ wt completion zsh > "${fpath[1]}/_wt"
+  $ grove completion zsh > "${fpath[1]}/_grove"
   or
-  $ wt completion zsh > /usr/local/share/zsh/site-functions/_wt
+  $ grove completion zsh > /usr/local/share/zsh/site-functions/_grove
 
 You may need to start a new shell for this setup to take effect.`,
 	DisableFlagsInUseLine: true,
@@ -81,12 +81,12 @@ You may need to start a new shell for this setup to take effect.`,
 var completionFishCmd = &cobra.Command{
 	Use:   "fish",
 	Short: "Generate fish completion script",
-	Long: `Generate fish completion script for wt.
+	Long: `Generate fish completion script for grove.
 
 To load completions:
-  $ wt completion fish > ~/.config/fish/completions/wt.fish
+  $ grove completion fish > ~/.config/fish/completions/grove.fish
   or
-  $ wt completion fish > /usr/local/share/fish/vendor_completions.d/wt.fish`,
+  $ grove completion fish > /usr/local/share/fish/vendor_completions.d/grove.fish`,
 	DisableFlagsInUseLine: true,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		return rootCmd.GenFishCompletion(os.Stdout, true)
@@ -107,7 +107,7 @@ func runCompletion(cmd *cobra.Command, args []string) error {
 
 // setupDynamicCompletions adds dynamic completion functions for commands
 func setupDynamicCompletions() {
-	// For 'wt stop <name>' - complete with running server names
+	// For 'grove stop <name>' - complete with running server names
 	stopCmd.ValidArgsFunction = func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		if len(args) != 0 {
 			return nil, cobra.ShellCompDirectiveNoFileComp
@@ -115,7 +115,7 @@ func setupDynamicCompletions() {
 		return getRunningServerNames(), cobra.ShellCompDirectiveNoFileComp
 	}
 
-	// For 'wt logs <name>' - complete with all server names
+	// For 'grove logs <name>' - complete with all server names
 	logsCmd.ValidArgsFunction = func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		if len(args) != 0 {
 			return nil, cobra.ShellCompDirectiveNoFileComp
@@ -123,7 +123,7 @@ func setupDynamicCompletions() {
 		return getAllServerNames(), cobra.ShellCompDirectiveNoFileComp
 	}
 
-	// For 'wt restart <name>' - complete with server names
+	// For 'grove restart <name>' - complete with server names
 	restartCmd.ValidArgsFunction = func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		if len(args) != 0 {
 			return nil, cobra.ShellCompDirectiveNoFileComp
@@ -131,7 +131,7 @@ func setupDynamicCompletions() {
 		return getAllServerNames(), cobra.ShellCompDirectiveNoFileComp
 	}
 
-	// For 'wt url <name>' - complete with running server names
+	// For 'grove url <name>' - complete with running server names
 	urlCmd.ValidArgsFunction = func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		if len(args) != 0 {
 			return nil, cobra.ShellCompDirectiveNoFileComp
@@ -139,7 +139,7 @@ func setupDynamicCompletions() {
 		return getRunningServerNames(), cobra.ShellCompDirectiveNoFileComp
 	}
 
-	// For 'wt open <name>' - complete with running server names
+	// For 'grove open <name>' - complete with running server names
 	openCmd.ValidArgsFunction = func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		if len(args) != 0 {
 			return nil, cobra.ShellCompDirectiveNoFileComp
@@ -147,7 +147,7 @@ func setupDynamicCompletions() {
 		return getRunningServerNames(), cobra.ShellCompDirectiveNoFileComp
 	}
 
-	// For 'wt switch <name>' - complete with worktree names
+	// For 'grove switch <name>' - complete with worktree names
 	switchCmd.ValidArgsFunction = func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		if len(args) != 0 {
 			return nil, cobra.ShellCompDirectiveNoFileComp

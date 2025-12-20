@@ -14,11 +14,11 @@ var restartCmd = &cobra.Command{
 	Short: "Restart a dev server",
 	Long: `Restart a dev server for the current worktree or a named worktree.
 
-This is equivalent to running 'wt stop' followed by 'wt start'.
+This is equivalent to running 'grove stop' followed by 'grove start'.
 
 Examples:
-  wt restart              # Restart server for current worktree
-  wt restart feature-auth # Restart server by name`,
+  grove restart              # Restart server for current worktree
+  grove restart feature-auth # Restart server by name`,
 	RunE: runRestart,
 }
 
@@ -51,11 +51,11 @@ func runRestart(cmd *cobra.Command, args []string) error {
 	// Get server info
 	server, ok := reg.Get(name)
 	if !ok {
-		return fmt.Errorf("no server registered for '%s'\nUse 'wt start <command>' to start a new server", name)
+		return fmt.Errorf("no server registered for '%s'\nUse 'grove start <command>' to start a new server", name)
 	}
 
 	if !server.IsRunning() {
-		return fmt.Errorf("server '%s' is not running\nUse 'wt start' to start it", name)
+		return fmt.Errorf("server '%s' is not running\nUse 'grove start' to start it", name)
 	}
 
 	// Remember the command for restart

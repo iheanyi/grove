@@ -63,7 +63,7 @@ func init() {
 }
 
 func runMCPInstall(cmd *cobra.Command, args []string) error {
-	// Find wt binary path
+	// Find grove binary path
 	grovePath, err := exec.LookPath("grove")
 	if err != nil {
 		// Fall back to current executable

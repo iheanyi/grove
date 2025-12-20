@@ -15,8 +15,8 @@ var openCmd = &cobra.Command{
 	Long: `Open the current worktree's server or a named server in the default browser.
 
 Examples:
-  wt open              # Open current worktree's server
-  wt open feature-auth # Open named server`,
+  grove open              # Open current worktree's server
+  grove open feature-auth # Open named server`,
 	RunE: runOpen,
 }
 
@@ -42,11 +42,11 @@ func runOpen(cmd *cobra.Command, args []string) error {
 
 	server, ok := reg.Get(name)
 	if !ok {
-		return fmt.Errorf("no server registered for '%s'\nUse 'wt start' to start a server first", name)
+		return fmt.Errorf("no server registered for '%s'\nUse 'grove start' to start a server first", name)
 	}
 
 	if !server.IsRunning() {
-		return fmt.Errorf("server '%s' is not running\nUse 'wt start' to start it", name)
+		return fmt.Errorf("server '%s' is not running\nUse 'grove start' to start it", name)
 	}
 
 	fmt.Printf("Opening %s...\n", server.URL)

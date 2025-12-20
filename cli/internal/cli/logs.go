@@ -24,11 +24,11 @@ Logs are syntax-highlighted with colors for:
   - Timestamps, durations, Rails patterns
 
 Examples:
-  wt logs              # Stream logs for current worktree
-  wt logs feature-auth # Stream logs for named server
-  wt logs -n 50        # Show last 50 lines
-  wt logs -f           # Follow logs (stream new lines)
-  wt logs --no-color   # Disable syntax highlighting`,
+  grove logs              # Stream logs for current worktree
+  grove logs feature-auth # Stream logs for named server
+  grove logs -n 50        # Show last 50 lines
+  grove logs -f           # Follow logs (stream new lines)
+  grove logs --no-color   # Disable syntax highlighting`,
 	RunE: runLogs,
 }
 

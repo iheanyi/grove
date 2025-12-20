@@ -22,8 +22,8 @@ On macOS, this uses osascript to open a new Terminal tab/window.
 Optionally starts the dev server if not already running.
 
 Examples:
-  wt switch myrepo-feature-auth         # Switch to worktree
-  wt switch myrepo-feature-auth --start # Switch and start dev server`,
+  grove switch myrepo-feature-auth         # Switch to worktree
+  grove switch myrepo-feature-auth --start # Switch and start dev server`,
 	Args: cobra.ExactArgs(1),
 	RunE: runSwitch,
 }
@@ -87,7 +87,7 @@ func runSwitch(cmd *cobra.Command, args []string) error {
 		if existing, ok := reg.Get(targetWt.Name); ok && existing.IsRunning() {
 			fmt.Printf("Server is already running at: %s\n", existing.URL)
 		} else {
-			fmt.Println("Note: Use 'wt start' in the new terminal to start the dev server")
+			fmt.Println("Note: Use 'grove start' in the new terminal to start the dev server")
 			fmt.Println("(Auto-start from switch command would require backgrounding)")
 		}
 	}

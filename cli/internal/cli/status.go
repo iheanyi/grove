@@ -15,8 +15,8 @@ var statusCmd = &cobra.Command{
 	Long: `Show detailed status of the current worktree's server or a named server.
 
 Examples:
-  wt status              # Show status for current worktree
-  wt status feature-auth # Show status for named server`,
+  grove status              # Show status for current worktree
+  grove status feature-auth # Show status for named server`,
 	RunE: runStatus,
 }
 
@@ -43,7 +43,7 @@ func runStatus(cmd *cobra.Command, args []string) error {
 	server, ok := reg.Get(name)
 	if !ok {
 		fmt.Printf("Server '%s' is not registered\n", name)
-		fmt.Println("\nUse 'wt start <command>' to start a server")
+		fmt.Println("\nUse 'grove start <command>' to start a server")
 		return nil
 	}
 

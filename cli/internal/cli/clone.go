@@ -22,12 +22,12 @@ Structure created:
   <directory>/
   ├── .bare/              # Bare git repository (object storage)
   ├── main/               # Main branch worktree
-  └── <feature-branch>/   # Additional worktrees (created with 'wt new')
+  └── <feature-branch>/   # Additional worktrees (created with 'grove new')
 
 Examples:
-  wt clone https://github.com/user/repo.git
-  wt clone git@github.com:user/repo.git myproject
-  wt clone https://github.com/user/repo.git --branch develop`,
+  grove clone https://github.com/user/repo.git
+  grove clone git@github.com:user/repo.git myproject
+  grove clone https://github.com/user/repo.git --branch develop`,
 	Args: cobra.RangeArgs(1, 2),
 	RunE: runClone,
 }
@@ -135,8 +135,8 @@ func runClone(cmd *cobra.Command, args []string) error {
 	fmt.Println()
 	fmt.Println("Next steps:")
 	fmt.Printf("  cd %s/main\n", absDir)
-	fmt.Println("  wt start npm run dev     # Start dev server")
-	fmt.Println("  wt new feature-branch    # Create a new worktree")
+	fmt.Println("  grove start npm run dev     # Start dev server")
+	fmt.Println("  grove new feature-branch    # Create a new worktree")
 
 	return nil
 }

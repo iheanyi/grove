@@ -57,7 +57,7 @@ func runInfo(cmd *cobra.Command, args []string) error {
 func outputInfoText(wt *worktree.Info, reg *registry.Registry) error {
 	// Header
 	fmt.Println("╭─────────────────────────────────────────────────────────────╮")
-	fmt.Println("│                      wt project info                        │")
+	fmt.Println("│                    grove project info                        │")
 	fmt.Println("╰─────────────────────────────────────────────────────────────╯")
 	fmt.Println()
 
@@ -87,7 +87,7 @@ func outputInfoText(wt *worktree.Info, reg *registry.Registry) error {
 		fmt.Println()
 		fmt.Println("CURRENT SERVER")
 		fmt.Println("  No server registered for this worktree")
-		fmt.Println("  Use 'wt start <command>' to start one")
+		fmt.Println("  Use 'grove start <command>' to start one")
 	}
 
 	// All worktrees
@@ -141,7 +141,7 @@ func outputInfoText(wt *worktree.Info, reg *registry.Registry) error {
 		fmt.Printf("  HTTPS:     :%d\n", cfg.ProxyHTTPSPort)
 	} else {
 		fmt.Println("  Status:    stopped")
-		fmt.Println("  Start:     wt proxy start")
+		fmt.Println("  Start:     grove proxy start")
 	}
 
 	// Configuration

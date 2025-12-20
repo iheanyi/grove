@@ -26,10 +26,10 @@ The proxy provides:
 - Automatic HTTPS with local certificates
 
 Examples:
-  wt proxy start   # Start the proxy daemon
-  wt proxy stop    # Stop the proxy daemon
-  wt proxy status  # Check proxy status
-  wt proxy routes  # List all registered routes`,
+  grove proxy start   # Start the proxy daemon
+  grove proxy stop    # Stop the proxy daemon
+  grove proxy status  # Check proxy status
+  grove proxy routes  # List all registered routes`,
 }
 
 var proxyStartCmd = &cobra.Command{
@@ -83,7 +83,7 @@ func runProxyStart(cmd *cobra.Command, args []string) error {
 
 	proxy := reg.GetProxy()
 	if proxy.IsRunning() && isProcessRunning(proxy.PID) {
-		return fmt.Errorf("proxy is already running (PID: %d)\nUse 'wt proxy stop' to stop it first", proxy.PID)
+		return fmt.Errorf("proxy is already running (PID: %d)\nUse 'grove proxy stop' to stop it first", proxy.PID)
 	}
 
 	fmt.Printf("Starting proxy on :%d/:%d...\n", cfg.ProxyHTTPPort, cfg.ProxyHTTPSPort)
@@ -328,7 +328,7 @@ func runProxyStatus(cmd *cobra.Command, args []string) error {
 		fmt.Printf("Started At: %s\n", proxy.StartedAt.Format("2006-01-02 15:04:05"))
 	} else {
 		fmt.Println("Status: stopped")
-		fmt.Println("\nUse 'wt proxy start' to start the proxy")
+		fmt.Println("\nUse 'grove proxy start' to start the proxy")
 	}
 
 	return nil
@@ -344,7 +344,7 @@ func runProxyRoutes(cmd *cobra.Command, args []string) error {
 	servers := reg.ListRunning()
 	if len(servers) == 0 {
 		fmt.Println("No routes registered")
-		fmt.Println("\nStart a server with 'wt start' to register routes")
+		fmt.Println("\nStart a server with 'grove start' to register routes")
 		return nil
 	}
 

@@ -12,8 +12,8 @@ import (
 
 var setupCmd = &cobra.Command{
 	Use:   "setup",
-	Short: "One-time setup for wt",
-	Long: `Perform one-time setup for wt.
+	Short: "One-time setup for grove",
+	Long: `Perform one-time setup for grove.
 
 This command will:
 1. Create necessary directories
@@ -25,7 +25,7 @@ After setup, your browser will trust HTTPS connections to *.localhost domains.`,
 }
 
 func runSetup(cmd *cobra.Command, args []string) error {
-	fmt.Println("Setting up wt...")
+	fmt.Println("Setting up grove...")
 	fmt.Println()
 
 	// Step 1: Create directories
@@ -67,7 +67,7 @@ func runSetup(cmd *cobra.Command, args []string) error {
 			fmt.Println("  Visit https://caddyserver.com/docs/install")
 		}
 		fmt.Println()
-		fmt.Println("After installing Caddy, run 'wt setup' again.")
+		fmt.Println("After installing Caddy, run 'grove setup' again.")
 		return nil
 	}
 	fmt.Println("found")
@@ -110,7 +110,7 @@ func runSetup(cmd *cobra.Command, args []string) error {
 				fmt.Println("done")
 			}
 
-			// Stop Caddy so wt proxy can manage it
+			// Stop Caddy so grove proxy can manage it
 			fmt.Print("Stopping Caddy... ")
 			stopCmd := exec.Command("caddy", "stop")
 			if err := stopCmd.Run(); err != nil {
@@ -131,9 +131,9 @@ func runSetup(cmd *cobra.Command, args []string) error {
 	fmt.Println("Setup complete!")
 	fmt.Println()
 	fmt.Println("Next steps:")
-	fmt.Println("  1. Start the proxy: wt proxy start")
-	fmt.Println("  2. Start a server: wt start bin/dev")
-	fmt.Println("  3. Open in browser: wt open")
+	fmt.Println("  1. Start the proxy: grove proxy start")
+	fmt.Println("  2. Start a server: grove start bin/dev")
+	fmt.Println("  3. Open in browser: grove open")
 
 	return nil
 }

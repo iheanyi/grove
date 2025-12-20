@@ -16,9 +16,9 @@ var urlCmd = &cobra.Command{
 	Long: `Print the URL for the current worktree's server or a named server.
 
 Examples:
-  wt url              # Print URL for current worktree
-  wt url feature-auth # Print URL for named server
-  wt url --json       # Output as JSON`,
+  grove url              # Print URL for current worktree
+  grove url feature-auth # Print URL for named server
+  grove url --json       # Output as JSON`,
 	RunE: runURL,
 }
 

@@ -20,8 +20,8 @@ var stopCmd = &cobra.Command{
 If no name is provided, stops the server for the current worktree.
 
 Examples:
-  wt stop              # Stop server for current worktree
-  wt stop feature-auth # Stop server by name`,
+  grove stop              # Stop server for current worktree
+  grove stop feature-auth # Stop server by name`,
 	RunE: runStop,
 }
 

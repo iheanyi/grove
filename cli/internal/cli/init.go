@@ -22,9 +22,9 @@ Available templates:
   go      - Go project
 
 Examples:
-  wt init           # Create basic .grove.yaml
-  wt init rails     # Create Rails-specific .grove.yaml
-  wt init node      # Create Node.js-specific .grove.yaml`,
+  grove init           # Create basic .grove.yaml
+  grove init rails     # Create Rails-specific .grove.yaml
+  grove init node      # Create Node.js-specific .grove.yaml`,
 	RunE:      runInit,
 	ValidArgs: []string{"rails", "node", "python", "go"},
 }
