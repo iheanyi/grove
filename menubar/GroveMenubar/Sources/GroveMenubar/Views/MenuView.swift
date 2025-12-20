@@ -1,5 +1,36 @@
 import SwiftUI
 
+// MARK: - Toast System
+
+enum ToastType {
+    case success(String)
+    case error(String)
+    case info(String)
+
+    var icon: String {
+        switch self {
+        case .success: return "checkmark.circle.fill"
+        case .error: return "xmark.circle.fill"
+        case .info: return "info.circle.fill"
+        }
+    }
+
+    var color: Color {
+        switch self {
+        case .success: return .green
+        case .error: return .red
+        case .info: return .blue
+        }
+    }
+
+    var message: String {
+        switch self {
+        case .success(let msg), .error(let msg), .info(let msg):
+            return msg
+        }
+    }
+}
+
 // Environment key for toast notifications
 private struct ShowCopiedToastKey: EnvironmentKey {
     static let defaultValue: Binding<Bool> = .constant(false)
@@ -33,6 +64,8 @@ struct MenuView: View {
     @FocusState private var isSearchFocused: Bool
     @State private var showCopiedToast = false
     @State private var eventMonitor: Any?
+    @State private var currentToast: ToastType?
+    @State private var isRefreshing = false
 
     var body: some View {
         if serverManager.isStreamingLogs {
@@ -63,19 +96,66 @@ struct MenuView: View {
 
     private var mainMenuView: some View {
         VStack(alignment: .leading, spacing: 0) {
-            // Header
+            // Header with improved loading indicator
             HStack {
-                Text("Grove")
-                    .font(.headline)
-                    .foregroundColor(.grovePrimary)
+                HStack(spacing: 6) {
+                    Image(systemName: "bolt.fill")
+                        .foregroundColor(.grovePrimary)
+                        .font(.system(size: 14))
+                    Text("Grove")
+                        .font(.headline)
+                        .foregroundColor(.grovePrimary)
+                }
+
                 Spacer()
-                if serverManager.isLoading {
-                    ProgressView()
-                        .scaleEffect(0.5)
+
+                // Running count badge
+                if serverManager.runningCount > 0 {
+                    Text("\(serverManager.runningCount) running")
+                        .font(.caption2)
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(Color.green)
+                        .cornerRadius(8)
+                }
+
+                // Loading indicator with animation
+                if serverManager.isLoading || isRefreshing {
+                    Image(systemName: "arrow.clockwise")
+                        .font(.system(size: 12))
+                        .foregroundColor(.secondary)
+                        .rotationEffect(.degrees(isRefreshing ? 360 : 0))
+                        .animation(
+                            isRefreshing ? .linear(duration: 1).repeatForever(autoreverses: false) : .default,
+                            value: isRefreshing
+                        )
                 }
             }
             .padding(.horizontal)
             .padding(.vertical, 8)
+
+            // Error banner (if any)
+            if let error = serverManager.error {
+                HStack(spacing: 6) {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .foregroundColor(.yellow)
+                    Text(error)
+                        .font(.caption)
+                        .lineLimit(2)
+                    Spacer()
+                    Button {
+                        serverManager.error = nil
+                    } label: {
+                        Image(systemName: "xmark")
+                            .font(.caption)
+                    }
+                    .buttonStyle(.plain)
+                }
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
+                .background(Color.yellow.opacity(0.15))
+            }
 
             Divider()
 
@@ -168,25 +248,59 @@ struct MenuView: View {
 
             // Servers
             if serverManager.servers.isEmpty {
-                VStack(spacing: 8) {
-                    Image(systemName: "server.rack")
-                        .font(.largeTitle)
-                        .foregroundColor(.gray)
-                    Text("No servers registered")
+                // Enhanced empty state with onboarding
+                VStack(spacing: 12) {
+                    Image(systemName: "bolt.badge.clock")
+                        .font(.system(size: 36))
+                        .foregroundColor(.grovePrimary.opacity(0.6))
+
+                    Text("No worktrees discovered")
+                        .font(.headline)
+                        .foregroundColor(.primary)
+
+                    Text("Get started with Grove")
+                        .font(.subheadline)
                         .foregroundColor(.secondary)
-                    Text("Run 'grove start' in terminal")
+
+                    VStack(alignment: .leading, spacing: 8) {
+                        OnboardingStep(number: 1, text: "Navigate to your project directory")
+                        OnboardingStep(number: 2, text: "Run: grove start <command>")
+                        OnboardingStep(number: 3, text: "Or: grove discover --register")
+                    }
+                    .padding(.vertical, 8)
+
+                    Button {
+                        serverManager.openTUI()
+                    } label: {
+                        HStack {
+                            Image(systemName: "terminal")
+                            Text("Open Terminal")
+                        }
                         .font(.caption)
-                        .foregroundColor(.secondary)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .tint(.grovePrimary)
+                    .controlSize(.small)
                 }
                 .frame(maxWidth: .infinity)
-                .padding(.vertical, 20)
+                .padding(.vertical, 24)
+                .padding(.horizontal)
             } else if filteredServers.isEmpty {
-                VStack(spacing: 8) {
+                VStack(spacing: 12) {
                     Image(systemName: "magnifyingglass")
-                        .font(.largeTitle)
-                        .foregroundColor(.gray)
-                    Text("No servers match '\(searchText)'")
+                        .font(.system(size: 28))
                         .foregroundColor(.secondary)
+                    Text("No matches for '\(searchText)'")
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
+                    Button {
+                        searchText = ""
+                    } label: {
+                        Text("Clear search")
+                            .font(.caption)
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
                 }
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 20)
@@ -236,46 +350,49 @@ struct MenuView: View {
 
             Divider()
 
-            // Actions
-            VStack(spacing: 4) {
+            // Actions with keyboard hints
+            VStack(spacing: 2) {
                 ActionButton(
                     title: "Open TUI",
-                    icon: "terminal",
+                    icon: "terminal.fill",
                     action: serverManager.openTUI
                 )
 
+                Divider()
+                    .padding(.vertical, 4)
+
                 ActionButton(
-                    title: "Quit",
-                    icon: "xmark.circle",
+                    title: "Quit Grove",
+                    icon: "power",
+                    destructive: true,
                     action: { NSApplication.shared.terminate(nil) }
                 )
             }
-            .padding(.horizontal)
+            .padding(.horizontal, 8)
             .padding(.vertical, 8)
         }
-        .frame(width: 300)
-        .overlay(
-            Group {
-                if showCopiedToast {
-                    VStack {
-                        Spacer()
-                        HStack {
-                            Image(systemName: "checkmark.circle.fill")
-                                .foregroundColor(.green)
-                            Text("Copied to clipboard")
-                                .font(.caption)
-                        }
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 6)
-                        .background(Color(NSColor.controlBackgroundColor).opacity(0.95))
-                        .cornerRadius(8)
-                        .shadow(radius: 4)
-                        .padding(.bottom, 60)
-                    }
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
+        .frame(width: 320)
+        .overlay(alignment: .bottom) {
+            // Toast overlay
+            if showCopiedToast || currentToast != nil {
+                let toast = currentToast ?? .success("Copied to clipboard")
+                HStack(spacing: 8) {
+                    Image(systemName: toast.icon)
+                        .foregroundColor(toast.color)
+                    Text(toast.message)
+                        .font(.caption)
+                        .foregroundColor(.primary)
                 }
+                .padding(.horizontal, 14)
+                .padding(.vertical, 8)
+                .background(.ultraThinMaterial)
+                .cornerRadius(10)
+                .shadow(color: .black.opacity(0.15), radius: 8, y: 4)
+                .padding(.bottom, 70)
+                .transition(.move(edge: .bottom).combined(with: .opacity))
+                .animation(.spring(response: 0.3), value: showCopiedToast)
             }
-        )
+        }
         .onAppear {
             // Set up keyboard shortcuts handler (only once)
             guard eventMonitor == nil else { return }
@@ -320,17 +437,26 @@ struct SectionHeader: View {
 
     var body: some View {
         HStack {
-            Text(title.uppercased())
-                .font(.caption)
-                .foregroundColor(.secondary)
+            HStack(spacing: 6) {
+                Circle()
+                    .fill(title == "Running" ? Color.green : Color.gray.opacity(0.5))
+                    .frame(width: 6, height: 6)
+                Text(title.uppercased())
+                    .font(.caption.weight(.medium))
+                    .foregroundColor(.secondary)
+            }
             Spacer()
             Text("\(count)")
-                .font(.caption)
+                .font(.caption.weight(.semibold))
                 .foregroundColor(.secondary)
+                .padding(.horizontal, 6)
+                .padding(.vertical, 2)
+                .background(Color.secondary.opacity(0.1))
+                .cornerRadius(4)
         }
         .padding(.horizontal)
-        .padding(.vertical, 4)
-        .background(Color(NSColor.windowBackgroundColor).opacity(0.5))
+        .padding(.vertical, 6)
+        .background(Color(NSColor.windowBackgroundColor).opacity(0.6))
     }
 }
 
@@ -542,11 +668,17 @@ struct ServerRowView: View {
                 }
             }
         }
-        .padding(.horizontal)
-        .padding(.vertical, 8)
-        .background(isHovered ? Color.gray.opacity(0.1) : Color.clear)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+        .background(
+            RoundedRectangle(cornerRadius: 6)
+                .fill(isHovered ? Color.grovePrimary.opacity(0.08) : Color.clear)
+        )
+        .contentShape(Rectangle())
         .onHover { hovering in
-            isHovered = hovering
+            withAnimation(.easeInOut(duration: 0.15)) {
+                isHovered = hovering
+            }
         }
         .contextMenu {
             if server.isRunning {
@@ -660,25 +792,78 @@ struct ProxyStatusView: View {
 struct ActionButton: View {
     let title: String
     let icon: String
+    var destructive: Bool = false
     let action: () -> Void
     @State private var isHovered = false
 
     var body: some View {
         Button(action: action) {
-            HStack {
+            HStack(spacing: 10) {
                 Image(systemName: icon)
+                    .font(.system(size: 13))
+                    .foregroundColor(destructive ? .red : .primary)
                     .frame(width: 20)
                 Text(title)
+                    .font(.system(size: 13))
+                    .foregroundColor(destructive ? .red : .primary)
                 Spacer()
             }
-            .padding(.horizontal, 8)
-            .padding(.vertical, 4)
-            .background(isHovered ? Color.gray.opacity(0.1) : Color.clear)
-            .cornerRadius(4)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
+            .background(
+                RoundedRectangle(cornerRadius: 5)
+                    .fill(isHovered ? (destructive ? Color.red.opacity(0.1) : Color.grovePrimary.opacity(0.1)) : Color.clear)
+            )
         }
         .buttonStyle(.plain)
         .onHover { hovering in
-            isHovered = hovering
+            withAnimation(.easeInOut(duration: 0.12)) {
+                isHovered = hovering
+            }
+        }
+    }
+}
+
+// MARK: - Onboarding Step
+
+struct OnboardingStep: View {
+    let number: Int
+    let text: String
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Text("\(number)")
+                .font(.caption2.bold())
+                .foregroundColor(.white)
+                .frame(width: 18, height: 18)
+                .background(Color.grovePrimary.opacity(0.8))
+                .clipShape(Circle())
+
+            Text(text)
+                .font(.caption)
+                .foregroundColor(.secondary)
+        }
+    }
+}
+
+// MARK: - Keyboard Shortcut Hint
+
+struct KeyboardHint: View {
+    let keys: String
+    let action: String
+
+    var body: some View {
+        HStack(spacing: 4) {
+            Text(keys)
+                .font(.system(size: 10, design: .monospaced))
+                .padding(.horizontal, 4)
+                .padding(.vertical, 2)
+                .background(Color.secondary.opacity(0.2))
+                .cornerRadius(3)
+
+            Text(action)
+                .font(.caption2)
+                .foregroundColor(.secondary)
         }
     }
 }
