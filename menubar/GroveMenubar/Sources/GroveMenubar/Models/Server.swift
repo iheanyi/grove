@@ -52,14 +52,23 @@ struct Server: Identifiable, Codable {
     let status: String
     let health: String?
     let path: String
+    let branch: String?
     let uptime: String?
     let pid: Int?
     let logFile: String?
+    let hasServer: Bool?
+    let hasClaude: Bool?
+    let hasVSCode: Bool?
+    let gitDirty: Bool?
     var githubInfo: GitHubInfo?
 
     enum CodingKeys: String, CodingKey {
-        case name, url, subdomains, port, status, health, path, uptime, pid
+        case name, url, subdomains, port, status, health, path, branch, uptime, pid
         case logFile = "log_file"
+        case hasServer = "has_server"
+        case hasClaude = "has_claude"
+        case hasVSCode = "has_vscode"
+        case gitDirty = "git_dirty"
         case githubInfo
     }
 
@@ -172,14 +181,17 @@ struct ProxyInfo: Codable {
 }
 
 struct WTStatus: Codable {
-    let servers: [Server]
+    let worktrees: [Server]
     let proxy: ProxyInfo?  // Only present in subdomain mode
     let urlMode: String    // "port" or "subdomain"
 
     enum CodingKeys: String, CodingKey {
-        case servers, proxy
+        case worktrees, proxy
         case urlMode = "url_mode"
     }
+
+    // Alias for backwards compatibility
+    var servers: [Server] { worktrees }
 
     var isPortMode: Bool {
         urlMode == "port"
