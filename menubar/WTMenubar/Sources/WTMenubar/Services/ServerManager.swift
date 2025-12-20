@@ -165,6 +165,15 @@ class ServerManager: ObservableObject {
         NSPasteboard.general.setString(server.url, forType: .string)
     }
 
+    func openAllRunningServers() {
+        let runningServers = servers.filter { $0.isRunning }
+        for server in runningServers {
+            if let url = URL(string: server.url) {
+                preferences.openURL(url)
+            }
+        }
+    }
+
     // MARK: - Quick Navigation
 
     func openInTerminal(_ server: Server) {

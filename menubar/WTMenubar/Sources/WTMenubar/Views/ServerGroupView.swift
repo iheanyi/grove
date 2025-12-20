@@ -3,6 +3,7 @@ import SwiftUI
 struct ServerGroupView: View {
     @EnvironmentObject var serverManager: ServerManager
     let group: ServerGroup
+    var searchText: String = ""
     @State private var isCollapsed: Bool = false
 
     var body: some View {
@@ -42,8 +43,8 @@ struct ServerGroupView: View {
 
             // Group servers
             if !isCollapsed {
-                ForEach(group.servers) { server in
-                    ServerRowView(server: server)
+                ForEach(Array(group.servers.enumerated()), id: \.element.id) { index, server in
+                    ServerRowView(server: server, searchText: searchText, displayIndex: index + 1)
                 }
             }
         }
