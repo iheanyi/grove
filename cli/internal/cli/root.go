@@ -59,6 +59,8 @@ func init() {
 	rootCmd.AddCommand(newCmd)
 	rootCmd.AddCommand(switchCmd)
 	rootCmd.AddCommand(pruneCmd)
+	rootCmd.AddCommand(cloneCmd)
+	rootCmd.AddCommand(infoCmd)
 }
 
 func initConfig() {
