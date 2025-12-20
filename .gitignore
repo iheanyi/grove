@@ -12,6 +12,7 @@
 *.so
 *.dylib
 /cli/grove
+/cli/wt
 /cli/bin/
 
 # Test binary
