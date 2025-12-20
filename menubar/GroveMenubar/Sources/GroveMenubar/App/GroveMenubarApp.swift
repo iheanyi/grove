@@ -1,7 +1,7 @@
 import SwiftUI
 
 @main
-struct WTMenubarApp: App {
+struct GroveMenubarApp: App {
     @StateObject private var serverManager = ServerManager()
 
     var body: some Scene {
