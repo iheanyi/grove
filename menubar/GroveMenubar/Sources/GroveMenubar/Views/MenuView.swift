@@ -601,28 +601,37 @@ struct ServerRowView: View {
                 HStack(spacing: 6) {
                     // Quick actions menu
                     Menu {
-                        Button("Open in Terminal") {
+                        Button {
                             serverManager.openInTerminal(server)
+                        } label: {
+                            Label("Open in Terminal", systemImage: "terminal")
                         }
 
-                        Button("Open in VS Code") {
+                        Button {
                             serverManager.openInVSCode(server)
+                        } label: {
+                            Label("Open in VS Code", systemImage: "chevron.left.forwardslash.chevron.right")
                         }
 
-                        Button("Open in Finder") {
+                        Button {
                             serverManager.openInFinder(server)
+                        } label: {
+                            Label("Open in Finder", systemImage: "folder")
                         }
 
                         Divider()
 
-                        Button("Copy Path") {
+                        Button {
                             serverManager.copyPath(server)
+                        } label: {
+                            Label("Copy Path", systemImage: "doc.on.doc")
                         }
                     } label: {
                         Image(systemName: "ellipsis.circle")
                             .font(.system(size: 12))
+                            .foregroundColor(.secondary)
                     }
-                    .menuStyle(.borderlessButton)
+                    .menuIndicator(.hidden)
                     .fixedSize()
                     .help("Quick Actions")
 
@@ -699,49 +708,65 @@ struct ServerRowView: View {
         }
         .contextMenu {
             if server.isRunning {
-                Button("Open in Browser") {
+                Button {
                     serverManager.openServer(server)
+                } label: {
+                    Label("Open in Browser", systemImage: "arrow.up.right.square")
                 }
 
-                Button("Copy URL") {
+                Button {
                     serverManager.copyURL(server)
                     showCopiedToast.wrappedValue = true
                     DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
                         showCopiedToast.wrappedValue = false
                     }
+                } label: {
+                    Label("Copy URL", systemImage: "link")
                 }
             }
 
             if server.logFile != nil {
-                Button("View Logs") {
+                Button {
                     serverManager.startStreamingLogs(for: server)
                     openWindow(id: "log-viewer")
+                } label: {
+                    Label("View Logs", systemImage: "doc.text")
                 }
             }
 
             Divider()
 
-            Button("Open in Terminal") {
+            Button {
                 serverManager.openInTerminal(server)
+            } label: {
+                Label("Open in Terminal", systemImage: "terminal")
             }
 
-            Button("Open in VS Code") {
+            Button {
                 serverManager.openInVSCode(server)
+            } label: {
+                Label("Open in VS Code", systemImage: "chevron.left.forwardslash.chevron.right")
             }
 
-            Button("Open in Finder") {
+            Button {
                 serverManager.openInFinder(server)
+            } label: {
+                Label("Open in Finder", systemImage: "folder")
             }
 
-            Button("Copy Path") {
+            Button {
                 serverManager.copyPath(server)
+            } label: {
+                Label("Copy Path", systemImage: "doc.on.doc")
             }
 
             if server.isRunning {
                 Divider()
 
-                Button("Stop Server") {
+                Button(role: .destructive) {
                     serverManager.stopServer(server)
+                } label: {
+                    Label("Stop Server", systemImage: "stop.fill")
                 }
             }
         }

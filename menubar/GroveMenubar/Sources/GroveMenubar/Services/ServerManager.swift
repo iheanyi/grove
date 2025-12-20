@@ -117,9 +117,16 @@ class ServerManager: ObservableObject {
     }
 
     func startServer(_ server: Server) {
-        runGrove(["start", server.name]) { [weak self] _ in
+        // grove start needs to run from within the worktree directory
+        runGroveInDirectory(server.path, args: ["start"]) { [weak self] result in
             DispatchQueue.main.async {
-                self?.refresh()
+                switch result {
+                case .success:
+                    self?.refresh()
+                case .failure(let error):
+                    self?.error = "Failed to start \(server.name): \(error.localizedDescription)"
+                    self?.refresh()
+                }
             }
         }
     }
@@ -131,7 +138,8 @@ class ServerManager: ObservableObject {
         guard !stoppedServers.isEmpty else { return }
 
         for server in stoppedServers {
-            runGrove(["start", server.name]) { _ in }
+            // grove start needs to run from within the worktree directory
+            runGroveInDirectory(server.path, args: ["start"]) { _ in }
         }
 
         // Refresh after a short delay
@@ -226,16 +234,68 @@ class ServerManager: ObservableObject {
     }
 
     func openTUI() {
-        // Open Terminal with grove command
-        let script = """
-        tell application "Terminal"
-            activate
-            do script "\(grovePath)"
-        end tell
-        """
-        if let appleScript = NSAppleScript(source: script) {
-            var error: NSDictionary?
-            appleScript.executeAndReturnError(&error)
+        // Open configured terminal with grove TUI command
+        // Get the directory of the grove binary and run it
+        let groveDir = (grovePath as NSString).deletingLastPathComponent
+
+        switch preferences.defaultTerminal {
+        case "com.apple.Terminal":
+            let script = """
+            tell application "Terminal"
+                activate
+                do script "cd '\(groveDir)' && \(grovePath)"
+            end tell
+            """
+            if let appleScript = NSAppleScript(source: script) {
+                var error: NSDictionary?
+                appleScript.executeAndReturnError(&error)
+            }
+        case "com.googlecode.iterm2":
+            let script = """
+            tell application "iTerm"
+                activate
+                try
+                    set newWindow to (create window with default profile)
+                    tell current session of newWindow
+                        write text "cd '\(groveDir)' && \(grovePath)"
+                    end tell
+                on error
+                    tell current window
+                        create tab with default profile
+                        tell current session
+                            write text "cd '\(groveDir)' && \(grovePath)"
+                        end tell
+                    end tell
+                end try
+            end tell
+            """
+            if let appleScript = NSAppleScript(source: script) {
+                var error: NSDictionary?
+                appleScript.executeAndReturnError(&error)
+            }
+        case "com.mitchellh.ghostty":
+            let task = Process()
+            task.executableURL = URL(fileURLWithPath: "/usr/bin/open")
+            task.arguments = ["-a", "Ghostty", "--args", "-e", grovePath]
+            try? task.run()
+        case "dev.warp.Warp-Stable":
+            let task = Process()
+            task.executableURL = URL(fileURLWithPath: "/usr/bin/open")
+            task.arguments = ["-a", "Warp", groveDir]
+            try? task.run()
+            // After Warp opens, we can't easily run a command in it
+        default:
+            // Fallback to Terminal.app
+            let script = """
+            tell application "Terminal"
+                activate
+                do script "\(grovePath)"
+            end tell
+            """
+            if let appleScript = NSAppleScript(source: script) {
+                var error: NSDictionary?
+                appleScript.executeAndReturnError(&error)
+            }
         }
     }
 
@@ -305,6 +365,20 @@ class ServerManager: ObservableObject {
         guard let server = selectedServerForLogs,
               let logFile = server.logFile else { return }
 
+        // Check if the server's path still exists (worktree might have been deleted)
+        guard FileManager.default.fileExists(atPath: server.path) else {
+            DispatchQueue.main.async { [weak self] in
+                self?.logLines.append("[Server path no longer exists - worktree may have been deleted]")
+                self?.stopStreamingLogs()
+            }
+            return
+        }
+
+        // Check if log file still exists
+        guard FileManager.default.fileExists(atPath: logFile) else {
+            return // Log file doesn't exist yet, keep waiting
+        }
+
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             guard let self = self else { return }
 
@@ -367,10 +441,23 @@ class ServerManager: ObservableObject {
 
         do {
             let status = try JSONDecoder().decode(WTStatus.self, from: data)
-            let newServers = status.servers.sorted { $0.name < $1.name }
+
+            // Filter out worktrees whose paths no longer exist (deleted worktrees)
+            let validServers = status.servers.filter { server in
+                let exists = FileManager.default.fileExists(atPath: server.path)
+                if !exists {
+                    print("Worktree path no longer exists, filtering out: \(server.name) at \(server.path)")
+                }
+                return exists
+            }
+
+            let newServers = validServers.sorted { $0.name < $1.name }
 
             // Check for status changes and send notifications
             checkForStatusChanges(newServers: newServers)
+
+            // Clean up previousServerStates for removed servers
+            cleanupRemovedServers(currentServers: newServers)
 
             self.servers = newServers
             self.proxy = status.proxy
@@ -380,6 +467,15 @@ class ServerManager: ObservableObject {
             fetchGitHubInfoForServers()
         } catch {
             self.error = "Failed to parse status: \(error.localizedDescription)"
+        }
+    }
+
+    private func cleanupRemovedServers(currentServers: [Server]) {
+        let currentNames = Set(currentServers.map { $0.name })
+        let staleNames = previousServerStates.keys.filter { !currentNames.contains($0) }
+
+        for name in staleNames {
+            previousServerStates.removeValue(forKey: name)
         }
     }
 
@@ -444,6 +540,37 @@ class ServerManager: ObservableObject {
             let task = Process()
             task.executableURL = URL(fileURLWithPath: self.grovePath)
             task.arguments = args
+
+            let pipe = Pipe()
+            task.standardOutput = pipe
+            task.standardError = pipe
+
+            do {
+                try task.run()
+                task.waitUntilExit()
+
+                let data = pipe.fileHandleForReading.readDataToEndOfFile()
+                let output = String(data: data, encoding: .utf8) ?? ""
+
+                if task.terminationStatus == 0 {
+                    completion(.success(output))
+                } else {
+                    completion(.failure(NSError(domain: "GroveMenubar", code: Int(task.terminationStatus),
+                        userInfo: [NSLocalizedDescriptionKey: output])))
+                }
+            } catch {
+                completion(.failure(error))
+            }
+        }
+    }
+
+    /// Run grove command from a specific working directory (needed for `grove start` which requires being in the worktree)
+    private func runGroveInDirectory(_ directory: String, args: [String], completion: @escaping (Result<String, Error>) -> Void) {
+        DispatchQueue.global(qos: .userInitiated).async {
+            let task = Process()
+            task.executableURL = URL(fileURLWithPath: self.grovePath)
+            task.arguments = args
+            task.currentDirectoryURL = URL(fileURLWithPath: directory)
 
             let pipe = Pipe()
             task.standardOutput = pipe
