@@ -1,4 +1,4 @@
-.PHONY: all build build-cli build-menubar run run-menubar clean clean-cli clean-menubar kill
+.PHONY: all build build-cli build-menubar run run-menubar restart dev clean clean-cli clean-menubar kill
 
 # Default target: build both apps
 all: build
@@ -24,6 +24,17 @@ run: run-menubar
 run-menubar: build-menubar kill
 	@echo "Starting GroveMenubar..."
 	menubar/GroveMenubar/.build/arm64-apple-macosx/debug/GroveMenubar &
+
+# Quick restart - kill, rebuild, and restart menubar app
+restart: kill build-menubar
+	@sleep 0.3
+	@menubar/GroveMenubar/.build/arm64-apple-macosx/debug/GroveMenubar &
+	@echo "Restarted GroveMenubar"
+
+# Development mode - run menubar with logs visible in terminal (blocks)
+dev: kill build-menubar
+	@echo "Starting GroveMenubar with logs..."
+	menubar/GroveMenubar/.build/arm64-apple-macosx/debug/GroveMenubar
 
 # Kill any running instance of the menubar app
 kill:

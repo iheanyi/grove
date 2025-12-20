@@ -1,4 +1,4 @@
-.PHONY: build run clean
+.PHONY: build run clean restart kill dev debug
 
 APP_NAME = GroveMenubar
 BUILD_DIR = .build
@@ -23,10 +23,37 @@ build:
 	fi
 	@echo "Built $(APP_BUNDLE)"
 
+# Build and run (full build with app bundle)
 run: build
-	@pkill -f "$(APP_NAME)" 2>/dev/null || true
+	@pkill -x "$(APP_NAME)" 2>/dev/null || true
 	@sleep 0.5
 	open "$(APP_BUNDLE)"
+
+# Quick restart - just rebuild and run binary directly (faster for development)
+restart:
+	@pkill -x "$(APP_NAME)" 2>/dev/null || true
+	@swift build
+	@sleep 0.3
+	@$(BINARY) &
+	@echo "Restarted $(APP_NAME)"
+
+# Kill the running app
+kill:
+	@pkill -x "$(APP_NAME)" 2>/dev/null && echo "Killed $(APP_NAME)" || echo "$(APP_NAME) not running"
+
+# Development mode - build, kill old instance, and run with logs visible in terminal
+dev:
+	@pkill -x "$(APP_NAME)" 2>/dev/null || true
+	@swift build
+	@echo "Starting $(APP_NAME) with logs..."
+	@$(BINARY)
+
+# Debug mode - same as dev but with GROVE_DEBUG enabled
+debug:
+	@pkill -x "$(APP_NAME)" 2>/dev/null || true
+	@swift build
+	@echo "Starting $(APP_NAME) in debug mode..."
+	@GROVE_DEBUG=1 $(BINARY)
 
 clean:
 	rm -rf $(BUILD_DIR)
