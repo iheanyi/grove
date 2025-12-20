@@ -389,6 +389,12 @@ func isProcessRunning(pid int) bool {
 
 // Run starts the TUI
 func Run(cfg *config.Config) error {
+	// Use enhanced version by default
+	return RunEnhanced(cfg)
+}
+
+// RunClassic starts the classic TUI (kept for backwards compatibility)
+func RunClassic(cfg *config.Config) error {
 	m, err := New(cfg)
 	if err != nil {
 		return err
