@@ -53,6 +53,18 @@ func init() {
 	rootCmd.AddCommand(doctorCmd)
 	rootCmd.AddCommand(uiCmd)
 	rootCmd.AddCommand(versionCmd)
+	rootCmd.AddCommand(completionCmd)
+
+	// Worktree management commands
+	rootCmd.AddCommand(newCmd)
+	rootCmd.AddCommand(switchCmd)
+	rootCmd.AddCommand(pruneCmd)
+	rootCmd.AddCommand(cloneCmd)
+	rootCmd.AddCommand(infoCmd)
+
+	// Server attachment commands
+	rootCmd.AddCommand(attachCmd)
+	rootCmd.AddCommand(detachCmd)
 }
 
 func initConfig() {

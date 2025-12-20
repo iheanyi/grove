@@ -129,7 +129,7 @@ func New(cfg *config.Config) (*Model, error) {
 	delegate.Styles.SelectedDesc = lipgloss.NewStyle().Foreground(lipgloss.Color("#A78BFA"))
 
 	l := list.New(items, delegate, 0, 0)
-	l.Title = "grove - Worktree Server Manager"
+	l.Title = "wt - Worktree Server Manager"
 	l.SetShowStatusBar(false)
 	l.SetFilteringEnabled(true)
 	l.Styles.Title = titleStyle
@@ -306,7 +306,7 @@ func (m *Model) toggleServer() tea.Cmd {
 			return statusMsgCmd(fmt.Sprintf("Stopped %s", server.Name))
 		}
 		// Can't start from TUI without knowing the command
-		return statusMsgCmd(fmt.Sprintf("Use 'grove start' in terminal to start %s", server.Name))
+		return statusMsgCmd(fmt.Sprintf("Use 'wt start' in terminal to start %s", server.Name))
 	}
 }
 
@@ -344,10 +344,10 @@ func (m *Model) viewLogs() tea.Cmd {
 		}
 	}
 
-	// Use grove logs command which has syntax highlighting
+	// Use wt logs command which has syntax highlighting
 	wtPath, _ := exec.LookPath("wt")
 	if wtPath == "" {
-		// Fall back to less if grove not found
+		// Fall back to less if wt not found
 		return tea.ExecProcess(exec.Command("less", "+F", server.LogFile), func(err error) tea.Msg {
 			return nil
 		})
@@ -371,7 +371,7 @@ func (m *Model) toggleProxy() tea.Cmd {
 			m.reg.UpdateProxy(proxy)
 			return statusMsgCmd("Proxy stopped")
 		}
-		return statusMsgCmd("Use 'grove proxy start' in terminal to start proxy")
+		return statusMsgCmd("Use 'wt proxy start' in terminal to start proxy")
 	}
 }
 
@@ -389,6 +389,12 @@ func isProcessRunning(pid int) bool {
 
 // Run starts the TUI
 func Run(cfg *config.Config) error {
+	// Use enhanced version by default
+	return RunEnhanced(cfg)
+}
+
+// RunClassic starts the classic TUI (kept for backwards compatibility)
+func RunClassic(cfg *config.Config) error {
 	m, err := New(cfg)
 	if err != nil {
 		return err

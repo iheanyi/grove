@@ -18,6 +18,11 @@ var (
 	stoppedColor = lipgloss.Color("#6B7280") // Gray
 	crashedColor = lipgloss.Color("#EF4444") // Red
 
+	// Health colors
+	healthyColor   = lipgloss.Color("#10B981") // Green
+	unhealthyColor = lipgloss.Color("#EF4444") // Red
+	unknownColor   = lipgloss.Color("#6B7280") // Gray
+
 	// Styles
 	titleStyle = lipgloss.NewStyle().
 			Bold(true).
@@ -62,4 +67,47 @@ var (
 			Bold(true).
 			Foreground(secondaryColor).
 			MarginBottom(1)
+
+	// Health styles
+	healthyStyle = lipgloss.NewStyle().
+			Foreground(healthyColor)
+
+	unhealthyStyle = lipgloss.NewStyle().
+			Foreground(unhealthyColor)
+
+	unknownStyle = lipgloss.NewStyle().
+			Foreground(unknownColor)
+
+	// Notification styles
+	notificationStyle = lipgloss.NewStyle().
+				Foreground(secondaryColor).
+				Bold(true)
+
+	errorNotificationStyle = lipgloss.NewStyle().
+				Foreground(errorColor).
+				Bold(true)
+
+	warningNotificationStyle = lipgloss.NewStyle().
+					Foreground(warningColor).
+					Bold(true)
+
+	// Spinner style
+	spinnerStyle = lipgloss.NewStyle().
+			Foreground(primaryColor)
+
+	// Progress bar style
+	progressBarStyle = lipgloss.NewStyle().
+				Foreground(primaryColor)
+
+	// Action panel style
+	actionPanelStyle = lipgloss.NewStyle().
+				Border(lipgloss.RoundedBorder()).
+				BorderForeground(primaryColor).
+				Padding(0, 1).
+				MarginTop(1)
+
+	// Search bar style
+	searchBarStyle = lipgloss.NewStyle().
+			Foreground(primaryColor).
+			Bold(true)
 )

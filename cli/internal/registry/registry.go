@@ -9,22 +9,25 @@ import (
 	"syscall"
 
 	"github.com/iheanyi/grove/internal/config"
+	"github.com/iheanyi/grove/internal/discovery"
 )
 
 // Registry manages the server registry
 type Registry struct {
-	path    string
-	mu      sync.RWMutex
-	Servers map[string]*Server `json:"servers"`
-	Proxy   *ProxyInfo         `json:"proxy,omitempty"`
+	path      string
+	mu        sync.RWMutex
+	Servers   map[string]*Server             `json:"servers"`
+	Worktrees map[string]*discovery.Worktree `json:"worktrees,omitempty"`
+	Proxy     *ProxyInfo                     `json:"proxy,omitempty"`
 }
 
 // New creates a new registry instance
 func New() *Registry {
 	return &Registry{
-		path:    config.RegistryPath(),
-		Servers: make(map[string]*Server),
-		Proxy:   &ProxyInfo{},
+		path:      config.RegistryPath(),
+		Servers:   make(map[string]*Server),
+		Worktrees: make(map[string]*discovery.Worktree),
+		Proxy:     &ProxyInfo{},
 	}
 }
 
@@ -199,4 +202,57 @@ func isProcessRunning(pid int) bool {
 	// On Unix, FindProcess always succeeds, so we need to send signal 0
 	err = process.Signal(syscall.Signal(0))
 	return err == nil
+}
+
+// GetWorktree returns a worktree by name
+func (r *Registry) GetWorktree(name string) (*discovery.Worktree, bool) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	wt, ok := r.Worktrees[name]
+	return wt, ok
+}
+
+// SetWorktree adds or updates a worktree
+func (r *Registry) SetWorktree(wt *discovery.Worktree) error {
+	r.mu.Lock()
+	r.Worktrees[wt.Name] = wt
+	r.mu.Unlock()
+
+	return r.Save()
+}
+
+// RemoveWorktree removes a worktree from the registry
+func (r *Registry) RemoveWorktree(name string) error {
+	r.mu.Lock()
+	delete(r.Worktrees, name)
+	r.mu.Unlock()
+
+	return r.Save()
+}
+
+// ListWorktrees returns all worktrees
+func (r *Registry) ListWorktrees() []*discovery.Worktree {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	worktrees := make([]*discovery.Worktree, 0, len(r.Worktrees))
+	for _, wt := range r.Worktrees {
+		worktrees = append(worktrees, wt)
+	}
+	return worktrees
+}
+
+// UpdateWorktreeActivities updates all worktrees with their current activity status
+func (r *Registry) UpdateWorktreeActivities() error {
+	r.mu.Lock()
+	for _, wt := range r.Worktrees {
+		if err := discovery.DetectActivity(wt); err != nil {
+			// Continue on error, just log it
+			continue
+		}
+	}
+	r.mu.Unlock()
+
+	return r.Save()
 }
