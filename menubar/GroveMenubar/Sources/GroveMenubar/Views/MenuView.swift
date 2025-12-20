@@ -540,27 +540,47 @@ struct ServerRowView: View {
 
                     // GitHub badges
                     if let github = server.githubInfo {
-                        // CI Status badge
-                        if github.ciStatus != .unknown {
-                            Image(systemName: github.ciStatus.icon)
-                                .foregroundColor(github.ciStatus.color)
-                                .font(.caption)
-                                .help(ciStatusHelp(github.ciStatus))
-                        }
-
-                        // PR badge
+                        // PR badge with CI status
                         if let prNumber = github.prNumber {
                             Button {
                                 if let urlString = github.prURL, let url = URL(string: urlString) {
                                     NSWorkspace.shared.open(url)
                                 }
                             } label: {
-                                Text("#\(prNumber)")
-                                    .font(.caption)
-                                    .foregroundColor(.blue)
+                                HStack(spacing: 3) {
+                                    Text("#\(prNumber)")
+                                        .font(.caption)
+                                    if github.ciStatus != .unknown {
+                                        Image(systemName: github.ciStatus.icon)
+                                            .font(.system(size: 9))
+                                    }
+                                }
+                                .foregroundColor(github.ciStatus == .failure ? .orange : (github.ciStatus == .success ? .green : .blue))
+                                .padding(.horizontal, 5)
+                                .padding(.vertical, 2)
+                                .background(
+                                    Capsule()
+                                        .fill(github.ciStatus == .failure ? Color.orange.opacity(0.15) : (github.ciStatus == .success ? Color.green.opacity(0.15) : Color.blue.opacity(0.15)))
+                                )
                             }
                             .buttonStyle(.plain)
-                            .help("Open PR #\(prNumber)")
+                            .help("PR #\(prNumber) • \(ciStatusHelp(github.ciStatus))")
+                        } else if github.ciStatus != .unknown {
+                            // CI status without PR (just show the badge)
+                            HStack(spacing: 3) {
+                                Text("CI")
+                                    .font(.system(size: 9, weight: .medium))
+                                Image(systemName: github.ciStatus.icon)
+                                    .font(.system(size: 9))
+                            }
+                            .foregroundColor(github.ciStatus == .failure ? .orange : (github.ciStatus == .success ? .green : .secondary))
+                            .padding(.horizontal, 5)
+                            .padding(.vertical, 2)
+                            .background(
+                                Capsule()
+                                    .fill(github.ciStatus == .failure ? Color.orange.opacity(0.15) : (github.ciStatus == .success ? Color.green.opacity(0.15) : Color.secondary.opacity(0.1)))
+                            )
+                            .help(ciStatusHelp(github.ciStatus))
                         }
                     }
                 }
