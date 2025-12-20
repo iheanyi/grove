@@ -57,7 +57,7 @@ extension EnvironmentValues {
 
 struct MenuView: View {
     @EnvironmentObject var serverManager: ServerManager
-    @State private var showingPreferences = false
+    @Environment(\.openWindow) private var openWindow
     @State private var selectedServerIndex: Int?
     @FocusState private var isFocused: Bool
     @State private var searchText = ""
@@ -68,18 +68,10 @@ struct MenuView: View {
     @State private var isRefreshing = false
 
     var body: some View {
-        if serverManager.isStreamingLogs {
-            LogsView()
-                .environmentObject(serverManager)
-        } else {
-            mainMenuView
-                .sheet(isPresented: $showingPreferences) {
-                    PreferencesView()
-                }
-                .onAppear {
-                    isFocused = true
-                }
-        }
+        mainMenuView
+            .onAppear {
+                isFocused = true
+            }
     }
 
     // Filter servers based on search text
@@ -233,12 +225,13 @@ struct MenuView: View {
                 Spacer()
 
                 Button {
-                    showingPreferences = true
+                    // Open native settings window (works on macOS 13+)
+                    NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
                 } label: {
                     Image(systemName: "gear")
                 }
                 .buttonStyle(.plain)
-                .help("Settings")
+                .help("Settings (⌘,)")
             }
             .padding(.horizontal)
             .padding(.vertical, 6)
@@ -353,6 +346,13 @@ struct MenuView: View {
             // Actions with keyboard hints
             VStack(spacing: 2) {
                 ActionButton(
+                    title: "View Logs",
+                    icon: "doc.text.magnifyingglass",
+                    shortcut: "⌘L",
+                    action: { openWindow(id: "log-viewer") }
+                )
+
+                ActionButton(
                     title: "Open TUI",
                     icon: "terminal.fill",
                     action: serverManager.openTUI
@@ -462,6 +462,7 @@ struct SectionHeader: View {
 
 struct ServerRowView: View {
     @EnvironmentObject var serverManager: ServerManager
+    @Environment(\.openWindow) private var openWindow
     let server: Server
     var searchText: String = ""
     var displayIndex: Int?
@@ -629,12 +630,13 @@ struct ServerRowView: View {
                     if server.logFile != nil {
                         Button {
                             serverManager.startStreamingLogs(for: server)
+                            openWindow(id: "log-viewer")
                         } label: {
                             Image(systemName: "doc.text")
                                 .font(.system(size: 12))
                         }
                         .buttonStyle(.plain)
-                        .help("View logs")
+                        .help("View logs (⌘L)")
                     }
 
                     if server.isRunning {
@@ -713,6 +715,7 @@ struct ServerRowView: View {
             if server.logFile != nil {
                 Button("View Logs") {
                     serverManager.startStreamingLogs(for: server)
+                    openWindow(id: "log-viewer")
                 }
             }
 
@@ -807,6 +810,7 @@ struct ProxyStatusView: View {
 struct ActionButton: View {
     let title: String
     let icon: String
+    var shortcut: String? = nil
     var destructive: Bool = false
     let action: () -> Void
     @State private var isHovered = false
@@ -822,6 +826,11 @@ struct ActionButton: View {
                     .font(.system(size: 13))
                     .foregroundColor(destructive ? .red : .primary)
                 Spacer()
+                if let shortcut = shortcut {
+                    Text(shortcut)
+                        .font(.system(size: 11, design: .monospaced))
+                        .foregroundColor(.secondary)
+                }
             }
             .padding(.horizontal, 10)
             .padding(.vertical, 6)

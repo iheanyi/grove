@@ -5,6 +5,7 @@ struct GroveMenubarApp: App {
     @StateObject private var serverManager = ServerManager()
 
     var body: some Scene {
+        // Menubar
         MenuBarExtra {
             MenuView()
                 .environmentObject(serverManager)
@@ -39,5 +40,20 @@ struct GroveMenubarApp: App {
             }
         }
         .menuBarExtraStyle(.window)
+
+        // Log Viewer Window (opened on demand)
+        Window("Grove Logs", id: "log-viewer") {
+            LogViewerWindow()
+                .environmentObject(serverManager)
+        }
+        .windowStyle(.automatic)
+        .windowResizability(.contentMinSize)
+        .defaultSize(width: 900, height: 600)
+        .keyboardShortcut("l", modifiers: [.command])
+
+        // Settings Window (native macOS settings)
+        Settings {
+            SettingsView()
+        }
     }
 }
