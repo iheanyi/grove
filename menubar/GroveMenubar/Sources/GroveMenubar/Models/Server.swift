@@ -46,10 +46,10 @@ struct GitHubInfo: Codable, Equatable {
 
 struct Server: Identifiable, Codable {
     let name: String
-    let url: String
+    let url: String?         // Optional: worktrees without servers have no URL
     let subdomains: String?  // Only present in subdomain mode
-    let port: Int
-    let status: String
+    let port: Int?           // Optional: worktrees without servers have no port
+    let status: String?      // Optional: worktrees without servers have no status
     let health: String?
     let path: String
     let branch: String?
@@ -76,6 +76,19 @@ struct Server: Identifiable, Codable {
 
     var isRunning: Bool {
         status == "running" || status == "starting"
+    }
+
+    // Computed properties for safe access
+    var displayURL: String {
+        url ?? "http://localhost:\(port ?? 0)"
+    }
+
+    var displayPort: Int {
+        port ?? 0
+    }
+
+    var displayStatus: String {
+        status ?? "stopped"
     }
 
     var statusIcon: String {
@@ -148,7 +161,7 @@ struct Server: Identifiable, Codable {
                     }
                 }
             }
-            scanner.scanCharacters(from: CharacterSet.letters)
+            _ = scanner.scanCharacters(from: CharacterSet.letters)
         }
 
         // Format based on duration

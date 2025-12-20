@@ -155,20 +155,20 @@ class ServerManager: ObservableObject {
     }
 
     func openServer(_ server: Server) {
-        if let url = URL(string: server.url) {
+        if let url = URL(string: server.displayURL) {
             preferences.openURL(url)
         }
     }
 
     func copyURL(_ server: Server) {
         NSPasteboard.general.clearContents()
-        NSPasteboard.general.setString(server.url, forType: .string)
+        NSPasteboard.general.setString(server.displayURL, forType: .string)
     }
 
     func openAllRunningServers() {
         let runningServers = servers.filter { $0.isRunning }
         for server in runningServers {
-            if let url = URL(string: server.url) {
+            if let url = URL(string: server.displayURL) {
                 preferences.openURL(url)
             }
         }
@@ -412,7 +412,7 @@ class ServerManager: ObservableObject {
     private func checkForStatusChanges(newServers: [Server]) {
         for server in newServers {
             let previousStatus = previousServerStates[server.name]
-            let currentStatus = server.status
+            let currentStatus = server.displayStatus
 
             // Store current status for next comparison
             previousServerStates[server.name] = currentStatus

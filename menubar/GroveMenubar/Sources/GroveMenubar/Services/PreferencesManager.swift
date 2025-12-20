@@ -134,7 +134,7 @@ class PreferencesManager: ObservableObject {
         ]
 
         for browser in commonBrowsers {
-            if let path = NSWorkspace.shared.urlForApplication(withBundleIdentifier: browser.bundleId) {
+            if NSWorkspace.shared.urlForApplication(withBundleIdentifier: browser.bundleId) != nil {
                 browsers.append(browser)
             }
         }
@@ -145,10 +145,13 @@ class PreferencesManager: ObservableObject {
     func openURL(_ url: URL) {
         if defaultBrowser == "system" {
             NSWorkspace.shared.open(url)
-        } else {
+        } else if let browserURL = NSWorkspace.shared.urlForApplication(withBundleIdentifier: defaultBrowser) {
             NSWorkspace.shared.open([url],
-                                   withApplicationAt: NSWorkspace.shared.urlForApplication(withBundleIdentifier: defaultBrowser)!,
+                                   withApplicationAt: browserURL,
                                    configuration: NSWorkspace.OpenConfiguration())
+        } else {
+            // Fallback to system default if browser not found
+            NSWorkspace.shared.open(url)
         }
     }
 }

@@ -32,6 +32,7 @@ struct MenuView: View {
     @State private var searchText = ""
     @FocusState private var isSearchFocused: Bool
     @State private var showCopiedToast = false
+    @State private var eventMonitor: Any?
 
     var body: some View {
         if serverManager.isStreamingLogs {
@@ -276,8 +277,9 @@ struct MenuView: View {
             }
         )
         .onAppear {
-            // Set up keyboard shortcuts handler
-            NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
+            // Set up keyboard shortcuts handler (only once)
+            guard eventMonitor == nil else { return }
+            eventMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [self] event in
                 if event.modifierFlags.contains(.command) {
                     if event.charactersIgnoringModifiers == "f" {
                         isSearchFocused = true
@@ -288,10 +290,10 @@ struct MenuView: View {
                 if let chars = event.charactersIgnoringModifiers,
                    let num = Int(chars),
                    num >= 1 && num <= 9 {
-                    let servers = filteredServers.filter { $0.isRunning || $0.status == "stopped" }
+                    let servers = filteredServers.filter { $0.isRunning || $0.displayStatus == "stopped" }
                     if num <= servers.count {
                         let server = servers[num - 1]
-                        if !server.isRunning && server.status == "stopped" {
+                        if !server.isRunning && server.displayStatus == "stopped" {
                             serverManager.startServer(server)
                         } else if server.isRunning {
                             serverManager.openServer(server)
@@ -300,6 +302,13 @@ struct MenuView: View {
                     }
                 }
                 return event
+            }
+        }
+        .onDisappear {
+            // Clean up the event monitor to prevent leaks
+            if let monitor = eventMonitor {
+                NSEvent.removeMonitor(monitor)
+                eventMonitor = nil
             }
         }
     }
@@ -430,14 +439,16 @@ struct ServerRowView: View {
                     }
                 }
 
-                HStack(spacing: 4) {
-                    Text(":")
-                        .foregroundColor(.secondary)
-                        .font(.system(size: 10))
-                    Text("\(server.port)")
-                        .font(.system(.callout, design: .monospaced))
-                        .foregroundColor(.grovePrimary)
-                        .fontWeight(.medium)
+                if let port = server.port, port > 0 {
+                    HStack(spacing: 4) {
+                        Text(":")
+                            .foregroundColor(.secondary)
+                            .font(.system(size: 10))
+                        Text("\(port)")
+                            .font(.system(.callout, design: .monospaced))
+                            .foregroundColor(.grovePrimary)
+                            .fontWeight(.medium)
+                    }
                 }
             }
 
@@ -517,7 +528,7 @@ struct ServerRowView: View {
                         }
                         .buttonStyle(.plain)
                         .help("Stop server")
-                    } else if server.status == "stopped" {
+                    } else if server.displayStatus == "stopped" {
                         Button {
                             serverManager.startServer(server)
                         } label: {

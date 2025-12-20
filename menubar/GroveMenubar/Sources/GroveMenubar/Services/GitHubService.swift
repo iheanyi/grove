@@ -201,6 +201,7 @@ class GitHubService {
 private class GitHubCache {
     private var cache: [String: CacheEntry] = [:]
     private let cacheTimeout: TimeInterval = 300 // 5 minutes
+    private let lock = NSLock() // Thread-safe access
 
     struct CacheEntry {
         let info: GitHubInfo
@@ -208,6 +209,9 @@ private class GitHubCache {
     }
 
     func get(for path: String) -> GitHubInfo? {
+        lock.lock()
+        defer { lock.unlock() }
+
         guard let entry = cache[path] else { return nil }
 
         // Check if cache is still valid
@@ -220,14 +224,20 @@ private class GitHubCache {
     }
 
     func set(_ info: GitHubInfo, for path: String) {
+        lock.lock()
+        defer { lock.unlock() }
         cache[path] = CacheEntry(info: info, timestamp: Date())
     }
 
     func clear() {
+        lock.lock()
+        defer { lock.unlock() }
         cache.removeAll()
     }
 
     func invalidate(for path: String) {
+        lock.lock()
+        defer { lock.unlock() }
         cache.removeValue(forKey: path)
     }
 }
