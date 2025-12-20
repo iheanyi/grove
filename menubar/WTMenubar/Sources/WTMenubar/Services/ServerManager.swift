@@ -16,6 +16,9 @@ class ServerManager: ObservableObject {
     private var logTimer: Timer?
     private var lastLogPosition: UInt64 = 0
     private let wtPath: String
+    private var previousServerStates: [String: String] = [:]  // Track previous server statuses
+    private let githubService = GitHubService.shared
+    private let preferences = PreferencesManager.shared
 
     var isPortMode: Bool { urlMode == "port" }
     var isSubdomainMode: Bool { urlMode == "subdomain" }
@@ -40,15 +43,15 @@ class ServerManager: ObservableObject {
     // MARK: - Status
 
     var statusIcon: String {
-        if servers.contains(where: { $0.isRunning }) {
-            return "bolt.fill"
-        }
-        return "bolt"
+        return "bolt.fill"
     }
 
     var statusColor: Color {
         if servers.contains(where: { $0.status == "crashed" }) {
             return .red
+        }
+        if servers.contains(where: { $0.status == "starting" }) {
+            return .yellow
         }
         if servers.contains(where: { $0.isRunning }) {
             return .green
@@ -58,6 +61,18 @@ class ServerManager: ObservableObject {
 
     var runningCount: Int {
         servers.filter { $0.isRunning }.count
+    }
+
+    var hasRunningServers: Bool {
+        servers.contains(where: { $0.isRunning })
+    }
+
+    var hasCrashedServers: Bool {
+        servers.contains(where: { $0.status == "crashed" })
+    }
+
+    var hasStartingServers: Bool {
+        servers.contains(where: { $0.status == "starting" })
     }
 
     // MARK: - Actions
@@ -87,15 +102,111 @@ class ServerManager: ObservableObject {
         }
     }
 
+    func stopAllServers() {
+        let runningServers = servers.filter { $0.isRunning }
+        guard !runningServers.isEmpty else { return }
+
+        for server in runningServers {
+            runWT(["stop", server.name]) { _ in }
+        }
+
+        // Refresh after a short delay to allow all stops to complete
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in
+            self?.refresh()
+        }
+    }
+
+    func startServer(_ server: Server) {
+        runWT(["start", server.name]) { [weak self] _ in
+            DispatchQueue.main.async {
+                self?.refresh()
+            }
+        }
+    }
+
+    // MARK: - Group Actions
+
+    func startAllInGroup(_ group: ServerGroup) {
+        let stoppedServers = group.servers.filter { !$0.isRunning }
+        guard !stoppedServers.isEmpty else { return }
+
+        for server in stoppedServers {
+            runWT(["start", server.name]) { _ in }
+        }
+
+        // Refresh after a short delay
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in
+            self?.refresh()
+        }
+    }
+
+    func stopAllInGroup(_ group: ServerGroup) {
+        let runningServers = group.servers.filter { $0.isRunning }
+        guard !runningServers.isEmpty else { return }
+
+        for server in runningServers {
+            runWT(["stop", server.name]) { _ in }
+        }
+
+        // Refresh after a short delay
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in
+            self?.refresh()
+        }
+    }
+
     func openServer(_ server: Server) {
         if let url = URL(string: server.url) {
-            NSWorkspace.shared.open(url)
+            preferences.openURL(url)
         }
     }
 
     func copyURL(_ server: Server) {
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(server.url, forType: .string)
+    }
+
+    // MARK: - Quick Navigation
+
+    func openInTerminal(_ server: Server) {
+        let script = """
+        tell application "Terminal"
+            activate
+            do script "cd '\(server.path)'"
+        end tell
+        """
+        if let appleScript = NSAppleScript(source: script) {
+            var error: NSDictionary?
+            appleScript.executeAndReturnError(&error)
+        }
+    }
+
+    func openInVSCode(_ server: Server) {
+        let task = Process()
+        task.executableURL = URL(fileURLWithPath: "/usr/bin/env")
+        task.arguments = ["code", server.path]
+
+        let pipe = Pipe()
+        task.standardOutput = pipe
+        task.standardError = pipe
+
+        do {
+            try task.run()
+        } catch {
+            // If VS Code command fails, try opening with 'open' command
+            let openTask = Process()
+            openTask.executableURL = URL(fileURLWithPath: "/usr/bin/open")
+            openTask.arguments = ["-a", "Visual Studio Code", server.path]
+            try? openTask.run()
+        }
+    }
+
+    func openInFinder(_ server: Server) {
+        NSWorkspace.shared.selectFile(nil, inFileViewerRootedAtPath: server.path)
+    }
+
+    func copyPath(_ server: Server) {
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(server.path, forType: .string)
     }
 
     func startProxy() {
@@ -241,9 +352,14 @@ class ServerManager: ObservableObject {
     // MARK: - Private
 
     private func startAutoRefresh() {
-        refreshTimer = Timer.scheduledTimer(withTimeInterval: 5.0, repeats: true) { [weak self] _ in
+        refreshTimer?.invalidate()
+        refreshTimer = Timer.scheduledTimer(withTimeInterval: preferences.refreshInterval, repeats: true) { [weak self] _ in
             self?.refresh()
         }
+    }
+
+    func updateRefreshInterval() {
+        startAutoRefresh()
     }
 
     private func parseStatus(_ output: String) {
@@ -251,11 +367,75 @@ class ServerManager: ObservableObject {
 
         do {
             let status = try JSONDecoder().decode(WTStatus.self, from: data)
-            self.servers = status.servers.sorted { $0.name < $1.name }
+            let newServers = status.servers.sorted { $0.name < $1.name }
+
+            // Check for status changes and send notifications
+            checkForStatusChanges(newServers: newServers)
+
+            self.servers = newServers
             self.proxy = status.proxy
             self.urlMode = status.urlMode
+
+            // Fetch GitHub info for all servers in background
+            fetchGitHubInfoForServers()
         } catch {
             self.error = "Failed to parse status: \(error.localizedDescription)"
+        }
+    }
+
+    private func fetchGitHubInfoForServers() {
+        // Fetch GitHub info for each server
+        for (index, server) in servers.enumerated() {
+            githubService.fetchGitHubInfo(for: server) { [weak self] info in
+                guard let self = self else { return }
+                DispatchQueue.main.async {
+                    // Update the server with GitHub info
+                    if index < self.servers.count && self.servers[index].id == server.id {
+                        var updatedServer = self.servers[index]
+                        updatedServer.githubInfo = info
+                        self.servers[index] = updatedServer
+                    }
+                }
+            }
+        }
+    }
+
+    private func checkForStatusChanges(newServers: [Server]) {
+        for server in newServers {
+            let previousStatus = previousServerStates[server.name]
+            let currentStatus = server.status
+
+            // Store current status for next comparison
+            previousServerStates[server.name] = currentStatus
+
+            // Skip if this is the first time we're seeing this server
+            guard let previous = previousStatus else { continue }
+
+            // Check for status changes
+            if previous != currentStatus {
+                handleStatusChange(server: server, from: previous, to: currentStatus)
+            }
+        }
+    }
+
+    private func handleStatusChange(server: Server, from previousStatus: String, to currentStatus: String) {
+        // Server crashed
+        if currentStatus == "crashed" && previousStatus != "crashed" {
+            NotificationService.shared.notifyServerCrashed(serverName: server.name)
+        }
+
+        // Server became healthy (starting -> running)
+        if currentStatus == "running" && previousStatus == "starting" {
+            NotificationService.shared.notifyServerHealthy(serverName: server.name)
+        }
+
+        // Server stopped (could be idle timeout)
+        // Note: We can't distinguish between manual stop and idle timeout from status alone
+        // This would need additional info from the wt CLI
+        if currentStatus == "stopped" && (previousStatus == "running" || previousStatus == "starting") {
+            // For now, we'll just send a generic stopped notification
+            // In the future, if wt provides idle timeout info, we can check it here
+            NotificationService.shared.notifyServerIdleTimeout(serverName: server.name)
         }
     }
 

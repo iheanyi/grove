@@ -1,4 +1,48 @@
 import Foundation
+import SwiftUI
+
+// MARK: - GitHub Models
+
+struct GitHubInfo: Codable, Equatable {
+    let prNumber: Int?
+    let prURL: String?
+    let prState: String?
+    let ciStatus: CIStatus
+    let lastUpdated: Date
+
+    enum CIStatus: String, Codable {
+        case success
+        case failure
+        case pending
+        case unknown
+
+        var icon: String {
+            switch self {
+            case .success: return "checkmark.circle.fill"
+            case .failure: return "xmark.circle.fill"
+            case .pending: return "clock.fill"
+            case .unknown: return "questionmark.circle"
+            }
+        }
+
+        var color: Color {
+            switch self {
+            case .success: return .green
+            case .failure: return .red
+            case .pending: return .yellow
+            case .unknown: return .gray
+            }
+        }
+    }
+
+    static let empty = GitHubInfo(
+        prNumber: nil,
+        prURL: nil,
+        prState: nil,
+        ciStatus: .unknown,
+        lastUpdated: Date()
+    )
+}
 
 struct Server: Identifiable, Codable {
     let name: String
@@ -11,10 +55,12 @@ struct Server: Identifiable, Codable {
     let uptime: String?
     let pid: Int?
     let logFile: String?
+    var githubInfo: GitHubInfo?
 
     enum CodingKeys: String, CodingKey {
         case name, url, subdomains, port, status, health, path, uptime, pid
         case logFile = "log_file"
+        case githubInfo
     }
 
     var id: String { name }
@@ -46,8 +92,63 @@ struct Server: Identifiable, Codable {
             return .gray
         case "crashed":
             return .red
+        case "starting":
+            return .yellow
         default:
             return .gray
+        }
+    }
+
+    var healthColor: Color {
+        guard let health = health else { return .gray }
+        switch health {
+        case "healthy":
+            return .green
+        case "unhealthy":
+            return .red
+        default:
+            return .yellow
+        }
+    }
+
+    var formattedUptime: String? {
+        guard let uptime = uptime else { return nil }
+
+        // Parse uptime string like "2h34m12s" or "45m23s" or "15s"
+        var hours = 0
+        var minutes = 0
+        var seconds = 0
+
+        let scanner = Scanner(string: uptime)
+        scanner.charactersToBeSkipped = CharacterSet.letters
+
+        while !scanner.isAtEnd {
+            if let value = scanner.scanInt() {
+                let currentIndex = scanner.currentIndex
+                if currentIndex < uptime.endIndex {
+                    let nextChar = uptime[currentIndex]
+                    switch nextChar {
+                    case "h":
+                        hours = value
+                    case "m":
+                        minutes = value
+                    case "s":
+                        seconds = value
+                    default:
+                        break
+                    }
+                }
+            }
+            scanner.scanCharacters(from: CharacterSet.letters)
+        }
+
+        // Format based on duration
+        if hours > 0 {
+            return String(format: "%dh %dm", hours, minutes)
+        } else if minutes > 0 {
+            return String(format: "%dm", minutes)
+        } else {
+            return String(format: "%ds", seconds)
         }
     }
 }

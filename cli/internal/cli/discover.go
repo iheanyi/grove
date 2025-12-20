@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/iheanyi/wt/internal/discovery"
 	"github.com/iheanyi/wt/internal/port"
 	"github.com/iheanyi/wt/internal/registry"
 	"github.com/iheanyi/wt/internal/worktree"
@@ -83,7 +84,22 @@ func runDiscover(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to load registry: %w", err)
 	}
 
-	// Discover worktrees
+	// Discover worktrees using new discovery package
+	allWorktrees, err := discovery.FindAll(absPath, depth)
+	if err != nil {
+		return fmt.Errorf("failed to discover worktrees: %w", err)
+	}
+
+	// Save discovered worktrees to registry
+	for _, wt := range allWorktrees {
+		// Mark if it has a server
+		if _, ok := reg.Get(wt.Name); ok {
+			wt.HasServer = true
+		}
+		reg.SetWorktree(wt)
+	}
+
+	// Also discover using old method for backward compatibility
 	discovered := discoverWorktrees(absPath, depth, reg)
 
 	if len(discovered) == 0 {
