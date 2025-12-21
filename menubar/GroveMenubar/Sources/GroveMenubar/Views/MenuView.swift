@@ -713,6 +713,14 @@ struct ServerRowView: View {
                         } label: {
                             Label("Copy Path", systemImage: "doc.on.doc")
                         }
+
+                        Divider()
+
+                        Button(role: .destructive) {
+                            serverManager.detachServer(server)
+                        } label: {
+                            Label("Remove from Grove", systemImage: "xmark.circle")
+                        }
                     } label: {
                         Image(systemName: "ellipsis.circle")
                             .font(.system(size: 14))

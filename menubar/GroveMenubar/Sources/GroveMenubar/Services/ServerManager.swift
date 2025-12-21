@@ -361,6 +361,14 @@ class ServerManager: ObservableObject {
         NSPasteboard.general.setString(server.path, forType: .string)
     }
 
+    func detachServer(_ server: Server) {
+        runGrove(["detach", server.name]) { [weak self] _ in
+            DispatchQueue.main.async {
+                self?.refresh()
+            }
+        }
+    }
+
     func startProxy() {
         runGrove(["proxy", "start"]) { [weak self] _ in
             DispatchQueue.main.async {
