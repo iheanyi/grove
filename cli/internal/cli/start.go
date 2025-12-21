@@ -154,6 +154,13 @@ func runForeground(server *registry.Server, reg *registry.Registry, projConfig *
 		fmt.Sprintf("PORT=%d", server.Port),
 	)
 
+	// Inject GROVE_URL (or custom var name from config)
+	urlVarName := "GROVE_URL"
+	if projConfig != nil && projConfig.URLVar != "" {
+		urlVarName = projConfig.URLVar
+	}
+	execCmd.Env = append(execCmd.Env, fmt.Sprintf("%s=%s", urlVarName, server.URL))
+
 	// Add project-specific env vars
 	if projConfig != nil {
 		for k, v := range projConfig.Env {
@@ -263,6 +270,13 @@ func runDaemon(server *registry.Server, reg *registry.Registry, projConfig *proj
 	execCmd.Env = append(os.Environ(),
 		fmt.Sprintf("PORT=%d", server.Port),
 	)
+
+	// Inject GROVE_URL (or custom var name from config)
+	urlVarName := "GROVE_URL"
+	if projConfig != nil && projConfig.URLVar != "" {
+		urlVarName = projConfig.URLVar
+	}
+	execCmd.Env = append(execCmd.Env, fmt.Sprintf("%s=%s", urlVarName, server.URL))
 
 	// Add project-specific env vars
 	if projConfig != nil {

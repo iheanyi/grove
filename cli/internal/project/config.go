@@ -19,6 +19,10 @@ type Config struct {
 	// Port overrides the hash-based port allocation
 	Port int `yaml:"port,omitempty"`
 
+	// URLVar overrides the environment variable name for the server URL
+	// Default is GROVE_URL, but can be set to APP_URL, BASE_URL, etc.
+	URLVar string `yaml:"url_var,omitempty"`
+
 	// Env contains environment variables to set
 	Env map[string]string `yaml:"env,omitempty"`
 
