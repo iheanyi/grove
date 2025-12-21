@@ -78,6 +78,9 @@ func runStart(cmd *cobra.Command, args []string) error {
 		serverPort = portFlag
 	} else if projConfig != nil && projConfig.Port > 0 {
 		serverPort = projConfig.Port
+	} else if existing, ok := reg.Get(wt.Name); ok && existing.Port > 0 {
+		// Reuse existing port from stopped server
+		serverPort = existing.Port
 	} else {
 		allocator := port.NewAllocator(cfg.PortMin, cfg.PortMax)
 		serverPort, err = allocator.AllocateWithFallback(wt.Name, reg.GetUsedPorts())
