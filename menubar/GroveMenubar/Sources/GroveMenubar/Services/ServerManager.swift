@@ -536,7 +536,7 @@ class ServerManager: ObservableObject {
                 let data = try Data(contentsOf: url)
                 let content = String(data: data, encoding: .utf8) ?? ""
                 let lines = content.components(separatedBy: .newlines)
-                    .map { self.stripANSICodes($0) }  // Strip ANSI escape codes
+                    .map { ANSIStripper.strip($0) }  // Strip ANSI escape codes
 
                 // Keep last 100 lines
                 let recentLines = Array(lines.suffix(100))
@@ -597,7 +597,7 @@ class ServerManager: ObservableObject {
                 if let newContent = String(data: newData, encoding: .utf8) {
                     let newLines = newContent.components(separatedBy: .newlines)
                         .filter { !$0.isEmpty }
-                        .map { self.stripANSICodes($0) }  // Strip ANSI escape codes
+                        .map { ANSIStripper.strip($0) }  // Strip ANSI escape codes
 
                     DispatchQueue.main.async {
                         self.logLines.append(contentsOf: newLines)
@@ -1029,22 +1029,5 @@ class ServerManager: ObservableObject {
         }
 
         return nil
-    }
-
-    // MARK: - Text Processing
-
-    /// Strips ANSI escape codes from log lines (e.g., color codes like [1m[35m)
-    private func stripANSICodes(_ string: String) -> String {
-        // Match ANSI escape sequences: ESC[ followed by parameters and a letter
-        // Pattern: \x1B\[[0-9;]*[a-zA-Z] or \x1B\([AB]
-        guard let regex = try? NSRegularExpression(
-            pattern: "\\x1B\\[[0-9;]*[a-zA-Z]|\\x1B\\([AB]",
-            options: []
-        ) else {
-            return string
-        }
-
-        let range = NSRange(string.startIndex..., in: string)
-        return regex.stringByReplacingMatches(in: string, options: [], range: range, withTemplate: "")
     }
 }
