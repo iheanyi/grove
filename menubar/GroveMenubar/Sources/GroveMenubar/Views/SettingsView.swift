@@ -45,6 +45,9 @@ struct GeneralSettingsTab: View {
 
                 Toggle("Show in Dock", isOn: $preferences.showDockIcon)
 
+                Toggle("Show GitHub PR/CI status", isOn: $preferences.showGitHubInfo)
+                    .help("Shows PR numbers and CI status for each server. Disable if experiencing slowness after wake from sleep.")
+
                 LabeledContent("Refresh interval") {
                     Picker("", selection: Binding(
                         get: { Int(preferences.refreshInterval) },

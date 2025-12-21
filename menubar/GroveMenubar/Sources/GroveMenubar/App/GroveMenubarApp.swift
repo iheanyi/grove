@@ -4,9 +4,15 @@ import SwiftUI
 struct GroveMenubarApp: App {
     @StateObject private var serverManager = ServerManager()
 
+    init() {
+        print("[Grove] GroveMenubarApp.init() - app starting")
+    }
+
     var body: some Scene {
+        let _ = print("[Grove] GroveMenubarApp.body evaluated")
         // Menubar
         MenuBarExtra {
+            let _ = print("[Grove] MenuBarExtra content evaluated")
             MenuView()
                 .environmentObject(serverManager)
         } label: {

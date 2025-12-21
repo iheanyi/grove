@@ -70,9 +70,6 @@ struct MenuView: View {
 
     var body: some View {
         mainMenuView
-            .onAppear {
-                isFocused = true
-            }
     }
 
     // Filter servers based on search text
@@ -302,7 +299,8 @@ struct MenuView: View {
                 ScrollView {
                     VStack(spacing: 0) {
                         // Check if servers should be grouped
-                        if ServerGrouper.shouldGroup(filteredServers) {
+                        let shouldGroup = ServerGrouper.shouldGroup(filteredServers)
+                        if shouldGroup {
                             // Show grouped view
                             let groups = ServerGrouper.groupServers(filteredServers)
                             ForEach(Array(groups.enumerated()), id: \.element.id) { index, group in
@@ -335,12 +333,14 @@ struct MenuView: View {
                 .frame(maxHeight: 300)
             }
 
-            Divider()
+            // Proxy status - only show in subdomain mode
+            if serverManager.isSubdomainMode {
+                Divider()
 
-            // Proxy status
-            ProxyStatusView()
-                .padding(.horizontal)
-                .padding(.vertical, 8)
+                ProxyStatusView()
+                    .padding(.horizontal)
+                    .padding(.vertical, 8)
+            }
 
             Divider()
 
@@ -470,9 +470,8 @@ struct ServerRowView: View {
     let server: Server
     var searchText: String = ""
     var displayIndex: Int?
+    @State private var isExpanded = false
     @State private var isHovered = false
-    @State private var showingQuickActions = false
-    @State private var showingDetails = false
     @Environment(\.showCopiedToast) private var showCopiedToast
 
     private func ciStatusHelp(_ status: GitHubInfo.CIStatus) -> String {
@@ -484,148 +483,174 @@ struct ServerRowView: View {
         }
     }
 
-    private func highlightedText(_ text: String) -> Text {
-        if searchText.isEmpty {
-            return Text(text)
-        }
-
-        let parts = text.components(separatedBy: searchText)
-        if parts.count <= 1 {
-            return Text(text)
-        }
-
-        var result = Text("")
-        for (index, part) in parts.enumerated() {
-            result = result + Text(part)
-            if index < parts.count - 1 {
-                result = result + Text(searchText).foregroundColor(.grovePrimary).bold()
-            }
-        }
-        return result
-    }
-
     var body: some View {
-        HStack(spacing: 8) {
-            // Status and health indicators
-            HStack(spacing: 4) {
+        VStack(alignment: .leading, spacing: 0) {
+            // Main row content
+            HStack(spacing: 8) {
+                // Status indicator
                 Circle()
                     .fill(server.statusColor)
                     .frame(width: 8, height: 8)
 
-                if server.isRunning, server.health != nil {
-                    Circle()
-                        .fill(server.healthColor)
-                        .frame(width: 6, height: 6)
+                // Display index for keyboard shortcuts
+                if let index = displayIndex, index <= 9 {
+                    Text("\(index)")
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                        .frame(width: 12)
                 }
-            }
-            .frame(width: 20)
 
-            // Display index for keyboard shortcuts
-            if let index = displayIndex, index <= 9 {
-                Text("\(index)")
-                    .font(.caption2)
-                    .foregroundColor(.secondary)
-                    .frame(width: 12)
-            }
-
-            // Server info
-            VStack(alignment: .leading, spacing: 2) {
-                HStack(spacing: 6) {
-                    Button {
-                        showingDetails.toggle()
-                    } label: {
-                        highlightedText(server.name)
+                // Server info
+                VStack(alignment: .leading, spacing: 2) {
+                    HStack(spacing: 6) {
+                        Text(server.name)
                             .font(.system(.body, design: .monospaced))
                             .lineLimit(1)
-                            .truncationMode(.middle)
-                    }
-                    .buttonStyle(.plain)
-                    .help("Click for details")
-                    .popover(isPresented: $showingDetails, arrowEdge: .bottom) {
-                        ServerDetailPopover(
-                            server: server,
-                            onOpenTerminal: { serverManager.openInTerminal(server) },
-                            onOpenVSCode: { serverManager.openInVSCode(server) },
-                            onOpenBrowser: { serverManager.openServer(server) }
-                        )
-                    }
 
-                    if let uptime = server.formattedUptime, server.isRunning {
-                        Text(uptime)
-                            .font(.caption2)
-                            .foregroundColor(.secondary)
-                            .padding(.horizontal, 4)
-                            .padding(.vertical, 1)
-                            .background(Color.secondary.opacity(0.1))
-                            .cornerRadius(3)
-                    }
+                        if let uptime = server.formattedUptime, server.isRunning {
+                            Text(uptime)
+                                .font(.caption2)
+                                .foregroundColor(.secondary)
+                                .padding(.horizontal, 4)
+                                .padding(.vertical, 1)
+                                .background(Color.secondary.opacity(0.1))
+                                .cornerRadius(3)
+                        }
 
-                    // GitHub badges
-                    if let github = server.githubInfo {
-                        // PR badge with CI status
-                        if let prNumber = github.prNumber {
-                            Button {
-                                if let urlString = github.prURL, let url = URL(string: urlString) {
-                                    NSWorkspace.shared.open(url)
-                                }
-                            } label: {
-                                HStack(spacing: 3) {
-                                    Text("#\(prNumber)")
-                                        .font(.caption)
-                                    if github.ciStatus != .unknown {
-                                        Image(systemName: github.ciStatus.icon)
-                                            .font(.system(size: 9))
+                        // GitHub badges
+                        if let github = server.githubInfo {
+                            if let prNumber = github.prNumber {
+                                Button {
+                                    if let urlString = github.prURL, let url = URL(string: urlString) {
+                                        NSWorkspace.shared.open(url)
                                     }
+                                } label: {
+                                    HStack(spacing: 3) {
+                                        Text("#\(prNumber)")
+                                            .font(.caption)
+                                        if github.ciStatus != .unknown {
+                                            Image(systemName: github.ciStatus.icon)
+                                                .font(.system(size: 9))
+                                        }
+                                    }
+                                    .foregroundColor(github.ciStatus == .failure ? .orange : (github.ciStatus == .success ? .green : .blue))
+                                    .padding(.horizontal, 5)
+                                    .padding(.vertical, 2)
+                                    .background(
+                                        Capsule()
+                                            .fill(github.ciStatus == .failure ? Color.orange.opacity(0.15) : (github.ciStatus == .success ? Color.green.opacity(0.15) : Color.blue.opacity(0.15)))
+                                    )
                                 }
-                                .foregroundColor(github.ciStatus == .failure ? .orange : (github.ciStatus == .success ? .green : .blue))
+                                .buttonStyle(.plain)
+                                .help("PR #\(prNumber) • \(ciStatusHelp(github.ciStatus))")
+                            } else if github.ciStatus != .unknown {
+                                HStack(spacing: 3) {
+                                    Text("CI")
+                                        .font(.system(size: 9, weight: .medium))
+                                    Image(systemName: github.ciStatus.icon)
+                                        .font(.system(size: 9))
+                                }
+                                .foregroundColor(github.ciStatus == .failure ? .orange : (github.ciStatus == .success ? .green : .secondary))
                                 .padding(.horizontal, 5)
                                 .padding(.vertical, 2)
                                 .background(
                                     Capsule()
-                                        .fill(github.ciStatus == .failure ? Color.orange.opacity(0.15) : (github.ciStatus == .success ? Color.green.opacity(0.15) : Color.blue.opacity(0.15)))
+                                        .fill(github.ciStatus == .failure ? Color.orange.opacity(0.15) : (github.ciStatus == .success ? Color.green.opacity(0.15) : Color.secondary.opacity(0.1)))
                                 )
+                                .help(ciStatusHelp(github.ciStatus))
                             }
-                            .buttonStyle(.plain)
-                            .help("PR #\(prNumber) • \(ciStatusHelp(github.ciStatus))")
-                        } else if github.ciStatus != .unknown {
-                            // CI status without PR (just show the badge)
-                            HStack(spacing: 3) {
-                                Text("CI")
-                                    .font(.system(size: 9, weight: .medium))
-                                Image(systemName: github.ciStatus.icon)
-                                    .font(.system(size: 9))
-                            }
-                            .foregroundColor(github.ciStatus == .failure ? .orange : (github.ciStatus == .success ? .green : .secondary))
-                            .padding(.horizontal, 5)
-                            .padding(.vertical, 2)
-                            .background(
-                                Capsule()
-                                    .fill(github.ciStatus == .failure ? Color.orange.opacity(0.15) : (github.ciStatus == .success ? Color.green.opacity(0.15) : Color.secondary.opacity(0.1)))
-                            )
-                            .help(ciStatusHelp(github.ciStatus))
                         }
+                    }
+
+                    if let port = server.port, port > 0 {
+                        Text(":\(String(port))")
+                            .font(.system(.callout, design: .monospaced))
+                            .foregroundColor(.grovePrimary)
+                            .fontWeight(.medium)
                     }
                 }
 
-                if let port = server.port, port > 0 {
-                    Text(":\(String(port))")
-                        .font(.system(.callout, design: .monospaced))
-                        .foregroundColor(.grovePrimary)
-                        .fontWeight(.medium)
+                Spacer()
+
+                // Chevron to indicate expandability + quick start/stop
+                HStack(spacing: 8) {
+                    if !isExpanded {
+                        if server.isRunning {
+                            Button {
+                                serverManager.stopServer(server)
+                            } label: {
+                                Image(systemName: "stop.circle.fill")
+                                    .font(.system(size: 14))
+                                    .foregroundColor(.red)
+                            }
+                            .buttonStyle(.plain)
+                            .help("Stop server")
+                        } else if server.displayStatus == "stopped" {
+                            Button {
+                                serverManager.startServer(server)
+                            } label: {
+                                Image(systemName: "play.circle.fill")
+                                    .font(.system(size: 14))
+                                    .foregroundColor(.green)
+                            }
+                            .buttonStyle(.plain)
+                            .help("Start server")
+                        }
+                    }
+
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundColor(.secondary)
+                        .rotationEffect(.degrees(isExpanded ? 90 : 0))
+                }
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 10)
+            .contentShape(Rectangle())
+            .onTapGesture {
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    isExpanded.toggle()
                 }
             }
 
-            Spacer()
+            // Expanded action bar
+            if isExpanded {
+                HStack(spacing: 12) {
+                    // Primary action
+                    if server.isRunning {
+                        ActionChip(icon: "arrow.up.right.square", label: "Open") {
+                            serverManager.openServer(server)
+                        }
 
-            // Actions
-            if isHovered || server.isRunning {
-                HStack(spacing: 6) {
-                    // Quick actions menu
+                        ActionChip(icon: "stop.fill", label: "Stop", destructive: true) {
+                            serverManager.stopServer(server)
+                        }
+                    } else if server.displayStatus == "stopped" {
+                        ActionChip(icon: "play.fill", label: "Start", primary: true) {
+                            serverManager.startServer(server)
+                        }
+                    }
+
+                    ActionChip(icon: "terminal", label: "Terminal") {
+                        serverManager.openInTerminal(server)
+                    }
+
+                    if server.logFile != nil {
+                        ActionChip(icon: "doc.text", label: "Logs") {
+                            serverManager.startStreamingLogs(for: server)
+                            NSApp.activate(ignoringOtherApps: true)
+                            openWindow(id: "log-viewer")
+                        }
+                    }
+
+                    Spacer()
+
+                    // More menu for less common actions
                     Menu {
                         Button {
-                            serverManager.openInTerminal(server)
+                            serverManager.openInFinder(server)
                         } label: {
-                            Label("Open in Terminal", systemImage: "terminal")
+                            Label("Open in Finder", systemImage: "folder")
                         }
 
                         Button {
@@ -634,13 +659,15 @@ struct ServerRowView: View {
                             Label("Open in VS Code", systemImage: "chevron.left.forwardslash.chevron.right")
                         }
 
-                        Button {
-                            serverManager.openInFinder(server)
-                        } label: {
-                            Label("Open in Finder", systemImage: "folder")
-                        }
-
                         Divider()
+
+                        if server.isRunning {
+                            Button {
+                                serverManager.copyURL(server)
+                            } label: {
+                                Label("Copy URL", systemImage: "link")
+                            }
+                        }
 
                         Button {
                             serverManager.copyPath(server)
@@ -649,80 +676,21 @@ struct ServerRowView: View {
                         }
                     } label: {
                         Image(systemName: "ellipsis.circle")
-                            .font(.system(size: 12))
+                            .font(.system(size: 14))
                             .foregroundColor(.secondary)
                     }
                     .menuIndicator(.hidden)
                     .fixedSize()
-                    .help("Quick Actions")
-
-                    // Logs button - always available if server has log file
-                    if server.logFile != nil {
-                        Button {
-                            serverManager.startStreamingLogs(for: server)
-                            NSApp.activate(ignoringOtherApps: true)
-                            openWindow(id: "log-viewer")
-                        } label: {
-                            Image(systemName: "doc.text")
-                                .font(.system(size: 12))
-                        }
-                        .buttonStyle(.plain)
-                        .help("View logs (⌘L)")
-                    }
-
-                    if server.isRunning {
-                        Button {
-                            serverManager.openServer(server)
-                        } label: {
-                            Image(systemName: "arrow.up.right.square")
-                                .font(.system(size: 12))
-                        }
-                        .buttonStyle(.plain)
-                        .help("Open in browser")
-
-                        Button {
-                            serverManager.copyURL(server)
-                            showCopiedToast.wrappedValue = true
-                            DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
-                                showCopiedToast.wrappedValue = false
-                            }
-                        } label: {
-                            Image(systemName: "doc.on.doc")
-                                .font(.system(size: 12))
-                        }
-                        .buttonStyle(.plain)
-                        .help("Copy URL")
-
-                        Button {
-                            serverManager.stopServer(server)
-                        } label: {
-                            Image(systemName: "stop.circle.fill")
-                                .font(.system(size: 14))
-                                .foregroundColor(.red)
-                        }
-                        .buttonStyle(.plain)
-                        .help("Stop server")
-                    } else if server.displayStatus == "stopped" {
-                        Button {
-                            serverManager.startServer(server)
-                        } label: {
-                            Image(systemName: "play.circle.fill")
-                                .font(.system(size: 14))
-                                .foregroundColor(.green)
-                        }
-                        .buttonStyle(.plain)
-                        .help("Start server")
-                    }
                 }
+                .padding(.horizontal, 12)
+                .padding(.bottom, 10)
+                .transition(.opacity.combined(with: .move(edge: .top)))
             }
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 10)
         .background(
             RoundedRectangle(cornerRadius: 6)
-                .fill(isHovered ? Color.grovePrimary.opacity(0.08) : Color.clear)
+                .fill(isExpanded ? Color.grovePrimary.opacity(0.08) : (isHovered ? Color.grovePrimary.opacity(0.04) : Color.clear))
         )
-        .contentShape(Rectangle())
         .onHover { hovering in
             withAnimation(.easeInOut(duration: 0.15)) {
                 isHovered = hovering
@@ -738,10 +706,6 @@ struct ServerRowView: View {
 
                 Button {
                     serverManager.copyURL(server)
-                    showCopiedToast.wrappedValue = true
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
-                        showCopiedToast.wrappedValue = false
-                    }
                 } label: {
                     Label("Copy URL", systemImage: "link")
                 }
@@ -801,55 +765,38 @@ struct ProxyStatusView: View {
 
     var body: some View {
         HStack {
-            if serverManager.isSubdomainMode {
-                // Subdomain mode - show proxy controls
-                if let proxy = serverManager.proxy {
-                    Image(systemName: proxy.isRunning ? "checkmark.circle.fill" : "xmark.circle")
-                        .foregroundColor(proxy.isRunning ? .green : .gray)
-
-                    VStack(alignment: .leading, spacing: 0) {
-                        Text("Proxy")
-                            .font(.caption)
-                        if proxy.isRunning {
-                            Text(String(format: ":%d/:%d", proxy.httpPort, proxy.httpsPort))
-                                .font(.caption2)
-                                .foregroundColor(.secondary)
-                        } else {
-                            Text("Not running")
-                                .font(.caption2)
-                                .foregroundColor(.secondary)
-                        }
-                    }
-
-                    Spacer()
-
-                    Button {
-                        if proxy.isRunning {
-                            serverManager.stopProxy()
-                        } else {
-                            serverManager.startProxy()
-                        }
-                    } label: {
-                        Text(proxy.isRunning ? "Stop" : "Start")
-                            .font(.caption)
-                    }
-                    .buttonStyle(.bordered)
-                    .controlSize(.small)
-                }
-            } else {
-                // Port mode - show mode info
-                Image(systemName: "network")
-                    .foregroundColor(.blue)
+            if let proxy = serverManager.proxy {
+                Image(systemName: proxy.isRunning ? "checkmark.circle.fill" : "xmark.circle")
+                    .foregroundColor(proxy.isRunning ? .green : .gray)
 
                 VStack(alignment: .leading, spacing: 0) {
-                    Text("URL Mode: Port")
+                    Text("Proxy")
                         .font(.caption)
-                    Text("Access servers via localhost:PORT")
-                        .font(.caption2)
-                        .foregroundColor(.secondary)
+                    if proxy.isRunning {
+                        Text(String(format: ":%d/:%d", proxy.httpPort, proxy.httpsPort))
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                    } else {
+                        Text("Not running")
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                    }
                 }
 
                 Spacer()
+
+                Button {
+                    if proxy.isRunning {
+                        serverManager.stopProxy()
+                    } else {
+                        serverManager.startProxy()
+                    }
+                } label: {
+                    Text(proxy.isRunning ? "Stop" : "Start")
+                        .font(.caption)
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
             }
         }
     }
@@ -914,6 +861,55 @@ struct OnboardingStep: View {
             Text(text)
                 .font(.caption)
                 .foregroundColor(.secondary)
+        }
+    }
+}
+
+// MARK: - Action Chip
+
+struct ActionChip: View {
+    let icon: String
+    let label: String
+    var primary: Bool = false
+    var destructive: Bool = false
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 4) {
+                Image(systemName: icon)
+                    .font(.system(size: 10))
+                Text(label)
+                    .font(.caption2)
+            }
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+            .background(
+                RoundedRectangle(cornerRadius: 4)
+                    .fill(backgroundColor)
+            )
+            .foregroundColor(foregroundColor)
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var backgroundColor: Color {
+        if primary {
+            return Color.green.opacity(0.15)
+        } else if destructive {
+            return Color.red.opacity(0.15)
+        } else {
+            return Color.secondary.opacity(0.1)
+        }
+    }
+
+    private var foregroundColor: Color {
+        if primary {
+            return .green
+        } else if destructive {
+            return .red
+        } else {
+            return .primary
         }
     }
 }

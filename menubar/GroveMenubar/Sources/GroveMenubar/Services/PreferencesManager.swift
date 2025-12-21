@@ -18,6 +18,7 @@ class PreferencesManager: ObservableObject {
         static let defaultTerminal = "defaultTerminal"
         static let theme = "theme"
         static let showDockIcon = "showDockIcon"
+        static let showGitHubInfo = "showGitHubInfo"
     }
 
     // Launch at login
@@ -72,6 +73,13 @@ class PreferencesManager: ObservableObject {
         }
     }
 
+    // Show GitHub PR/CI info (can cause slowness on wake)
+    @Published var showGitHubInfo: Bool {
+        didSet {
+            defaults.set(showGitHubInfo, forKey: Keys.showGitHubInfo)
+        }
+    }
+
     private init() {
         // Load from defaults
         self.launchAtLogin = defaults.bool(forKey: Keys.launchAtLogin)
@@ -85,6 +93,8 @@ class PreferencesManager: ObservableObject {
         let themeString = defaults.string(forKey: Keys.theme) ?? AppTheme.system.rawValue
         self.theme = AppTheme(rawValue: themeString) ?? .system
         self.showDockIcon = defaults.bool(forKey: Keys.showDockIcon)
+        // Default to OFF to avoid wake-from-sleep issues
+        self.showGitHubInfo = defaults.object(forKey: Keys.showGitHubInfo) as? Bool ?? false
 
         applyTheme()
         updateDockIcon()

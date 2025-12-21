@@ -136,32 +136,25 @@ struct Server: Identifiable, Codable {
     var formattedUptime: String? {
         guard let uptime = uptime else { return nil }
 
+        // Simple string parsing without Scanner (avoids heavy Foundation loading)
         // Parse uptime string like "2h34m12s" or "45m23s" or "15s"
         var hours = 0
         var minutes = 0
         var seconds = 0
 
-        let scanner = Scanner(string: uptime)
-        scanner.charactersToBeSkipped = CharacterSet.letters
-
-        while !scanner.isAtEnd {
-            if let value = scanner.scanInt() {
-                let currentIndex = scanner.currentIndex
-                if currentIndex < uptime.endIndex {
-                    let nextChar = uptime[currentIndex]
-                    switch nextChar {
-                    case "h":
-                        hours = value
-                    case "m":
-                        minutes = value
-                    case "s":
-                        seconds = value
-                    default:
-                        break
-                    }
+        var currentNumber = ""
+        for char in uptime {
+            if char.isNumber {
+                currentNumber.append(char)
+            } else if let value = Int(currentNumber) {
+                switch char {
+                case "h": hours = value
+                case "m": minutes = value
+                case "s": seconds = value
+                default: break
                 }
+                currentNumber = ""
             }
-            _ = scanner.scanCharacters(from: CharacterSet.letters)
         }
 
         // Format based on duration

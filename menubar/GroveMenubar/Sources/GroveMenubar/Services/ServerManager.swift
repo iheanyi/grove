@@ -31,16 +31,23 @@ class ServerManager: ObservableObject {
     var isSubdomainMode: Bool { urlMode == "subdomain" }
 
     init() {
+        let initStart = CFAbsoluteTimeGetCurrent()
+        print("[Grove] init() START - thread: \(Thread.isMainThread ? "MAIN" : "bg")")
+
         // Find grove binary synchronously from known paths (fast, no process spawn)
         // We avoid running `which` here to prevent blocking the main thread
+        let findStart = CFAbsoluteTimeGetCurrent()
         self.grovePath = Self.findGroveBinaryFast() ?? "/usr/local/bin/grove"
+        print("[Grove] findGroveBinaryFast took \(String(format: "%.3f", CFAbsoluteTimeGetCurrent() - findStart))s -> \(grovePath)")
 
         // Register for sleep/wake notifications to handle network availability
         setupSleepWakeObservers()
+        print("[Grove] setupSleepWakeObservers done")
 
         // Start with cooldown enabled - handles fresh app start after wake
         // Clear cooldown after 3 seconds when network should be ready
         let workItem = DispatchWorkItem { [weak self] in
+            print("[Grove] Cooldown ended, triggering refresh")
             self?.isWakeCooldown = false
             // Trigger a refresh to fetch GitHub info now that network should be ready
             self?.refresh()
@@ -51,9 +58,12 @@ class ServerManager: ObservableObject {
         // Delay initial operations slightly to let system stabilize after launch/wake
         // This prevents blocking the main thread during the critical app startup period
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
+            print("[Grove] Initial refresh starting (0.3s after init)")
             self?.refresh()
             self?.startAutoRefresh()
         }
+
+        print("[Grove] init() END - took \(String(format: "%.3f", CFAbsoluteTimeGetCurrent() - initStart))s")
     }
 
     deinit {
@@ -158,24 +168,35 @@ class ServerManager: ObservableObject {
     // MARK: - Actions
 
     func refresh() {
+        let refreshStart = CFAbsoluteTimeGetCurrent()
+        print("[Grove] refresh() START - thread: \(Thread.isMainThread ? "MAIN" : "bg"), cooldown: \(isWakeCooldown)")
+
         isLoading = true
         error = nil
 
+        print("[Grove] refresh() calling runGrove...")
         runGrove(["ls", "--json"]) { [weak self] result in
+            print("[Grove] refresh() runGrove completed in \(String(format: "%.3f", CFAbsoluteTimeGetCurrent() - refreshStart))s - thread: \(Thread.isMainThread ? "MAIN" : "bg")")
+
             switch result {
             case .success(let output):
+                let parseStart = CFAbsoluteTimeGetCurrent()
                 guard let data = output.data(using: .utf8),
                       let status = try? JSONDecoder().decode(WTStatus.self, from: data) else {
+                    print("[Grove] refresh() JSON parse FAILED")
                     DispatchQueue.main.async {
                         self?.isLoading = false
                     }
                     return
                 }
+                print("[Grove] refresh() JSON parsed in \(String(format: "%.3f", CFAbsoluteTimeGetCurrent() - parseStart))s, \(status.servers.count) servers")
 
                 let newServers = status.servers.sorted { $0.name < $1.name }
 
+                print("[Grove] refresh() dispatching to main...")
                 DispatchQueue.main.async {
                     guard let self = self else { return }
+                    print("[Grove] refresh() on main thread, updating UI...")
 
                     self.checkForStatusChanges(newServers: newServers)
                     self.cleanupRemovedServers(currentServers: newServers)
@@ -185,10 +206,13 @@ class ServerManager: ObservableObject {
                     self.urlMode = status.urlMode
                     self.isLoading = false
 
+                    print("[Grove] refresh() UI updated, cooldown=\(self.isWakeCooldown), calling fetchGitHubInfoForServers...")
                     self.fetchGitHubInfoForServers()
+                    print("[Grove] refresh() DONE - total \(String(format: "%.3f", CFAbsoluteTimeGetCurrent() - refreshStart))s")
                 }
 
             case .failure(let err):
+                print("[Grove] refresh() FAILED: \(err.localizedDescription)")
                 DispatchQueue.main.async {
                     self?.isLoading = false
                     self?.error = err.localizedDescription
@@ -595,11 +619,25 @@ class ServerManager: ObservableObject {
     }
 
     private func fetchGitHubInfoForServers() {
+        // Skip if GitHub info is disabled in preferences
+        guard preferences.showGitHubInfo else {
+            print("[Grove] fetchGitHubInfoForServers() SKIPPED - disabled in preferences")
+            return
+        }
+
         // Skip GitHub fetching during wake cooldown (network may not be ready)
-        guard !isWakeCooldown else { return }
+        guard !isWakeCooldown else {
+            print("[Grove] fetchGitHubInfoForServers() SKIPPED - wake cooldown active")
+            return
+        }
 
         // Prevent overlapping fetches
-        guard !isGitHubFetchInProgress else { return }
+        guard !isGitHubFetchInProgress else {
+            print("[Grove] fetchGitHubInfoForServers() SKIPPED - already in progress")
+            return
+        }
+
+        print("[Grove] fetchGitHubInfoForServers() START")
 
         // Collect all GitHub info updates and batch them
         let serverCount = servers.count
@@ -717,8 +755,11 @@ class ServerManager: ObservableObject {
 
     private func runGrove(_ args: [String], timeout: TimeInterval = commandTimeout, completion: @escaping (Result<String, Error>) -> Void) {
         let grovePath = self.grovePath
+        let argsStr = args.joined(separator: " ")
+        print("[Grove] runGrove(\(argsStr)) dispatching to background...")
 
         DispatchQueue.global(qos: .userInitiated).async {
+            print("[Grove] runGrove(\(argsStr)) on background thread, starting process...")
             Self.runProcessWithTimeout(
                 executablePath: grovePath,
                 args: args,
@@ -753,6 +794,10 @@ class ServerManager: ObservableObject {
         timeout: TimeInterval,
         completion: @escaping (Result<String, Error>) -> Void
     ) {
+        let processStart = CFAbsoluteTimeGetCurrent()
+        let argsStr = args.joined(separator: " ")
+        print("[Grove] runProcessWithTimeout START: \(executablePath) \(argsStr)")
+
         let task = Process()
         task.executableURL = URL(fileURLWithPath: executablePath)
         task.arguments = args
@@ -769,18 +814,22 @@ class ServerManager: ObservableObject {
         var timedOut = false
         let timeoutWorkItem = DispatchWorkItem {
             timedOut = true
+            print("[Grove] runProcessWithTimeout TIMEOUT after \(timeout)s: \(argsStr)")
             if task.isRunning {
                 task.terminate()
             }
         }
 
         do {
+            print("[Grove] runProcessWithTimeout launching process...")
             try task.run()
+            print("[Grove] runProcessWithTimeout process launched, waiting...")
 
             // Schedule timeout
             DispatchQueue.global().asyncAfter(deadline: .now() + timeout, execute: timeoutWorkItem)
 
             task.waitUntilExit()
+            print("[Grove] runProcessWithTimeout process exited in \(String(format: "%.3f", CFAbsoluteTimeGetCurrent() - processStart))s")
 
             // Cancel timeout if process finished in time
             timeoutWorkItem.cancel()
@@ -791,8 +840,10 @@ class ServerManager: ObservableObject {
                 return
             }
 
+            print("[Grove] runProcessWithTimeout reading output...")
             let data = pipe.fileHandleForReading.readDataToEndOfFile()
             let output = String(data: data, encoding: .utf8) ?? ""
+            print("[Grove] runProcessWithTimeout got \(data.count) bytes, status=\(task.terminationStatus)")
 
             if task.terminationStatus == 0 {
                 completion(.success(output))
@@ -801,6 +852,7 @@ class ServerManager: ObservableObject {
                     userInfo: [NSLocalizedDescriptionKey: output.isEmpty ? "Command failed with exit code \(task.terminationStatus)" : output])))
             }
         } catch {
+            print("[Grove] runProcessWithTimeout EXCEPTION: \(error)")
             timeoutWorkItem.cancel()
             completion(.failure(error))
         }
