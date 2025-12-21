@@ -132,35 +132,49 @@ func DetectActivity(wt *Worktree) error {
 
 // detectClaude checks for Claude Code activity
 func detectClaude(path string) bool {
-	// Check for Claude socket files in ~/.claude/ide/
-	homeDir, err := os.UserHomeDir()
+	// Find Claude Code processes using ps aux
+	// Claude processes show as "claude" at the end of the command line
+	cmd := exec.Command("bash", "-c", "ps aux | grep -E 'claude\\s*$' | grep -v grep | awk '{print $2}'")
+	output, err := cmd.Output()
 	if err != nil {
 		return false
 	}
 
-	claudeDir := filepath.Join(homeDir, ".claude", "ide")
-
-	// Check if directory exists
-	if _, err := os.Stat(claudeDir); os.IsNotExist(err) {
+	pids := strings.Fields(strings.TrimSpace(string(output)))
+	if len(pids) == 0 {
 		return false
 	}
 
-	// Look for socket files that might be associated with this path
-	entries, err := os.ReadDir(claudeDir)
-	if err != nil {
-		return false
-	}
-
-	// Check for any .sock files (simplified check)
-	for _, entry := range entries {
-		if strings.HasSuffix(entry.Name(), ".sock") {
-			// Found a Claude socket
+	// Check each claude process's working directory using lsof
+	for _, pid := range pids {
+		cwd := getProcessCwd(pid)
+		if cwd != "" && cwd == path {
 			return true
 		}
 	}
 
-	// Alternative: check for claude processes with this path
-	return checkProcessWithPath("claude", path)
+	return false
+}
+
+// getProcessCwd returns the current working directory of a process
+func getProcessCwd(pid string) string {
+	cmd := exec.Command("lsof", "-p", pid)
+	output, err := cmd.Output()
+	if err != nil {
+		return ""
+	}
+
+	lines := strings.Split(string(output), "\n")
+	for _, line := range lines {
+		if strings.Contains(line, "cwd") {
+			// lsof output format: "node  PID user  cwd  DIR  ...  /path/to/dir"
+			fields := strings.Fields(line)
+			if len(fields) >= 9 {
+				return fields[len(fields)-1]
+			}
+		}
+	}
+	return ""
 }
 
 // detectVSCode checks for VS Code activity
