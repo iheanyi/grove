@@ -8,6 +8,8 @@ import (
 	"strings"
 	"text/tabwriter"
 
+	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/lipgloss/table"
 	"github.com/iheanyi/grove/internal/discovery"
 	"github.com/iheanyi/grove/internal/registry"
 	"github.com/iheanyi/grove/internal/worktree"
@@ -358,21 +360,17 @@ func outputTableFormatNew(views []*WorktreeView, proxy *registry.ProxyInfo) erro
 		return nil
 	}
 
-	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-
-	// Header - updated format with activity indicators
-	fmt.Fprintln(w, "NAME\tSERVER\tCLAUDE\tVSCODE\tGIT\tPATH")
-	fmt.Fprintln(w, strings.Repeat("-", 100))
-
+	// Build table rows
+	var rows [][]string
 	for _, view := range views {
-		// Server status
-		serverStatus := "○ -"
+		// Server status with emoji
+		status := "○"
+		port := "-"
 		if view.Server != nil {
 			if view.Server.IsRunning() {
-				serverStatus = fmt.Sprintf("● :%d", view.Server.Port)
-			} else {
-				serverStatus = fmt.Sprintf("○ :%d", view.Server.Port)
+				status = "●"
 			}
+			port = fmt.Sprintf("%d", view.Server.Port)
 		}
 
 		// Claude status
@@ -401,25 +399,44 @@ func outputTableFormatNew(views []*WorktreeView, proxy *registry.ProxyInfo) erro
 			}
 		}
 
-		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\n",
+		rows = append(rows, []string{
 			view.Name,
-			serverStatus,
+			status,
+			port,
 			claudeStatus,
 			vscodeStatus,
 			gitStatus,
 			displayPath,
-		)
+		})
 	}
 
-	w.Flush()
+	// Style definitions
+	headerStyle := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("252")).PaddingRight(2)
+	cellStyle := lipgloss.NewStyle().PaddingRight(2)
+
+	// Create table with lipgloss
+	t := table.New().
+		Border(lipgloss.NormalBorder()).
+		BorderRow(false).
+		BorderColumn(false).
+		BorderTop(false).
+		BorderBottom(false).
+		BorderLeft(false).
+		BorderRight(false).
+		Headers("NAME", "STATUS", "PORT", "CLAUDE", "VSCODE", "GIT", "PATH").
+		Rows(rows...).
+		StyleFunc(func(row, col int) lipgloss.Style {
+			if row == table.HeaderRow {
+				return headerStyle
+			}
+			return cellStyle
+		})
+
+	fmt.Println(t)
 
 	// Legend
 	fmt.Println()
-	fmt.Println("Legend:")
-	fmt.Println("  SERVER: ● = running, ○ = stopped, - = no server")
-	fmt.Println("  CLAUDE: 🤖 = active")
-	fmt.Println("  VSCODE: 💻 = active")
-	fmt.Println("  GIT: ✓ = clean, 📝 = dirty")
+	fmt.Println("Legend: ● running  ○ stopped  🤖 Claude  💻 VS Code  ✓ clean  📝 dirty")
 
 	// Proxy status (only relevant in subdomain mode)
 	fmt.Println()
