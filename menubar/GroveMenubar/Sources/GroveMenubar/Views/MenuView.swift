@@ -466,6 +466,7 @@ struct SectionHeader: View {
 
 struct ServerRowView: View {
     @EnvironmentObject var serverManager: ServerManager
+    @ObservedObject private var preferences = PreferencesManager.shared
     @Environment(\.openWindow) private var openWindow
     let server: Server
     var searchText: String = ""
@@ -507,7 +508,7 @@ struct ServerRowView: View {
                             .font(.system(.body, design: .monospaced))
                             .lineLimit(1)
 
-                        if let uptime = server.formattedUptime, server.isRunning {
+                        if preferences.showUptime, let uptime = server.formattedUptime, server.isRunning {
                             Text(uptime)
                                 .font(.caption2)
                                 .foregroundColor(.secondary)
@@ -518,7 +519,7 @@ struct ServerRowView: View {
                         }
 
                         // GitHub badges
-                        if let github = server.githubInfo {
+                        if preferences.showGitHubInfo, let github = server.githubInfo {
                             if let prNumber = github.prNumber {
                                 Button {
                                     if let urlString = github.prURL, let url = URL(string: urlString) {
@@ -562,7 +563,7 @@ struct ServerRowView: View {
                         }
                     }
 
-                    if let port = server.port, port > 0 {
+                    if preferences.showPort, let port = server.port, port > 0 {
                         Text(":\(String(port))")
                             .font(.system(.callout, design: .monospaced))
                             .foregroundColor(.grovePrimary)

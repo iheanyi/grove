@@ -48,6 +48,12 @@ struct GeneralSettingsTab: View {
                 Toggle("Show GitHub PR/CI status", isOn: $preferences.showGitHubInfo)
                     .help("Shows PR numbers and CI status for each server. Disable if experiencing slowness after wake from sleep.")
 
+                Toggle("Show uptime", isOn: $preferences.showUptime)
+                    .help("Shows how long each server has been running")
+
+                Toggle("Show port number", isOn: $preferences.showPort)
+                    .help("Shows the port number below each server name")
+
                 LabeledContent("Refresh interval") {
                     Picker("", selection: Binding(
                         get: { Int(preferences.refreshInterval) },

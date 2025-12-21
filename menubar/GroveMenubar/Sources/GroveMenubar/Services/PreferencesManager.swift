@@ -19,6 +19,8 @@ class PreferencesManager: ObservableObject {
         static let theme = "theme"
         static let showDockIcon = "showDockIcon"
         static let showGitHubInfo = "showGitHubInfo"
+        static let showUptime = "showUptime"
+        static let showPort = "showPort"
     }
 
     // Launch at login
@@ -80,6 +82,20 @@ class PreferencesManager: ObservableObject {
         }
     }
 
+    // Show uptime badge on server rows
+    @Published var showUptime: Bool {
+        didSet {
+            defaults.set(showUptime, forKey: Keys.showUptime)
+        }
+    }
+
+    // Show port number on server rows
+    @Published var showPort: Bool {
+        didSet {
+            defaults.set(showPort, forKey: Keys.showPort)
+        }
+    }
+
     private init() {
         // Load from defaults
         self.launchAtLogin = defaults.bool(forKey: Keys.launchAtLogin)
@@ -95,6 +111,9 @@ class PreferencesManager: ObservableObject {
         self.showDockIcon = defaults.bool(forKey: Keys.showDockIcon)
         // Default to OFF to avoid wake-from-sleep issues
         self.showGitHubInfo = defaults.object(forKey: Keys.showGitHubInfo) as? Bool ?? false
+        // Default to ON for uptime and port
+        self.showUptime = defaults.object(forKey: Keys.showUptime) as? Bool ?? true
+        self.showPort = defaults.object(forKey: Keys.showPort) as? Bool ?? true
 
         applyTheme()
         updateDockIcon()
