@@ -8,7 +8,9 @@ import (
 	"strings"
 	"text/tabwriter"
 
+	"github.com/iheanyi/grove/internal/discovery"
 	"github.com/iheanyi/grove/internal/registry"
+	"github.com/iheanyi/grove/internal/worktree"
 	"github.com/spf13/cobra"
 )
 
@@ -56,6 +58,9 @@ func runLs(cmd *cobra.Command, args []string) error {
 
 	// Cleanup stale entries first
 	reg.Cleanup()
+
+	// Auto-discover worktrees from current repo (fast operation)
+	autoDiscoverCurrentRepo(reg)
 
 	// Update worktree activities
 	reg.UpdateWorktreeActivities()
@@ -430,4 +435,29 @@ func outputTableFormatNew(views []*WorktreeView, proxy *registry.ProxyInfo) erro
 	}
 
 	return nil
+}
+
+// autoDiscoverCurrentRepo discovers worktrees from the current git repo and registers them.
+// This is a fast operation that only runs `git worktree list` for the current repo.
+func autoDiscoverCurrentRepo(reg *registry.Registry) {
+	// Try to detect current worktree
+	wt, err := worktree.Detect()
+	if err != nil {
+		// Not in a git repo, skip
+		return
+	}
+
+	// Discover all worktrees for this repo
+	worktrees, err := discovery.Discover(wt.Path)
+	if err != nil {
+		return
+	}
+
+	// Register any new worktrees
+	for _, discovered := range worktrees {
+		if _, exists := reg.GetWorktree(discovered.Name); !exists {
+			// New worktree, register it
+			reg.SetWorktree(discovered)
+		}
+	}
 }

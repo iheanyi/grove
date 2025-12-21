@@ -81,13 +81,18 @@ func runAttach(cmd *cobra.Command, args []string) error {
 			fmt.Printf("Server '%s' is already registered on port %d\n", name, portNum)
 			return nil
 		}
-		return fmt.Errorf("server '%s' is already registered on port %d (use a different name)", name, existing.Port)
+		// Only block if the server is actually running
+		if existing.IsRunning() {
+			return fmt.Errorf("server '%s' is already running on port %d (stop it first or use a different name)", name, existing.Port)
+		}
+		// Server exists but is stopped - we can overwrite it
+		fmt.Printf("Note: Overwriting stopped server '%s' (was on port %d)\n", name, existing.Port)
 	}
 
-	// Check if port is already registered by another server
+	// Check if port is already registered by another RUNNING server
 	for _, s := range reg.List() {
-		if s.Port == portNum {
-			return fmt.Errorf("port %d is already registered to server '%s'", portNum, s.Name)
+		if s.Port == portNum && s.Name != name && s.IsRunning() {
+			return fmt.Errorf("port %d is already in use by running server '%s'", portNum, s.Name)
 		}
 	}
 
