@@ -48,6 +48,9 @@ struct LogsView: View {
                     Text(server.name)
                         .font(.headline)
                         .foregroundColor(.grovePrimary)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                        .help(server.name)
                 }
 
                 Spacer()
@@ -214,8 +217,8 @@ struct LogsView: View {
                     .padding(.horizontal, 8)
                     .padding(.vertical, 4)
                 }
-                .onChange(of: serverManager.logLines.count) { _ in
-                    if autoScroll, let lastIndex = filteredLogs.indices.last {
+                .onChange(of: serverManager.logLines.count) { oldCount, newCount in
+                    if autoScroll && newCount > oldCount, let lastIndex = filteredLogs.indices.last {
                         withAnimation(.easeOut(duration: 0.1)) {
                             proxy.scrollTo(lastIndex, anchor: .bottom)
                         }
@@ -461,8 +464,8 @@ struct LogsPopoutWindow: View {
                     .padding(.horizontal, 8)
                     .padding(.vertical, 4)
                 }
-                .onChange(of: serverManager.logLines.count) { _ in
-                    if autoScroll, let lastIndex = filteredLogs.indices.last {
+                .onChange(of: serverManager.logLines.count) { oldCount, newCount in
+                    if autoScroll && newCount > oldCount, let lastIndex = filteredLogs.indices.last {
                         withAnimation(.easeOut(duration: 0.1)) {
                             proxy.scrollTo(lastIndex, anchor: .bottom)
                         }

@@ -136,6 +136,7 @@ class PreferencesManager: ObservableObject {
             Browser(name: "Microsoft Edge", bundleId: "com.microsoft.edgemac"),
             Browser(name: "Brave", bundleId: "com.brave.Browser"),
             Browser(name: "Arc", bundleId: "company.thebrowser.Browser"),
+            Browser(name: "Dia", bundleId: "build.aspect.Dia"),
             Browser(name: "Opera", bundleId: "com.operasoftware.Opera"),
             Browser(name: "Vivaldi", bundleId: "com.vivaldi.Vivaldi")
         ]
@@ -229,21 +230,42 @@ class PreferencesManager: ObservableObject {
     }
 
     private static func openInGhostty(path: String) {
-        // Ghostty supports opening with a working directory via CLI or just activate and cd
-        let task = Process()
-        task.executableURL = URL(fileURLWithPath: "/usr/bin/open")
-        task.arguments = ["-a", "Ghostty", "--args", "-e", "cd '\(path)' && exec $SHELL"]
+        // Try using the Ghostty CLI with --working-directory if available
+        let ghosttyPaths = [
+            "/Applications/Ghostty.app/Contents/MacOS/ghostty",
+            "/opt/homebrew/bin/ghostty",
+            "\(NSHomeDirectory())/.local/bin/ghostty"
+        ]
 
-        do {
-            try task.run()
-        } catch {
-            // Fallback: just open Ghostty
-            DispatchQueue.main.async {
-                if let appURL = NSWorkspace.shared.urlForApplication(withBundleIdentifier: "com.mitchellh.ghostty") {
-                    NSWorkspace.shared.open(appURL)
+        for ghosttyPath in ghosttyPaths {
+            if FileManager.default.fileExists(atPath: ghosttyPath) {
+                let task = Process()
+                task.executableURL = URL(fileURLWithPath: ghosttyPath)
+                task.arguments = ["--working-directory=\(path)"]
+
+                do {
+                    try task.run()
+                    return
+                } catch {
+                    // Try next path
+                    continue
                 }
             }
         }
+
+        // Fallback: Use AppleScript to open Ghostty and send a cd command
+        // Note: This is less ideal but works as a fallback
+        let script = """
+        tell application "Ghostty"
+            activate
+        end tell
+        delay 0.5
+        tell application "System Events"
+            keystroke "cd '\(path)'"
+            keystroke return
+        end tell
+        """
+        runAppleScriptAsync(script)
     }
 
     private static func openInWarp(path: String) {

@@ -19,22 +19,20 @@ class ServerManager: ObservableObject {
     private var previousServerStates: [String: String] = [:]  // Track previous server statuses
     private let githubService = GitHubService.shared
     private let preferences = PreferencesManager.shared
+    private var isGitHubFetchInProgress = false  // Prevent overlapping GitHub fetches
 
     var isPortMode: Bool { urlMode == "port" }
     var isSubdomainMode: Bool { urlMode == "subdomain" }
 
     init() {
-        let initStart = CFAbsoluteTimeGetCurrent()
-        print("[DEBUG] ServerManager.init() started")
-
         // Find grove binary synchronously from known paths (fast, no process spawn)
         // We avoid running `which` here to prevent blocking the main thread
         self.grovePath = Self.findGroveBinaryFast() ?? "/usr/local/bin/grove"
-        print("[DEBUG] Found grove at: \(grovePath) (took \(CFAbsoluteTimeGetCurrent() - initStart)s)")
 
-        refresh()
-        startAutoRefresh()
-        print("[DEBUG] ServerManager.init() completed (took \(CFAbsoluteTimeGetCurrent() - initStart)s)")
+        DispatchQueue.main.async { [weak self] in
+            self?.refresh()
+            self?.startAutoRefresh()
+        }
     }
 
     deinit {
@@ -80,18 +78,36 @@ class ServerManager: ObservableObject {
     // MARK: - Actions
 
     func refresh() {
-        let refreshStart = CFAbsoluteTimeGetCurrent()
-        print("[DEBUG] refresh() started on thread: \(Thread.isMainThread ? "MAIN" : "background")")
-
         isLoading = true
         error = nil
 
         runGrove(["ls", "--json"]) { [weak self] result in
-            print("[DEBUG] runGrove completed (took \(CFAbsoluteTimeGetCurrent() - refreshStart)s)")
             switch result {
             case .success(let output):
-                // Parse and filter on background thread to avoid blocking main thread
-                self?.parseStatusAsync(output)
+                guard let data = output.data(using: .utf8),
+                      let status = try? JSONDecoder().decode(WTStatus.self, from: data) else {
+                    DispatchQueue.main.async {
+                        self?.isLoading = false
+                    }
+                    return
+                }
+
+                let newServers = status.servers.sorted { $0.name < $1.name }
+
+                DispatchQueue.main.async {
+                    guard let self = self else { return }
+
+                    self.checkForStatusChanges(newServers: newServers)
+                    self.cleanupRemovedServers(currentServers: newServers)
+
+                    self.servers = newServers
+                    self.proxy = status.proxy
+                    self.urlMode = status.urlMode
+                    self.isLoading = false
+
+                    self.fetchGitHubInfoForServers()
+                }
+
             case .failure(let err):
                 DispatchQueue.main.async {
                     self?.isLoading = false
@@ -242,7 +258,6 @@ class ServerManager: ObservableObject {
 
     func openTUI() {
         // Open configured terminal with grove TUI command
-        // Get the directory of the grove binary and run it
         let groveDir = (grovePath as NSString).deletingLastPathComponent
         let grovePath = self.grovePath
         let terminal = preferences.defaultTerminal
@@ -279,21 +294,59 @@ class ServerManager: ObservableObject {
                 """
                 Self.runAppleScriptAsync(script)
             case "com.mitchellh.ghostty":
-                let task = Process()
-                task.executableURL = URL(fileURLWithPath: "/usr/bin/open")
-                task.arguments = ["-a", "Ghostty", "--args", "-e", grovePath]
-                try? task.run()
+                // Try using the Ghostty CLI directly
+                let ghosttyPaths = [
+                    "/Applications/Ghostty.app/Contents/MacOS/ghostty",
+                    "/opt/homebrew/bin/ghostty",
+                    "\(NSHomeDirectory())/.local/bin/ghostty"
+                ]
+
+                var launched = false
+                for ghosttyPath in ghosttyPaths {
+                    if FileManager.default.fileExists(atPath: ghosttyPath) {
+                        let task = Process()
+                        task.executableURL = URL(fileURLWithPath: ghosttyPath)
+                        task.arguments = ["--working-directory=\(groveDir)", "-e", grovePath]
+                        if (try? task.run()) != nil {
+                            launched = true
+                            break
+                        }
+                    }
+                }
+
+                // Fallback: open Ghostty and send command via AppleScript
+                if !launched {
+                    let script = """
+                    tell application "Ghostty"
+                        activate
+                    end tell
+                    delay 0.5
+                    tell application "System Events"
+                        keystroke "cd '\(groveDir)' && \(grovePath)"
+                        keystroke return
+                    end tell
+                    """
+                    Self.runAppleScriptAsync(script)
+                }
             case "dev.warp.Warp-Stable":
-                let task = Process()
-                task.executableURL = URL(fileURLWithPath: "/usr/bin/open")
-                task.arguments = ["-a", "Warp", groveDir]
-                try? task.run()
+                // Warp: open the directory, then run the command
+                let script = """
+                tell application "Warp"
+                    activate
+                end tell
+                delay 0.3
+                tell application "System Events"
+                    keystroke "cd '\(groveDir)' && \(grovePath)"
+                    keystroke return
+                end tell
+                """
+                Self.runAppleScriptAsync(script)
             default:
                 // Fallback to Terminal.app
                 let script = """
                 tell application "Terminal"
                     activate
-                    do script "\(grovePath)"
+                    do script "cd '\(groveDir)' && \(grovePath)"
                 end tell
                 """
                 Self.runAppleScriptAsync(script)
@@ -452,67 +505,6 @@ class ServerManager: ObservableObject {
         startAutoRefresh()
     }
 
-    /// Parse status on background thread, then update UI on main thread
-    private func parseStatusAsync(_ output: String) {
-        let parseStart = CFAbsoluteTimeGetCurrent()
-        print("[DEBUG] parseStatusAsync started on thread: \(Thread.isMainThread ? "MAIN" : "background")")
-
-        // Already on background thread from runGrove
-        guard let data = output.data(using: .utf8) else {
-            DispatchQueue.main.async { [weak self] in
-                self?.isLoading = false
-            }
-            return
-        }
-
-        do {
-            let status = try JSONDecoder().decode(WTStatus.self, from: data)
-            print("[DEBUG] JSON decode done (took \(CFAbsoluteTimeGetCurrent() - parseStart)s)")
-
-            // Filter out worktrees whose paths no longer exist (done on background thread)
-            let validServers = status.servers.filter { server in
-                let exists = FileManager.default.fileExists(atPath: server.path)
-                if !exists {
-                    print("Worktree path no longer exists, filtering out: \(server.name) at \(server.path)")
-                }
-                return exists
-            }
-            print("[DEBUG] FileManager filter done (took \(CFAbsoluteTimeGetCurrent() - parseStart)s)")
-
-            let newServers = validServers.sorted { $0.name < $1.name }
-            let proxy = status.proxy
-            let urlMode = status.urlMode
-
-            // Update UI on main thread
-            DispatchQueue.main.async { [weak self] in
-                let mainStart = CFAbsoluteTimeGetCurrent()
-                print("[DEBUG] Main thread update started")
-                guard let self = self else { return }
-
-                self.isLoading = false
-
-                // Check for status changes and send notifications
-                self.checkForStatusChanges(newServers: newServers)
-
-                // Clean up previousServerStates for removed servers
-                self.cleanupRemovedServers(currentServers: newServers)
-
-                self.servers = newServers
-                self.proxy = proxy
-                self.urlMode = urlMode
-                print("[DEBUG] Main thread update done (took \(CFAbsoluteTimeGetCurrent() - mainStart)s)")
-
-                // Fetch GitHub info for all servers in background
-                self.fetchGitHubInfoForServers()
-            }
-        } catch {
-            DispatchQueue.main.async { [weak self] in
-                self?.isLoading = false
-                self?.error = "Failed to parse status: \(error.localizedDescription)"
-            }
-        }
-    }
-
     private func cleanupRemovedServers(currentServers: [Server]) {
         let currentNames = Set(currentServers.map { $0.name })
         let staleNames = previousServerStates.keys.filter { !currentNames.contains($0) }
@@ -523,18 +515,77 @@ class ServerManager: ObservableObject {
     }
 
     private func fetchGitHubInfoForServers() {
-        // Fetch GitHub info for each server
-        for (index, server) in servers.enumerated() {
+        // Prevent overlapping fetches
+        guard !isGitHubFetchInProgress else { return }
+
+        // Collect all GitHub info updates and batch them
+        let serverCount = servers.count
+        guard serverCount > 0 else { return }
+
+        isGitHubFetchInProgress = true
+
+        // Safety timeout - reset flag if fetches take too long (30 seconds max)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 30) { [weak self] in
+            if self?.isGitHubFetchInProgress == true {
+                self?.isGitHubFetchInProgress = false
+            }
+        }
+
+        // Use a dictionary to collect updates (thread-safe collection)
+        let updatesLock = NSLock()
+        var updates: [String: GitHubInfo] = [:]
+        var completedCount = 0
+
+        for server in servers {
+            let serverId = server.id
             githubService.fetchGitHubInfo(for: server) { [weak self] info in
-                guard let self = self else { return }
-                DispatchQueue.main.async {
-                    // Update the server with GitHub info
-                    if index < self.servers.count && self.servers[index].id == server.id {
-                        var updatedServer = self.servers[index]
-                        updatedServer.githubInfo = info
-                        self.servers[index] = updatedServer
+                updatesLock.lock()
+
+                // Add to updates if we have valid info
+                if let info = info {
+                    updates[serverId] = info
+                }
+
+                completedCount += 1
+                let isComplete = completedCount >= serverCount
+                let currentUpdates = updates
+                updatesLock.unlock()
+
+                // When all fetches complete, apply updates in a single batch
+                if isComplete {
+                    DispatchQueue.main.async {
+                        self?.isGitHubFetchInProgress = false
+                    }
+                    self?.applyGitHubUpdates(currentUpdates)
+                }
+            }
+        }
+    }
+
+    /// Apply GitHub info updates in a single batch to minimize re-renders
+    private func applyGitHubUpdates(_ updates: [String: GitHubInfo]) {
+        guard !updates.isEmpty else { return }
+
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self else { return }
+
+            // Apply all updates in one mutation
+            var updatedServers = self.servers
+            var hasChanges = false
+
+            for (serverId, info) in updates {
+                if let index = updatedServers.firstIndex(where: { $0.id == serverId }) {
+                    // Only update if info actually changed
+                    if updatedServers[index].githubInfo != info {
+                        updatedServers[index].githubInfo = info
+                        hasChanges = true
                     }
                 }
+            }
+
+            // Only trigger @Published if there were actual changes
+            if hasChanges {
+                self.servers = updatedServers
             }
         }
     }

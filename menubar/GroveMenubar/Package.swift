@@ -16,6 +16,7 @@ let package = Package(
         ),
         .testTarget(
             name: "GroveMenubarTests",
+            dependencies: ["GroveMenubar"],
             path: "Tests/GroveMenubarTests"
         )
     ]

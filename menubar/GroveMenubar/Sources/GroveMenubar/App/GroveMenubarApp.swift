@@ -13,13 +13,11 @@ struct GroveMenubarApp: App {
             Label {
                 Text("Grove")
             } icon: {
-                // Use ZStack to overlay status indicator on icon
                 ZStack(alignment: .bottomTrailing) {
                     Image(systemName: "bolt.fill")
                         .symbolRenderingMode(.monochrome)
                         .foregroundStyle(.primary)
 
-                    // Status indicator dot
                     if serverManager.hasCrashedServers {
                         Circle()
                             .fill(Color.red)

@@ -169,6 +169,9 @@ class GitHubService {
         return nil
     }
 
+    /// Default timeout for git/gh commands (5 seconds)
+    private static let commandTimeout: TimeInterval = 5.0
+
     private func runCommand(_ command: String, args: [String], workingDir: String? = nil) -> String? {
         let task = Process()
         task.executableURL = URL(fileURLWithPath: command)
@@ -182,15 +185,37 @@ class GitHubService {
         task.standardOutput = pipe
         task.standardError = Pipe()
 
+        // Set up timeout
+        var timedOut = false
+        let timeoutWorkItem = DispatchWorkItem {
+            timedOut = true
+            if task.isRunning {
+                task.terminate()
+            }
+        }
+
         do {
             try task.run()
+
+            // Schedule timeout
+            DispatchQueue.global().asyncAfter(deadline: .now() + Self.commandTimeout, execute: timeoutWorkItem)
+
             task.waitUntilExit()
+
+            // Cancel timeout if process finished in time
+            timeoutWorkItem.cancel()
+
+            if timedOut {
+                print("[GitHubService] Command timed out: \(command) \(args.joined(separator: " "))")
+                return nil
+            }
 
             guard task.terminationStatus == 0 else { return nil }
 
             let data = pipe.fileHandleForReading.readDataToEndOfFile()
             return String(data: data, encoding: .utf8)
         } catch {
+            timeoutWorkItem.cancel()
             return nil
         }
     }

@@ -113,7 +113,6 @@ struct MenuView: View {
                         .cornerRadius(8)
                 }
 
-                // Loading indicator with animation
                 if serverManager.isLoading || isRefreshing {
                     Image(systemName: "arrow.clockwise")
                         .font(.system(size: 12))
@@ -473,6 +472,7 @@ struct ServerRowView: View {
     var displayIndex: Int?
     @State private var isHovered = false
     @State private var showingQuickActions = false
+    @State private var showingDetails = false
     @Environment(\.showCopiedToast) private var showCopiedToast
 
     private func ciStatusHelp(_ status: GitHubInfo.CIStatus) -> String {
@@ -531,8 +531,24 @@ struct ServerRowView: View {
             // Server info
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 6) {
-                    highlightedText(server.name)
-                        .font(.system(.body, design: .monospaced))
+                    Button {
+                        showingDetails.toggle()
+                    } label: {
+                        highlightedText(server.name)
+                            .font(.system(.body, design: .monospaced))
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                    }
+                    .buttonStyle(.plain)
+                    .help("Click for details")
+                    .popover(isPresented: $showingDetails, arrowEdge: .bottom) {
+                        ServerDetailPopover(
+                            server: server,
+                            onOpenTerminal: { serverManager.openInTerminal(server) },
+                            onOpenVSCode: { serverManager.openInVSCode(server) },
+                            onOpenBrowser: { serverManager.openServer(server) }
+                        )
+                    }
 
                     if let uptime = server.formattedUptime, server.isRunning {
                         Text(uptime)
@@ -920,6 +936,139 @@ struct KeyboardHint: View {
             Text(action)
                 .font(.caption2)
                 .foregroundColor(.secondary)
+        }
+    }
+}
+
+// MARK: - Server Detail Popover
+
+struct ServerDetailPopover: View {
+    let server: Server
+    let onOpenTerminal: () -> Void
+    let onOpenVSCode: () -> Void
+    let onOpenBrowser: () -> Void
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            // Header with full name
+            HStack {
+                Circle()
+                    .fill(server.statusColor)
+                    .frame(width: 10, height: 10)
+
+                Text(server.name)
+                    .font(.system(.headline, design: .monospaced))
+                    .textSelection(.enabled)
+
+                Spacer()
+
+                if server.isRunning {
+                    Text(server.displayStatus.uppercased())
+                        .font(.caption2)
+                        .fontWeight(.semibold)
+                        .foregroundColor(.green)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(Color.green.opacity(0.15))
+                        .cornerRadius(4)
+                }
+            }
+
+            Divider()
+
+            // Details
+            VStack(alignment: .leading, spacing: 8) {
+                if let branch = server.branch {
+                    DetailRow(icon: "arrow.triangle.branch", label: "Branch", value: branch)
+                }
+
+                DetailRow(icon: "folder", label: "Path", value: server.path, selectable: true)
+
+                if let port = server.port, port > 0 {
+                    DetailRow(icon: "network", label: "Port", value: ":\(port)")
+                }
+
+                if let url = server.url {
+                    DetailRow(icon: "link", label: "URL", value: url, selectable: true)
+                }
+
+                if let uptime = server.formattedUptime {
+                    DetailRow(icon: "clock", label: "Uptime", value: uptime)
+                }
+            }
+
+            Divider()
+
+            // Quick Actions
+            HStack(spacing: 8) {
+                Button {
+                    onOpenTerminal()
+                    dismiss()
+                } label: {
+                    Label("Terminal", systemImage: "terminal")
+                        .font(.caption)
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+
+                Button {
+                    onOpenVSCode()
+                    dismiss()
+                } label: {
+                    Label("VS Code", systemImage: "chevron.left.forwardslash.chevron.right")
+                        .font(.caption)
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+
+                if server.isRunning {
+                    Button {
+                        onOpenBrowser()
+                        dismiss()
+                    } label: {
+                        Label("Open", systemImage: "arrow.up.right.square")
+                            .font(.caption)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.small)
+                }
+            }
+        }
+        .padding()
+        .frame(width: 320)
+    }
+}
+
+struct DetailRow: View {
+    let icon: String
+    let label: String
+    let value: String
+    var selectable: Bool = false
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 8) {
+            Image(systemName: icon)
+                .font(.caption)
+                .foregroundColor(.secondary)
+                .frame(width: 16)
+
+            Text(label)
+                .font(.caption)
+                .foregroundColor(.secondary)
+                .frame(width: 50, alignment: .leading)
+
+            if selectable {
+                Text(value)
+                    .font(.system(.caption, design: .monospaced))
+                    .textSelection(.enabled)
+                    .lineLimit(2)
+                    .truncationMode(.middle)
+            } else {
+                Text(value)
+                    .font(.system(.caption, design: .monospaced))
+                    .lineLimit(1)
+            }
         }
     }
 }

@@ -149,6 +149,9 @@ struct LogViewerWindow: View {
 
                     Text(server.name)
                         .font(.headline)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                        .help(server.name)
 
                     if server.isRunning, let port = server.port {
                         Text(":\(String(port))")
@@ -186,8 +189,8 @@ struct LogViewerWindow: View {
                 } label: {
                     Label("\(Int(fontSize))", systemImage: "textformat.size")
                 }
-                .menuStyle(.borderlessButton)
-                .frame(width: 60)
+                .menuIndicator(.hidden)
+                .fixedSize()
             }
 
             Divider()
@@ -316,8 +319,8 @@ struct LogViewerWindow: View {
                 .padding(.horizontal, 12)
                 .padding(.vertical, 8)
             }
-            .onChange(of: serverManager.logLines.count) { _ in
-                if autoScroll, let lastIndex = filteredLogs.indices.last {
+            .onChange(of: serverManager.logLines.count) { oldCount, newCount in
+                if autoScroll && newCount > oldCount, let lastIndex = filteredLogs.indices.last {
                     withAnimation(.easeOut(duration: 0.1)) {
                         proxy.scrollTo(lastIndex, anchor: .bottom)
                     }
@@ -429,6 +432,9 @@ struct ServerSidebarRow: View {
                     Text(server.name)
                         .font(.system(size: 12, weight: isSelected ? .semibold : .regular))
                         .foregroundColor(isSelected ? .primary : .secondary)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                        .help(server.name)
 
                     if server.isRunning, let port = server.port {
                         Text(":\(String(port))")
@@ -493,14 +499,28 @@ struct LogLineRow: View {
 
         // Additionally highlight search matches
         if !searchText.isEmpty {
-            let lowerLine = line.lowercased()
-            let lowerSearch = searchText.lowercased()
+            // Use localizedCaseInsensitiveContains to find the match, then use NSRange for safe index handling
+            if let range = line.range(of: searchText, options: .caseInsensitive) {
+                // Convert String range to AttributedString range safely
+                let startOffset = line.distance(from: line.startIndex, to: range.lowerBound)
+                let length = line.distance(from: range.lowerBound, to: range.upperBound)
 
-            if let range = lowerLine.range(of: lowerSearch) {
-                // Convert to AttributedString range
-                if let attrRange = Range(range, in: result) {
-                    result[attrRange].backgroundColor = .yellow.opacity(0.3)
-                    result[attrRange].foregroundColor = .black
+                // Get the AttributedString start index and apply offset
+                var currentIndex = result.startIndex
+                for _ in 0..<startOffset {
+                    guard currentIndex < result.endIndex else { break }
+                    currentIndex = result.index(afterCharacter: currentIndex)
+                }
+
+                var endIndex = currentIndex
+                for _ in 0..<length {
+                    guard endIndex < result.endIndex else { break }
+                    endIndex = result.index(afterCharacter: endIndex)
+                }
+
+                if currentIndex < result.endIndex && endIndex <= result.endIndex {
+                    result[currentIndex..<endIndex].backgroundColor = .yellow.opacity(0.3)
+                    result[currentIndex..<endIndex].foregroundColor = .black
                 }
             }
         }

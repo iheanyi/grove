@@ -3,6 +3,14 @@ import SwiftUI
 /// Highlights log lines with syntax coloring for Rails and structured logs
 struct LogHighlighter {
 
+    // MARK: - Configuration
+
+    /// Maximum line length to highlight (longer lines are returned as-is for performance)
+    private static let maxLineLength = 2000
+
+    /// Maximum number of matches to highlight per pattern (prevents O(n²) on repetitive content)
+    private static let maxMatchesPerPattern = 50
+
     // MARK: - Colors
 
     static let colors = LogColors()
@@ -32,185 +40,259 @@ struct LogHighlighter {
         let statusServerError = Color.red
     }
 
-    // MARK: - Cached Regex Patterns (Performance Optimization)
+    // MARK: - Combined Regex Patterns (fewer regex runs = faster)
 
-    private static let timestampPatterns: [NSRegularExpression] = {
-        [
-            #"\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:?\d{2})?"#,
-            #"\[\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\]"#,
-            #"\d{2}:\d{2}:\d{2}\.\d+"#
-        ].compactMap { try? NSRegularExpression(pattern: $0) }
-    }()
+    /// Combined timestamp pattern (one regex instead of three)
+    private static let timestampRegex = try? NSRegularExpression(
+        pattern: #"\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:?\d{2})?|\[\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\]|\d{2}:\d{2}:\d{2}\.\d+"#
+    )
 
-    private static let logLevelPatterns: [(NSRegularExpression, Color)] = {
-        [
-            (#"\b(ERROR|FATAL|CRITICAL)\b"#, colors.error),
-            (#"\b(WARN|WARNING)\b"#, colors.warn),
-            (#"\bINFO\b"#, colors.info),
-            (#"\b(DEBUG|TRACE)\b"#, colors.debug),
-            (#"\[error\]"#, colors.error),
-            (#"\[warn(ing)?\]"#, colors.warn),
-            (#"\[info\]"#, colors.info),
-            (#"\[debug\]"#, colors.debug),
-        ].compactMap { pattern, color -> (NSRegularExpression, Color)? in
-            guard let regex = try? NSRegularExpression(pattern: pattern, options: .caseInsensitive) else { return nil }
-            return (regex, color)
-        }
-    }()
+    /// Combined log level pattern (one regex instead of eight)
+    private static let logLevelRegex = try? NSRegularExpression(
+        pattern: #"\b(ERROR|FATAL|CRITICAL)\b|\b(WARN|WARNING)\b|\bINFO\b|\b(DEBUG|TRACE)\b|\[(error|warn(?:ing)?|info|debug)\]"#,
+        options: .caseInsensitive
+    )
 
-    private static let httpMethodPatterns: [(NSRegularExpression, Color)] = {
-        [
-            (#"\bGET\b"#, colors.httpGet),
-            (#"\bPOST\b"#, colors.httpPost),
-            (#"\bPUT\b"#, colors.httpPut),
-            (#"\bPATCH\b"#, colors.httpPatch),
-            (#"\bDELETE\b"#, colors.httpDelete),
-            (#"\bHEAD\b"#, colors.httpGet),
-            (#"\bOPTIONS\b"#, colors.httpGet),
-        ].compactMap { pattern, color -> (NSRegularExpression, Color)? in
-            guard let regex = try? NSRegularExpression(pattern: pattern) else { return nil }
-            return (regex, color)
-        }
-    }()
+    /// Combined HTTP method pattern
+    private static let httpMethodRegex = try? NSRegularExpression(
+        pattern: #"\b(GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS)\b"#
+    )
 
-    private static let statusCodePatterns: [(NSRegularExpression, Color)] = {
-        [
-            (#"\b2\d{2}\b"#, colors.statusOk),
-            (#"\b3\d{2}\b"#, colors.statusRedirect),
-            (#"\b4\d{2}\b"#, colors.statusClientError),
-            (#"\b5\d{2}\b"#, colors.statusServerError),
-        ].compactMap { pattern, color -> (NSRegularExpression, Color)? in
-            guard let regex = try? NSRegularExpression(pattern: pattern) else { return nil }
-            return (regex, color)
-        }
-    }()
+    /// Combined duration pattern
+    private static let durationRegex = try? NSRegularExpression(
+        pattern: #"\d+\.?\d*\s*(ms|s|μs)\b|Duration:\s*\d+\.?\d*ms|in\s+\d+\.?\d*ms"#
+    )
 
-    private static let durationPatterns: [NSRegularExpression] = {
-        [
-            #"\d+\.?\d*\s*ms\b"#,
-            #"\d+\.?\d*\s*s\b"#,
-            #"\d+\.?\d*\s*μs\b"#,
-            #"Duration:\s*\d+\.?\d*ms"#,
-            #"in\s+\d+\.?\d*ms"#,
-        ].compactMap { try? NSRegularExpression(pattern: $0) }
-    }()
+    /// Status code pattern (only used when context suggests status codes)
+    private static let statusCodeRegex = try? NSRegularExpression(
+        pattern: #"\b([2345]\d{2})\b"#
+    )
 
+    // Rails-specific patterns
     private static let controllerRegex = try? NSRegularExpression(pattern: #"Processing by (\w+#\w+)"#)
     private static let startedRegex = try? NSRegularExpression(pattern: #"^Started\b"#)
     private static let completedRegex = try? NSRegularExpression(pattern: #"^Completed\b"#)
     private static let renderedRegex = try? NSRegularExpression(pattern: #"Rendered\s+[\w/]+\.[\w.]+"#)
-    private static let activeRecordRegex = try? NSRegularExpression(pattern: #"ActiveRecord:\s*\d+\.?\d*ms"#)
-    private static let viewsRegex = try? NSRegularExpression(pattern: #"Views:\s*\d+\.?\d*ms"#)
-    private static let allocationsRegex = try? NSRegularExpression(pattern: #"Allocations:\s*\d+"#)
+    private static let railsTimingRegex = try? NSRegularExpression(pattern: #"(ActiveRecord|Views|Allocations):\s*\d+\.?\d*(ms)?"#)
+
+    // JSON/key-value patterns
     private static let keyValueRegex = try? NSRegularExpression(pattern: #"(\w+)[=:]\s*"#)
     private static let jsonKeyRegex = try? NSRegularExpression(pattern: #""(\w+)":\s*"#)
-    private static let jsonStringRegex = try? NSRegularExpression(pattern: #""[^"]*""#)
-    private static let jsonNumberRegex = try? NSRegularExpression(pattern: #":\s*-?\d+\.?\d*[,\}\]]"#)
-    private static let jsonBoolRegex = try? NSRegularExpression(pattern: #"\b(true|false|null)\b"#)
+    private static let jsonStringRegex = try? NSRegularExpression(pattern: #""[^"]{0,200}""#) // Limit string length
+    private static let jsonPrimitivesRegex = try? NSRegularExpression(pattern: #"\b(true|false|null|-?\d+\.?\d*)\b"#)
 
     // MARK: - Main Highlight Function
 
     static func highlight(_ line: String) -> AttributedString {
+        // Fast path: skip very long lines (likely data dumps, not readable logs)
+        guard line.count <= maxLineLength else {
+            return AttributedString(line)
+        }
+
+        // Fast path: empty or very short lines
+        guard line.count > 2 else {
+            return AttributedString(line)
+        }
+
         var result = AttributedString(line)
         let nsRange = NSRange(location: 0, length: line.utf16.count)
 
         // Apply highlights in order (later ones override earlier)
-        highlightTimestamps(in: &result, line: line, nsRange: nsRange)
-        highlightLogLevels(in: &result, line: line, nsRange: nsRange)
-        highlightHTTPMethods(in: &result, line: line, nsRange: nsRange)
-        highlightStatusCodes(in: &result, line: line, nsRange: nsRange)
-        highlightDurations(in: &result, line: line, nsRange: nsRange)
-        highlightRailsPatterns(in: &result, line: line, nsRange: nsRange)
-        highlightKeyValuePairs(in: &result, line: line, nsRange: nsRange)
-        highlightJSON(in: &result, line: line, nsRange: nsRange)
+        // Use early-exit checks to skip unnecessary regex runs
+
+        // Timestamps (only if line likely contains one)
+        if lineContainsDigits(line) {
+            highlightTimestamps(in: &result, line: line, nsRange: nsRange)
+            highlightDurations(in: &result, line: line, nsRange: nsRange)
+        }
+
+        // Log levels (only if line contains bracket or uppercase)
+        if line.contains("[") || containsUppercase(line) {
+            highlightLogLevels(in: &result, line: line, nsRange: nsRange)
+        }
+
+        // HTTP methods (only if line might contain them)
+        if containsHTTPMethodCandidate(line) {
+            highlightHTTPMethods(in: &result, line: line, nsRange: nsRange)
+        }
+
+        // Status codes (only in specific contexts)
+        if line.contains("Completed") || line.contains("HTTP") || line.contains("status") {
+            highlightStatusCodes(in: &result, line: line, nsRange: nsRange)
+        }
+
+        // Rails patterns (only if line starts with Rails keywords)
+        if line.hasPrefix("Started") || line.hasPrefix("Completed") ||
+           line.contains("Processing by") || line.contains("Rendered") ||
+           line.contains("ActiveRecord") || line.contains("Views:") || line.contains("Allocations:") {
+            highlightRailsPatterns(in: &result, line: line, nsRange: nsRange)
+        }
+
+        // Key-value pairs (only if line contains = or :)
+        if line.contains("=") || line.contains(":") {
+            highlightKeyValuePairs(in: &result, line: line, nsRange: nsRange)
+        }
+
+        // JSON (only if line contains braces)
+        if line.contains("{") || line.contains("[") {
+            highlightJSON(in: &result, line: line, nsRange: nsRange)
+        }
 
         return result
     }
 
-    // MARK: - Pattern Highlighters (Using Cached Regex)
+    // MARK: - Fast Character Checks
+
+    @inline(__always)
+    private static func lineContainsDigits(_ line: String) -> Bool {
+        line.contains { $0.isNumber }
+    }
+
+    @inline(__always)
+    private static func containsUppercase(_ line: String) -> Bool {
+        // Check first 100 chars only for performance
+        let prefix = line.prefix(100)
+        return prefix.contains { $0.isUppercase }
+    }
+
+    @inline(__always)
+    private static func containsHTTPMethodCandidate(_ line: String) -> Bool {
+        // Quick check for common HTTP method starting letters
+        let upper = line.uppercased()
+        return upper.contains("GET") || upper.contains("POST") || upper.contains("PUT") ||
+               upper.contains("DELETE") || upper.contains("PATCH")
+    }
+
+    // MARK: - Pattern Highlighters
 
     private static func highlightTimestamps(in result: inout AttributedString, line: String, nsRange: NSRange) {
-        for regex in timestampPatterns {
-            applyRegex(regex, color: colors.timestamp, in: &result, line: line, nsRange: nsRange)
-        }
+        guard let regex = timestampRegex else { return }
+        applyRegex(regex, color: colors.timestamp, in: &result, line: line, nsRange: nsRange)
     }
 
     private static func highlightLogLevels(in result: inout AttributedString, line: String, nsRange: NSRange) {
-        for (regex, color) in logLevelPatterns {
-            applyRegex(regex, color: color, in: &result, line: line, nsRange: nsRange)
+        guard let regex = logLevelRegex else { return }
+
+        let matches = regex.matches(in: line, options: [], range: nsRange)
+        for match in matches.prefix(maxMatchesPerPattern) {
+            guard let range = Range(match.range, in: line),
+                  let attrRange = Range(range, in: result) else { continue }
+
+            let matchedText = String(line[range]).uppercased()
+
+            // Determine color based on matched text
+            let color: Color
+            if matchedText.contains("ERROR") || matchedText.contains("FATAL") || matchedText.contains("CRITICAL") {
+                color = colors.error
+            } else if matchedText.contains("WARN") {
+                color = colors.warn
+            } else if matchedText.contains("INFO") {
+                color = colors.info
+            } else {
+                color = colors.debug
+            }
+
+            result[attrRange].foregroundColor = color
         }
     }
 
     private static func highlightHTTPMethods(in result: inout AttributedString, line: String, nsRange: NSRange) {
-        for (regex, color) in httpMethodPatterns {
-            applyRegex(regex, color: color, in: &result, line: line, nsRange: nsRange, bold: true)
+        guard let regex = httpMethodRegex else { return }
+
+        let matches = regex.matches(in: line, options: [], range: nsRange)
+        for match in matches.prefix(maxMatchesPerPattern) {
+            guard let range = Range(match.range, in: line),
+                  let attrRange = Range(range, in: result) else { continue }
+
+            let method = String(line[range])
+            let color: Color
+            switch method {
+            case "GET", "HEAD", "OPTIONS": color = colors.httpGet
+            case "POST": color = colors.httpPost
+            case "PUT": color = colors.httpPut
+            case "PATCH": color = colors.httpPatch
+            case "DELETE": color = colors.httpDelete
+            default: color = colors.httpGet
+            }
+
+            result[attrRange].foregroundColor = color
+            result[attrRange].font = .system(.body, design: .monospaced).bold()
         }
     }
 
     private static func highlightStatusCodes(in result: inout AttributedString, line: String, nsRange: NSRange) {
-        // Only highlight if it looks like a status code context
-        guard line.contains("Completed") || line.contains("HTTP") || line.contains("status") else { return }
+        guard let regex = statusCodeRegex else { return }
 
-        for (regex, color) in statusCodePatterns {
-            applyRegex(regex, color: color, in: &result, line: line, nsRange: nsRange, bold: true)
+        let matches = regex.matches(in: line, options: [], range: nsRange)
+        for match in matches.prefix(maxMatchesPerPattern) {
+            guard let range = Range(match.range, in: line),
+                  let attrRange = Range(range, in: result),
+                  let code = Int(line[range]) else { continue }
+
+            let color: Color
+            switch code {
+            case 200..<300: color = colors.statusOk
+            case 300..<400: color = colors.statusRedirect
+            case 400..<500: color = colors.statusClientError
+            case 500..<600: color = colors.statusServerError
+            default: continue
+            }
+
+            result[attrRange].foregroundColor = color
+            result[attrRange].font = .system(.body, design: .monospaced).bold()
         }
     }
 
     private static func highlightDurations(in result: inout AttributedString, line: String, nsRange: NSRange) {
-        for regex in durationPatterns {
-            applyRegex(regex, color: colors.duration, in: &result, line: line, nsRange: nsRange)
-        }
+        guard let regex = durationRegex else { return }
+        applyRegex(regex, color: colors.duration, in: &result, line: line, nsRange: nsRange)
     }
 
     private static func highlightRailsPatterns(in result: inout AttributedString, line: String, nsRange: NSRange) {
-        // "Started GET" or "Started POST" etc
-        if let regex = startedRegex {
-            applyRegex(regex, color: colors.info, in: &result, line: line, nsRange: nsRange, bold: true)
+        // "Started GET" - use firstMatch since it only appears once
+        if let regex = startedRegex, let match = regex.firstMatch(in: line, options: [], range: nsRange) {
+            if let range = Range(match.range, in: line), let attrRange = Range(range, in: result) {
+                result[attrRange].foregroundColor = colors.info
+                result[attrRange].font = .system(.body, design: .monospaced).bold()
+            }
         }
 
         // "Processing by Controller#action"
-        if let regex = controllerRegex {
-            let matches = regex.matches(in: line, range: nsRange)
-            for match in matches {
-                if match.numberOfRanges > 1, let range = Range(match.range(at: 1), in: line) {
-                    if let attrRange = Range(range, in: result) {
-                        result[attrRange].foregroundColor = colors.controller
-                        result[attrRange].font = .system(.body, design: .monospaced).bold()
-                    }
+        if let regex = controllerRegex, let match = regex.firstMatch(in: line, options: [], range: nsRange) {
+            if match.numberOfRanges > 1, let range = Range(match.range(at: 1), in: line) {
+                if let attrRange = Range(range, in: result) {
+                    result[attrRange].foregroundColor = colors.controller
+                    result[attrRange].font = .system(.body, design: .monospaced).bold()
                 }
             }
         }
 
         // "Completed 200 OK"
-        if let regex = completedRegex {
-            applyRegex(regex, color: colors.success, in: &result, line: line, nsRange: nsRange, bold: true)
+        if let regex = completedRegex, let match = regex.firstMatch(in: line, options: [], range: nsRange) {
+            if let range = Range(match.range, in: line), let attrRange = Range(range, in: result) {
+                result[attrRange].foregroundColor = colors.success
+                result[attrRange].font = .system(.body, design: .monospaced).bold()
+            }
         }
 
         // "Rendered view.html.erb"
-        if let regex = renderedRegex {
-            applyRegex(regex, color: colors.info, in: &result, line: line, nsRange: nsRange)
+        if let regex = renderedRegex, let match = regex.firstMatch(in: line, options: [], range: nsRange) {
+            if let range = Range(match.range, in: line), let attrRange = Range(range, in: result) {
+                result[attrRange].foregroundColor = colors.info
+            }
         }
 
-        // ActiveRecord timing
-        if let regex = activeRecordRegex {
+        // Rails timing (ActiveRecord, Views, Allocations)
+        if let regex = railsTimingRegex {
             applyRegex(regex, color: colors.duration, in: &result, line: line, nsRange: nsRange)
-        }
-
-        // Views timing
-        if let regex = viewsRegex {
-            applyRegex(regex, color: colors.duration, in: &result, line: line, nsRange: nsRange)
-        }
-
-        // Allocations
-        if let regex = allocationsRegex {
-            applyRegex(regex, color: colors.number, in: &result, line: line, nsRange: nsRange)
         }
     }
 
     private static func highlightKeyValuePairs(in result: inout AttributedString, line: String, nsRange: NSRange) {
         guard let regex = keyValueRegex else { return }
-        let matches = regex.matches(in: line, range: nsRange)
-        for match in matches {
+
+        let matches = regex.matches(in: line, options: [], range: nsRange)
+        for match in matches.prefix(maxMatchesPerPattern) {
             if match.numberOfRanges > 1, let range = Range(match.range(at: 1), in: line) {
                 if let attrRange = Range(range, in: result) {
                     result[attrRange].foregroundColor = colors.key
@@ -220,18 +302,15 @@ struct LogHighlighter {
     }
 
     private static func highlightJSON(in result: inout AttributedString, line: String, nsRange: NSRange) {
-        // Only process if line contains JSON-like content
-        guard line.contains("{") || line.contains("[") else { return }
-
-        // JSON string values
+        // JSON string values (limited length to prevent slow regex on large strings)
         if let regex = jsonStringRegex {
             applyRegex(regex, color: colors.string, in: &result, line: line, nsRange: nsRange)
         }
 
-        // JSON keys (before colon)
+        // JSON keys
         if let regex = jsonKeyRegex {
-            let matches = regex.matches(in: line, range: nsRange)
-            for match in matches {
+            let matches = regex.matches(in: line, options: [], range: nsRange)
+            for match in matches.prefix(maxMatchesPerPattern) {
                 if match.numberOfRanges > 1, let range = Range(match.range(at: 1), in: line) {
                     if let attrRange = Range(range, in: result) {
                         result[attrRange].foregroundColor = colors.key
@@ -240,13 +319,8 @@ struct LogHighlighter {
             }
         }
 
-        // Numbers in JSON
-        if let regex = jsonNumberRegex {
-            applyRegex(regex, color: colors.number, in: &result, line: line, nsRange: nsRange)
-        }
-
-        // Booleans
-        if let regex = jsonBoolRegex {
+        // JSON primitives (numbers, booleans, null)
+        if let regex = jsonPrimitivesRegex {
             applyRegex(regex, color: colors.number, in: &result, line: line, nsRange: nsRange)
         }
     }
@@ -261,8 +335,8 @@ struct LogHighlighter {
         nsRange: NSRange,
         bold: Bool = false
     ) {
-        let matches = regex.matches(in: line, range: nsRange)
-        for match in matches {
+        let matches = regex.matches(in: line, options: [], range: nsRange)
+        for match in matches.prefix(maxMatchesPerPattern) {
             if let range = Range(match.range, in: line),
                let attrRange = Range(range, in: result) {
                 result[attrRange].foregroundColor = color

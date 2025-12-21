@@ -325,7 +325,7 @@ final class ServerParsingTests: XCTestCase {
         """
 
         let data = json.data(using: .utf8)!
-        var status = try JSONDecoder().decode(WTStatus.self, from: data)
+        let status = try JSONDecoder().decode(WTStatus.self, from: data)
 
         XCTAssertNil(status.servers.first?.githubInfo)
 
