@@ -49,6 +49,9 @@ struct GroveMenubarApp: App {
         Window("Grove Logs", id: "log-viewer") {
             LogViewerWindow()
                 .environmentObject(serverManager)
+                .onAppear {
+                    NSApp.activate(ignoringOtherApps: true)
+                }
         }
         .windowStyle(.automatic)
         .windowResizability(.contentMinSize)
