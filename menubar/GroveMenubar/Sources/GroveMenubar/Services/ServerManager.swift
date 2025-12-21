@@ -21,6 +21,12 @@ class ServerManager: ObservableObject {
     private let preferences = PreferencesManager.shared
     private var isGitHubFetchInProgress = false  // Prevent overlapping GitHub fetches
 
+    // Wake-from-sleep handling - start with cooldown ON to handle fresh app starts after wake
+    private var isWakeCooldown = true
+    private var wakeCooldownWorkItem: DispatchWorkItem?
+    private var sleepObserver: NSObjectProtocol?
+    private var wakeObserver: NSObjectProtocol?
+
     var isPortMode: Bool { urlMode == "port" }
     var isSubdomainMode: Bool { urlMode == "subdomain" }
 
@@ -29,7 +35,22 @@ class ServerManager: ObservableObject {
         // We avoid running `which` here to prevent blocking the main thread
         self.grovePath = Self.findGroveBinaryFast() ?? "/usr/local/bin/grove"
 
-        DispatchQueue.main.async { [weak self] in
+        // Register for sleep/wake notifications to handle network availability
+        setupSleepWakeObservers()
+
+        // Start with cooldown enabled - handles fresh app start after wake
+        // Clear cooldown after 3 seconds when network should be ready
+        let workItem = DispatchWorkItem { [weak self] in
+            self?.isWakeCooldown = false
+            // Trigger a refresh to fetch GitHub info now that network should be ready
+            self?.refresh()
+        }
+        wakeCooldownWorkItem = workItem
+        DispatchQueue.main.asyncAfter(deadline: .now() + 3.0, execute: workItem)
+
+        // Delay initial operations slightly to let system stabilize after launch/wake
+        // This prevents blocking the main thread during the critical app startup period
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
             self?.refresh()
             self?.startAutoRefresh()
         }
@@ -38,6 +59,65 @@ class ServerManager: ObservableObject {
     deinit {
         refreshTimer?.invalidate()
         logTimer?.invalidate()
+        wakeCooldownWorkItem?.cancel()
+
+        // Remove sleep/wake observers
+        if let observer = sleepObserver {
+            NSWorkspace.shared.notificationCenter.removeObserver(observer)
+        }
+        if let observer = wakeObserver {
+            NSWorkspace.shared.notificationCenter.removeObserver(observer)
+        }
+    }
+
+    // MARK: - Sleep/Wake Handling
+
+    private func setupSleepWakeObservers() {
+        let workspace = NSWorkspace.shared
+
+        // When system is about to sleep, cancel any pending operations
+        sleepObserver = workspace.notificationCenter.addObserver(
+            forName: NSWorkspace.willSleepNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            self?.handleSystemWillSleep()
+        }
+
+        // When system wakes, wait before doing network operations
+        wakeObserver = workspace.notificationCenter.addObserver(
+            forName: NSWorkspace.didWakeNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            self?.handleSystemDidWake()
+        }
+    }
+
+    private func handleSystemWillSleep() {
+        // Cancel any pending wake cooldown
+        wakeCooldownWorkItem?.cancel()
+
+        // Mark that we should skip network operations
+        isWakeCooldown = true
+        isGitHubFetchInProgress = false
+    }
+
+    private func handleSystemDidWake() {
+        // Cancel any existing cooldown
+        wakeCooldownWorkItem?.cancel()
+
+        // Start cooldown period - skip GitHub fetches for 3 seconds
+        isWakeCooldown = true
+
+        // Schedule end of cooldown
+        let workItem = DispatchWorkItem { [weak self] in
+            self?.isWakeCooldown = false
+            // Do a fresh refresh now that network should be ready
+            self?.refresh()
+        }
+        wakeCooldownWorkItem = workItem
+        DispatchQueue.main.asyncAfter(deadline: .now() + 3.0, execute: workItem)
     }
 
     // MARK: - Status
@@ -515,6 +595,9 @@ class ServerManager: ObservableObject {
     }
 
     private func fetchGitHubInfoForServers() {
+        // Skip GitHub fetching during wake cooldown (network may not be ready)
+        guard !isWakeCooldown else { return }
+
         // Prevent overlapping fetches
         guard !isGitHubFetchInProgress else { return }
 
@@ -629,8 +712,8 @@ class ServerManager: ObservableObject {
         }
     }
 
-    /// Default timeout for grove commands (10 seconds should be plenty for ls --json)
-    private static let commandTimeout: TimeInterval = 10.0
+    /// Default timeout for grove commands (5 seconds - fail fast)
+    private static let commandTimeout: TimeInterval = 5.0
 
     private func runGrove(_ args: [String], timeout: TimeInterval = commandTimeout, completion: @escaping (Result<String, Error>) -> Void) {
         let grovePath = self.grovePath
@@ -724,7 +807,15 @@ class ServerManager: ObservableObject {
     }
 
     /// Fast path lookup that doesn't spawn any processes - safe for main thread
+    /// Uses UserDefaults cache to avoid repeated filesystem checks after wake
     private static func findGroveBinaryFast() -> String? {
+        // Check cache first - much faster than filesystem after wake
+        let cacheKey = "cachedGrovePath"
+        if let cached = UserDefaults.standard.string(forKey: cacheKey),
+           FileManager.default.fileExists(atPath: cached) {
+            return cached
+        }
+
         let paths = [
             "\(NSHomeDirectory())/development/claude-helper/cli/grove",
             "\(NSHomeDirectory())/development/go/bin/grove",
@@ -736,6 +827,8 @@ class ServerManager: ObservableObject {
 
         for path in paths {
             if FileManager.default.fileExists(atPath: path) {
+                // Cache for next launch
+                UserDefaults.standard.set(path, forKey: cacheKey)
                 return path
             }
         }

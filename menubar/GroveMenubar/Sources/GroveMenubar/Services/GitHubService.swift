@@ -169,8 +169,8 @@ class GitHubService {
         return nil
     }
 
-    /// Default timeout for git/gh commands (5 seconds)
-    private static let commandTimeout: TimeInterval = 5.0
+    /// Default timeout for git/gh commands (3 seconds - fail fast when network is down)
+    private static let commandTimeout: TimeInterval = 3.0
 
     private func runCommand(_ command: String, args: [String], workingDir: String? = nil) -> String? {
         let task = Process()
