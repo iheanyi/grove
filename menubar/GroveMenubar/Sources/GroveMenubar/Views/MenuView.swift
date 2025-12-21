@@ -415,10 +415,10 @@ struct MenuView: View {
                 if let chars = event.charactersIgnoringModifiers,
                    let num = Int(chars),
                    num >= 1 && num <= 9 {
-                    let servers = filteredServers.filter { $0.isRunning || $0.displayStatus == "stopped" }
+                    let servers = filteredServers.filter { $0.isRunning || ($0.displayStatus == "stopped" && $0.hasServer == true) }
                     if num <= servers.count {
                         let server = servers[num - 1]
-                        if !server.isRunning && server.displayStatus == "stopped" {
+                        if !server.isRunning && server.displayStatus == "stopped" && server.hasServer == true {
                             serverManager.startServer(server)
                         } else if server.isRunning {
                             serverManager.openServer(server)
@@ -622,7 +622,7 @@ struct ServerRowView: View {
                             }
                             .buttonStyle(.plain)
                             .help("Stop server")
-                        } else if server.displayStatus == "stopped" {
+                        } else if server.displayStatus == "stopped" && server.hasServer == true {
                             Button {
                                 serverManager.startServer(server)
                             } label: {
@@ -662,7 +662,7 @@ struct ServerRowView: View {
                         ActionChip(icon: "stop.fill", label: "Stop", destructive: true) {
                             serverManager.stopServer(server)
                         }
-                    } else if server.displayStatus == "stopped" {
+                    } else if server.displayStatus == "stopped" && server.hasServer == true {
                         ActionChip(icon: "play.fill", label: "Start", primary: true) {
                             serverManager.startServer(server)
                         }
