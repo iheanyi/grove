@@ -67,6 +67,7 @@ struct MenuView: View {
     @State private var eventMonitor: Any?
     @State private var currentToast: ToastType?
     @State private var isRefreshing = false
+    @State private var isStoppedCollapsed = false
 
     var body: some View {
         mainMenuView
@@ -318,12 +319,15 @@ struct MenuView: View {
                                 }
                             }
 
-                            // Stopped servers
+                            // Stopped servers (collapsible)
                             let stopped = filteredServers.filter { !$0.isRunning }
                             if !stopped.isEmpty {
-                                SectionHeader(title: "Stopped", count: stopped.count)
-                                ForEach(Array(stopped.enumerated()), id: \.element.id) { index, server in
-                                    ServerRowView(server: server, searchText: searchText, displayIndex: running.count + index + 1)
+                                SectionHeader(title: "Stopped", count: stopped.count, isCollapsible: true, isCollapsed: $isStoppedCollapsed)
+
+                                if !isStoppedCollapsed {
+                                    ForEach(Array(stopped.enumerated()), id: \.element.id) { index, server in
+                                        ServerRowView(server: server, searchText: searchText, displayIndex: running.count + index + 1)
+                                    }
                                 }
                             }
                         }
@@ -438,6 +442,15 @@ struct MenuView: View {
 struct SectionHeader: View {
     let title: String
     let count: Int
+    var isCollapsible: Bool = false
+    @Binding var isCollapsed: Bool
+
+    init(title: String, count: Int, isCollapsible: Bool = false, isCollapsed: Binding<Bool> = .constant(false)) {
+        self.title = title
+        self.count = count
+        self.isCollapsible = isCollapsible
+        self._isCollapsed = isCollapsed
+    }
 
     var body: some View {
         HStack {
@@ -457,10 +470,24 @@ struct SectionHeader: View {
                 .padding(.vertical, 2)
                 .background(Color.secondary.opacity(0.1))
                 .cornerRadius(4)
+
+            if isCollapsible {
+                Image(systemName: isCollapsed ? "chevron.right" : "chevron.down")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
         }
         .padding(.horizontal)
         .padding(.vertical, 6)
         .background(Color(NSColor.windowBackgroundColor).opacity(0.6))
+        .contentShape(Rectangle())
+        .onTapGesture {
+            if isCollapsible {
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    isCollapsed.toggle()
+                }
+            }
+        }
     }
 }
 
@@ -484,13 +511,22 @@ struct ServerRowView: View {
         }
     }
 
+    /// Returns the color for the status indicator, considering both server status and health
+    private var effectiveStatusColor: Color {
+        // If server is running but unhealthy, show orange
+        if server.isRunning && serverManager.healthStatus(for: server) == .unhealthy {
+            return .orange
+        }
+        return server.statusColor
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             // Main row content
             HStack(spacing: 8) {
-                // Status indicator
+                // Status indicator (shows orange if running but unhealthy)
                 Circle()
-                    .fill(server.statusColor)
+                    .fill(effectiveStatusColor)
                     .frame(width: 8, height: 8)
 
                 // Display index for keyboard shortcuts

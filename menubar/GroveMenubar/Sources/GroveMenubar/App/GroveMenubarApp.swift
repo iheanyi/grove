@@ -29,6 +29,11 @@ struct GroveMenubarApp: App {
                             .fill(Color.red)
                             .frame(width: 6, height: 6)
                             .offset(x: 2, y: 2)
+                    } else if serverManager.hasUnhealthyServers {
+                        Circle()
+                            .fill(Color.orange)
+                            .frame(width: 6, height: 6)
+                            .offset(x: 2, y: 2)
                     } else if serverManager.hasStartingServers {
                         Circle()
                             .fill(Color.yellow)

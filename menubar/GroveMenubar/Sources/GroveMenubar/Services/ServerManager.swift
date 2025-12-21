@@ -11,6 +11,13 @@ class ServerManager: ObservableObject {
     @Published var selectedServerForLogs: Server?
     @Published var logLines: [String] = []
     @Published var isStreamingLogs = false
+    @Published var serverHealth: [String: HealthStatus] = [:]  // Track health per server
+
+    enum HealthStatus: String {
+        case healthy
+        case unhealthy
+        case unknown
+    }
 
     private var refreshTimer: Timer?
     private var logTimer: Timer?
@@ -20,6 +27,7 @@ class ServerManager: ObservableObject {
     private let githubService = GitHubService.shared
     private let preferences = PreferencesManager.shared
     private var isGitHubFetchInProgress = false  // Prevent overlapping GitHub fetches
+    private var isHealthCheckInProgress = false  // Prevent overlapping health checks
 
     // Wake-from-sleep handling - start with cooldown ON to handle fresh app starts after wake
     private var isWakeCooldown = true
@@ -165,6 +173,14 @@ class ServerManager: ObservableObject {
         servers.contains(where: { $0.status == "starting" })
     }
 
+    var hasUnhealthyServers: Bool {
+        serverHealth.values.contains(.unhealthy)
+    }
+
+    func healthStatus(for server: Server) -> HealthStatus {
+        serverHealth[server.name] ?? .unknown
+    }
+
     // MARK: - Actions
 
     func refresh() {
@@ -208,6 +224,7 @@ class ServerManager: ObservableObject {
 
                     print("[Grove] refresh() UI updated, cooldown=\(self.isWakeCooldown), calling fetchGitHubInfoForServers...")
                     self.fetchGitHubInfoForServers()
+                    self.checkServerHealth()
                     print("[Grove] refresh() DONE - total \(String(format: "%.3f", CFAbsoluteTimeGetCurrent() - refreshStart))s")
                 }
 
@@ -593,6 +610,121 @@ class ServerManager: ObservableObject {
     func openLogsInFinder(_ server: Server) {
         if let logFile = server.logFile {
             NSWorkspace.shared.selectFile(logFile, inFileViewerRootedAtPath: "")
+        }
+    }
+
+    // MARK: - Health Checking
+
+    /// Performs HTTP health checks on all running servers
+    private func checkServerHealth() {
+        // Skip during wake cooldown
+        guard !isWakeCooldown else { return }
+
+        // Prevent overlapping checks
+        guard !isHealthCheckInProgress else { return }
+
+        let runningServers = servers.filter { $0.isRunning }
+        guard !runningServers.isEmpty else { return }
+
+        isHealthCheckInProgress = true
+
+        // Safety timeout
+        DispatchQueue.main.asyncAfter(deadline: .now() + 15) { [weak self] in
+            self?.isHealthCheckInProgress = false
+        }
+
+        let healthLock = NSLock()
+        var healthUpdates: [String: HealthStatus] = [:]
+        var completedCount = 0
+        let totalCount = runningServers.count
+
+        for server in runningServers {
+            let serverName = server.name
+            let serverURL = server.displayURL
+
+            DispatchQueue.global(qos: .utility).async { [weak self] in
+                let health = self?.pingServer(url: serverURL) ?? .unknown
+
+                healthLock.lock()
+                healthUpdates[serverName] = health
+                completedCount += 1
+                let isComplete = completedCount >= totalCount
+                let currentUpdates = healthUpdates
+                healthLock.unlock()
+
+                if isComplete {
+                    DispatchQueue.main.async {
+                        self?.isHealthCheckInProgress = false
+                        self?.applyHealthUpdates(currentUpdates)
+                    }
+                }
+            }
+        }
+    }
+
+    /// Ping a server URL to check if it's responding
+    private func pingServer(url: String) -> HealthStatus {
+        guard let serverURL = URL(string: url) else { return .unknown }
+
+        var request = URLRequest(url: serverURL)
+        request.httpMethod = "GET"
+        request.timeoutInterval = 3.0  // 3 second timeout
+
+        let semaphore = DispatchSemaphore(value: 0)
+        var result: HealthStatus = .unknown
+
+        let task = URLSession.shared.dataTask(with: request) { _, response, error in
+            if let error = error {
+                // Check for connection refused specifically
+                let nsError = error as NSError
+                if nsError.domain == NSURLErrorDomain {
+                    switch nsError.code {
+                    case NSURLErrorCannotConnectToHost, NSURLErrorNetworkConnectionLost, NSURLErrorTimedOut:
+                        result = .unhealthy
+                    default:
+                        result = .unhealthy
+                    }
+                } else {
+                    result = .unhealthy
+                }
+            } else if let httpResponse = response as? HTTPURLResponse {
+                // Consider 2xx-4xx as healthy (server is responding)
+                // 5xx might indicate server issues but it's still "up"
+                result = httpResponse.statusCode < 500 ? .healthy : .unhealthy
+            } else {
+                result = .unknown
+            }
+            semaphore.signal()
+        }
+
+        task.resume()
+        _ = semaphore.wait(timeout: .now() + 4.0)  // Wait up to 4 seconds
+
+        return result
+    }
+
+    /// Apply health updates in a single batch
+    private func applyHealthUpdates(_ updates: [String: HealthStatus]) {
+        guard !updates.isEmpty else { return }
+
+        for (name, health) in updates {
+            let previousHealth = serverHealth[name]
+            if previousHealth != health {
+                serverHealth[name] = health
+
+                // Notify if server became unhealthy
+                if health == .unhealthy && previousHealth != .unhealthy {
+                    print("[Grove] Server '\(name)' is unhealthy (connection refused)")
+                }
+            }
+        }
+
+        // Clean up health status for servers that are no longer running
+        let runningNames = Set(servers.filter { $0.isRunning }.map { $0.name })
+        for name in serverHealth.keys {
+            if !runningNames.contains(name) {
+                serverHealth.removeValue(forKey: name)
+            }
         }
     }
 
