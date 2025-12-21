@@ -632,24 +632,22 @@ struct ServerRowView: View {
                         }
                     }
 
-                    ActionChip(icon: "terminal", label: "Terminal") {
-                        serverManager.openInTerminal(server)
+                    if server.logFile != nil {
+                        ActionChip(icon: "doc.text", label: "Logs") {
+                            serverManager.startStreamingLogs(for: server)
+                            NSApp.activate(ignoringOtherApps: true)
+                            openWindow(id: "log-viewer")
+                        }
                     }
 
                     Spacer()
 
                     // More menu for less common actions
                     Menu {
-                        if server.logFile != nil {
-                            Button {
-                                serverManager.startStreamingLogs(for: server)
-                                NSApp.activate(ignoringOtherApps: true)
-                                openWindow(id: "log-viewer")
-                            } label: {
-                                Label("View Logs", systemImage: "doc.text")
-                            }
-
-                            Divider()
+                        Button {
+                            serverManager.openInTerminal(server)
+                        } label: {
+                            Label("Open Terminal", systemImage: "terminal")
                         }
 
                         Button {
