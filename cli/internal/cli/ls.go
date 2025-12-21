@@ -290,6 +290,7 @@ func outputJSONFormatNew(views []*WorktreeView, proxy *registry.ProxyInfo) error
 		GitDirty  bool   `json:"git_dirty"`
 		PID       int    `json:"pid,omitempty"`
 		Uptime    string `json:"uptime,omitempty"`
+		LogFile   string `json:"log_file,omitempty"`
 	}
 
 	type output struct {
@@ -334,6 +335,7 @@ func outputJSONFormatNew(views []*WorktreeView, proxy *registry.ProxyInfo) error
 			jv.Status = string(view.Server.Status)
 			jv.PID = view.Server.PID
 			jv.Uptime = view.Server.UptimeString()
+			jv.LogFile = view.Server.LogFile
 		}
 
 		out.Worktrees = append(out.Worktrees, jv)
