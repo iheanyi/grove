@@ -42,9 +42,9 @@ var (
 // Compiled regex patterns
 var (
 	// Timestamps
-	timestampISO      = regexp.MustCompile(`\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:?\d{2})?`)
-	timestampBracket  = regexp.MustCompile(`\[\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\]`)
-	timestampTime     = regexp.MustCompile(`\d{2}:\d{2}:\d{2}\.\d+`)
+	timestampISO     = regexp.MustCompile(`\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:?\d{2})?`)
+	timestampBracket = regexp.MustCompile(`\[\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\]`)
+	timestampTime    = regexp.MustCompile(`\d{2}:\d{2}:\d{2}\.\d+`)
 
 	// Log levels
 	levelError = regexp.MustCompile(`(?i)\b(ERROR|FATAL|CRITICAL)\b`)
@@ -53,11 +53,11 @@ var (
 	levelDebug = regexp.MustCompile(`(?i)\b(DEBUG|TRACE)\b`)
 
 	// HTTP
-	httpGet     = regexp.MustCompile(`\bGET\b`)
-	httpPost    = regexp.MustCompile(`\bPOST\b`)
-	httpPut     = regexp.MustCompile(`\bPUT\b`)
-	httpPatch   = regexp.MustCompile(`\bPATCH\b`)
-	httpDelete  = regexp.MustCompile(`\bDELETE\b`)
+	httpGet    = regexp.MustCompile(`\bGET\b`)
+	httpPost   = regexp.MustCompile(`\bPOST\b`)
+	httpPut    = regexp.MustCompile(`\bPUT\b`)
+	httpPatch  = regexp.MustCompile(`\bPATCH\b`)
+	httpDelete = regexp.MustCompile(`\bDELETE\b`)
 
 	// Status codes (only in status context)
 	statusCode = regexp.MustCompile(`\b([2-5]\d{2})\b`)

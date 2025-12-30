@@ -159,12 +159,12 @@ func outputInfoText(wt *worktree.Info, reg *registry.Registry) error {
 func outputInfoJSON(wt *worktree.Info, reg *registry.Registry) error {
 	// For JSON output, build a structured response
 	type WorktreeInfo struct {
-		Name     string `json:"name"`
-		Branch   string `json:"branch"`
-		Path     string `json:"path"`
-		IsCurrent bool  `json:"is_current"`
-		ServerURL string `json:"server_url,omitempty"`
-		ServerRunning bool `json:"server_running"`
+		Name          string `json:"name"`
+		Branch        string `json:"branch"`
+		Path          string `json:"path"`
+		IsCurrent     bool   `json:"is_current"`
+		ServerURL     string `json:"server_url,omitempty"`
+		ServerRunning bool   `json:"server_running"`
 	}
 
 	type InfoOutput struct {
@@ -175,9 +175,9 @@ func outputInfoJSON(wt *worktree.Info, reg *registry.Registry) error {
 			IsWorktree bool   `json:"is_worktree"`
 			MainRepo   string `json:"main_repo,omitempty"`
 		} `json:"current_worktree"`
-		Worktrees     []WorktreeInfo `json:"worktrees"`
-		RunningServers int           `json:"running_servers"`
-		ProxyRunning   bool          `json:"proxy_running"`
+		Worktrees      []WorktreeInfo `json:"worktrees"`
+		RunningServers int            `json:"running_servers"`
+		ProxyRunning   bool           `json:"proxy_running"`
 	}
 
 	output := InfoOutput{}

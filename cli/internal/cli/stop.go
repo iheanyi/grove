@@ -93,8 +93,8 @@ func stopServer(reg *registry.Registry, name string, timeout time.Duration) erro
 		server.PID = 0
 		server.StoppedAt = time.Now()
 		if err := reg.Set(server); err != nil {
-		fmt.Fprintf(os.Stderr, "Warning: failed to update registry: %v\n", err)
-	}
+			fmt.Fprintf(os.Stderr, "Warning: failed to update registry: %v\n", err)
+		}
 		// Reload proxy to remove stale route (only in subdomain mode)
 		if cfg.IsSubdomainMode() {
 			if err := ReloadProxy(); err != nil {
@@ -117,8 +117,8 @@ func stopServer(reg *registry.Registry, name string, timeout time.Duration) erro
 		server.PID = 0
 		server.StoppedAt = time.Now()
 		if err := reg.Set(server); err != nil {
-		fmt.Fprintf(os.Stderr, "Warning: failed to update registry: %v\n", err)
-	}
+			fmt.Fprintf(os.Stderr, "Warning: failed to update registry: %v\n", err)
+		}
 		// Reload proxy to remove stale route (only in subdomain mode)
 		if cfg.IsSubdomainMode() {
 			if err := ReloadProxy(); err != nil {
@@ -228,8 +228,8 @@ func stopServerNoReload(reg *registry.Registry, name string, timeout time.Durati
 		server.PID = 0
 		server.StoppedAt = time.Now()
 		if err := reg.Set(server); err != nil {
-		fmt.Fprintf(os.Stderr, "Warning: failed to update registry: %v\n", err)
-	}
+			fmt.Fprintf(os.Stderr, "Warning: failed to update registry: %v\n", err)
+		}
 		fmt.Printf("Server '%s' process not found, marking as stopped\n", name)
 		return nil
 	}
@@ -246,8 +246,8 @@ func stopServerNoReload(reg *registry.Registry, name string, timeout time.Durati
 		server.PID = 0
 		server.StoppedAt = time.Now()
 		if err := reg.Set(server); err != nil {
-		fmt.Fprintf(os.Stderr, "Warning: failed to update registry: %v\n", err)
-	}
+			fmt.Fprintf(os.Stderr, "Warning: failed to update registry: %v\n", err)
+		}
 		fmt.Printf("Server '%s' stopped\n", name)
 		return nil
 	}

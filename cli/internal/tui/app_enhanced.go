@@ -20,19 +20,19 @@ import (
 
 // EnhancedKeyMap defines the enhanced keybindings
 type EnhancedKeyMap struct {
-	Quit         key.Binding
-	Help         key.Binding
-	Start        key.Binding
-	Stop         key.Binding
-	Restart      key.Binding
-	Open         key.Binding
-	CopyURL      key.Binding
-	Logs         key.Binding
-	Refresh      key.Binding
-	Up           key.Binding
-	Down         key.Binding
-	StartProxy   key.Binding
-	Search       key.Binding
+	Quit          key.Binding
+	Help          key.Binding
+	Start         key.Binding
+	Stop          key.Binding
+	Restart       key.Binding
+	Open          key.Binding
+	CopyURL       key.Binding
+	Logs          key.Binding
+	Refresh       key.Binding
+	Up            key.Binding
+	Down          key.Binding
+	StartProxy    key.Binding
+	Search        key.Binding
 	ToggleActions key.Binding
 }
 

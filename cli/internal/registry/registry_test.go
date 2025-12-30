@@ -172,7 +172,7 @@ func TestSave_ReadOnlyDirectory(t *testing.T) {
 		t.Fatalf("Failed to chmod directory: %v", err)
 	}
 	defer func() {
-		_ = os.Chmod(readOnlyDir, 0755) //nolint:errcheck // Best effort cleanup in test
+		_ = os.Chmod(readOnlyDir, 0755)
 	}()
 
 	registryPath := filepath.Join(readOnlyDir, "registry.json")
@@ -610,7 +610,7 @@ func TestConcurrentAccess(t *testing.T) {
 	// Writer goroutine
 	go func() {
 		for i := 0; i < 100; i++ {
-			_ = r.Set(&Server{ //nolint:errcheck // Best effort in concurrent test
+			_ = r.Set(&Server{
 				Name: "server",
 				Port: 3000 + i,
 			})

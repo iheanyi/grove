@@ -305,7 +305,7 @@ func TestConcurrentRegistryAccess(t *testing.T) {
 					continue
 				}
 				var r registry.Registry
-				_ = json.Unmarshal(data, &r) //nolint:errcheck // Best effort in concurrent test
+				_ = json.Unmarshal(data, &r)
 			}
 			done <- true
 		}()

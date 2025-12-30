@@ -1,26 +1,34 @@
-# golangci-lint configuration
+# golangci-lint configuration (v1 format)
 # https://golangci-lint.run/usage/configuration/
 
 run:
   timeout: 5m
-  go: "1.21"
   tests: true
 
 linters:
+  disable-all: true
   enable:
-    - errcheck
-    - gosimple
-    - govet
-    - ineffassign
-    - staticcheck
-    - unused
+    # Essential linters
+    - errcheck      # Check for unchecked errors
+    - govet         # Report suspicious constructs
+    - ineffassign   # Detect ineffectual assignments
+    - staticcheck   # Static analysis checks
+    - unused        # Check for unused code
+
+    # Code quality
+    - gosimple      # Simplify code
+    - gofmt         # Check formatting
+    - goimports     # Check imports are sorted
+    - misspell      # Catch spelling mistakes
+    - nilerr        # Check for nil error returns
+    - nolintlint    # Check nolint directives are valid
+
+    # Security
+    - gosec         # Security checks
 
 linters-settings:
   errcheck:
-    # Check for ignoring errors with blank identifier
     check-blank: false
-    # Ignore functions where error is intentionally not handled
-    # These are common patterns where checking error doesn't make sense
     exclude-functions:
       # Close methods - errors in defer are not actionable
       - (io.Closer).Close
@@ -44,24 +52,36 @@ linters-settings:
       - os.Remove
       - os.Setenv
 
+  gosec:
+    excludes:
+      - G104  # Audit errors not checked (we use errcheck for this)
+      - G115  # Integer overflow conversion (false positive for port numbers)
+      - G204  # Subprocess launched with variable (expected in CLI tools)
+      - G304  # File path provided as taint input (expected in CLI tools)
+      - G306  # WriteFile permissions (0644 is fine for config files)
+
+  misspell:
+    locale: US
+
   staticcheck:
     checks:
       - all
-      - "-SA1019" # Ignore deprecation warnings (we handle them explicitly)
 
 issues:
-  # Show all issues from a linter
   max-issues-per-linter: 0
   max-same-issues: 0
 
-  # Don't skip any files
-  exclude-dirs: []
-
-  # Allow nolint comments
-  exclude-use-default: false
+  exclude-rules:
+    # Exclude some linters from test files
+    - path: _test\.go
+      linters:
+        - gosec
+        - gofmt
+        - goimports
 
 output:
   formats:
     - format: colored-line-number
   print-issued-lines: true
   print-linter-name: true
+  sort-results: true

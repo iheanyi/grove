@@ -14,7 +14,7 @@ type Worktree struct {
 	Name         string    `json:"name"`
 	Path         string    `json:"path"`
 	Branch       string    `json:"branch"`
-	MainRepo     string    `json:"main_repo"`      // Path to the main repo this worktree belongs to
+	MainRepo     string    `json:"main_repo"` // Path to the main repo this worktree belongs to
 	DiscoveredAt time.Time `json:"discovered_at"`
 	LastActivity time.Time `json:"last_activity"`
 
@@ -274,7 +274,7 @@ func FindAll(basePath string, maxDepth int) ([]*Worktree, error) {
 		// Not a git repo, scan subdirectories
 		entries, err := os.ReadDir(path)
 		if err != nil {
-			return nil // Skip directories we can't read
+			return nil //nolint:nilerr // Intentionally skip unreadable directories and continue walk
 		}
 
 		for _, entry := range entries {

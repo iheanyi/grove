@@ -19,7 +19,7 @@ type PRInfo struct {
 // CIStatus represents CI status for a branch
 type CIStatus struct {
 	State      string // success, failure, pending, none
-	Conclusion string // success, failure, cancelled, skipped, etc.
+	Conclusion string // success, failure, canceled, skipped, etc.
 	URL        string
 }
 
@@ -166,7 +166,7 @@ func FormatCIStatus(ci *CIStatus) string {
 		return "✗"
 	case "pending":
 		return "◐"
-	case "cancelled", "skipped":
+	case "cancelled", "skipped": //nolint:misspell // GitHub API uses British spelling
 		return "○"
 	default:
 		return ""

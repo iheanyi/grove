@@ -587,7 +587,7 @@ func (s *mcpServer) toolList() callToolResult {
 	}
 
 	// Cleanup is best-effort for listing - ignore errors as we can still list servers
-	_, _ = reg.Cleanup() //nolint:errcheck
+	_, _ = reg.Cleanup()
 	servers := reg.List()
 
 	if len(servers) == 0 {
