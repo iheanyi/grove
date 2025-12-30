@@ -47,19 +47,41 @@ Available tools:
 
 var mcpInstallCmd = &cobra.Command{
 	Use:   "install",
-	Short: "Install grove as an MCP server in Claude Code",
-	Long: `Configure Claude Code to use grove as an MCP server.
+	Short: "Install grove as an MCP server in a supported provider",
+	Long: `Configure a supported provider to use grove as an MCP server.
 
-This command adds the grove MCP server configuration to your Claude Code
-settings file (~/.claude/settings.json).
+Supported providers:
+  - claude-code (default): Installs to Claude Code (~/.claude/settings.json)
+  - opencode: Installs to OpenCode config (opencode.json)
+  - cursor: Installs to Cursor IDE (~/.cursor/mcp.json)
+  - codex: Installs to OpenAI Codex CLI (~/.codex/config.toml)
 
-After installation, restart Claude Code to load the MCP server.`,
+For OpenCode and Cursor, use --global to install to the global config
+instead of the local project config.
+
+Examples:
+  grove mcp install                      # Install for Claude Code
+  grove mcp install -p opencode          # Install for OpenCode (local)
+  grove mcp install -p opencode --global # Install for OpenCode (global)
+  grove mcp install -p cursor            # Install for Cursor (local)
+  grove mcp install -p cursor --global   # Install for Cursor (global)
+  grove mcp install -p codex             # Install for Codex (always global)
+
+After installation, restart the provider to load the MCP server.`,
 	RunE: runMCPInstall,
 }
+
+var (
+	mcpInstallProvider string
+	mcpInstallGlobal   bool
+)
 
 func init() {
 	rootCmd.AddCommand(mcpCmd)
 	mcpCmd.AddCommand(mcpInstallCmd)
+
+	mcpInstallCmd.Flags().StringVarP(&mcpInstallProvider, "provider", "p", "claude-code", "Provider to install for (claude-code, opencode, cursor, codex)")
+	mcpInstallCmd.Flags().BoolVarP(&mcpInstallGlobal, "global", "g", false, "Install globally (for opencode and cursor)")
 }
 
 func runMCPInstall(cmd *cobra.Command, args []string) error {
@@ -79,6 +101,21 @@ func runMCPInstall(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to resolve grove path: %w", err)
 	}
 
+	switch mcpInstallProvider {
+	case "claude-code":
+		return installForClaudeCode(grovePath)
+	case "opencode":
+		return installForOpenCode(grovePath, mcpInstallGlobal)
+	case "cursor":
+		return installForCursor(grovePath, mcpInstallGlobal)
+	case "codex":
+		return installForCodex(grovePath)
+	default:
+		return fmt.Errorf("unknown provider: %s (supported: claude-code, opencode, cursor, codex)", mcpInstallProvider)
+	}
+}
+
+func installForClaudeCode(grovePath string) error {
 	// Use claude mcp add command to properly register the MCP server
 	claudeCmd := exec.Command("claude", "mcp", "add", "-s", "user", "-t", "stdio", "grove", grovePath, "mcp")
 	output, err := claudeCmd.CombinedOutput()
@@ -86,7 +123,7 @@ func runMCPInstall(cmd *cobra.Command, args []string) error {
 		// Check if it's because it already exists
 		if strings.Contains(string(output), "already exists") {
 			fmt.Println("grove MCP server is already installed.")
-			fmt.Println("\nTo reinstall, first remove it with: claude mcp remove wt")
+			fmt.Println("\nTo reinstall, first remove it with: claude mcp remove grove")
 			return nil
 		}
 		return fmt.Errorf("failed to install MCP server: %w\nOutput: %s", err, string(output))
@@ -95,14 +132,215 @@ func runMCPInstall(cmd *cobra.Command, args []string) error {
 	fmt.Printf("✓ Installed grove MCP server in Claude Code\n\n")
 	fmt.Printf("  Binary path: %s\n\n", grovePath)
 	fmt.Println("The MCP server is now available. Run 'claude mcp list' to verify.")
+	printMCPTools()
+
+	return nil
+}
+
+func installForOpenCode(grovePath string, global bool) error {
+	var configPath string
+
+	if global {
+		// Global config: ~/.config/opencode/opencode.json
+		homeDir, err := os.UserHomeDir()
+		if err != nil {
+			return fmt.Errorf("failed to get home directory: %w", err)
+		}
+		configDir := filepath.Join(homeDir, ".config", "opencode")
+		if err := os.MkdirAll(configDir, 0755); err != nil {
+			return fmt.Errorf("failed to create config directory: %w", err)
+		}
+		configPath = filepath.Join(configDir, "opencode.json")
+	} else {
+		// Local config: opencode.json in current directory
+		configPath = "opencode.json"
+	}
+
+	// Read existing config or create new one
+	config := make(map[string]interface{})
+	if data, err := os.ReadFile(configPath); err == nil {
+		if err := json.Unmarshal(data, &config); err != nil {
+			return fmt.Errorf("failed to parse existing config at %s: %w", configPath, err)
+		}
+	}
+
+	// Get or create the mcp section
+	mcpSection, ok := config["mcp"].(map[string]interface{})
+	if !ok {
+		mcpSection = make(map[string]interface{})
+	}
+
+	// Check if grove already exists
+	if _, exists := mcpSection["grove"]; exists {
+		fmt.Printf("grove MCP server is already configured in %s\n", configPath)
+		fmt.Println("\nTo reinstall, remove the 'grove' entry from the 'mcp' section and run this command again.")
+		return nil
+	}
+
+	// Add grove MCP server configuration
+	mcpSection["grove"] = map[string]interface{}{
+		"type":    "local",
+		"command": []string{grovePath, "mcp"},
+		"enabled": true,
+	}
+	config["mcp"] = mcpSection
+
+	// Write updated config
+	data, err := json.MarshalIndent(config, "", "  ")
+	if err != nil {
+		return fmt.Errorf("failed to marshal config: %w", err)
+	}
+
+	if err := os.WriteFile(configPath, data, 0644); err != nil {
+		return fmt.Errorf("failed to write config to %s: %w", configPath, err)
+	}
+
+	location := "local"
+	if global {
+		location = "global"
+	}
+
+	fmt.Printf("✓ Installed grove MCP server in OpenCode (%s)\n\n", location)
+	fmt.Printf("  Config file: %s\n", configPath)
+	fmt.Printf("  Binary path: %s\n\n", grovePath)
+	fmt.Println("Restart OpenCode to load the MCP server.")
+	printMCPTools()
+
+	return nil
+}
+
+func installForCursor(grovePath string, global bool) error {
+	var configPath string
+
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		return fmt.Errorf("failed to get home directory: %w", err)
+	}
+
+	if global {
+		// Global config: ~/.cursor/mcp.json
+		configDir := filepath.Join(homeDir, ".cursor")
+		if err := os.MkdirAll(configDir, 0755); err != nil {
+			return fmt.Errorf("failed to create config directory: %w", err)
+		}
+		configPath = filepath.Join(configDir, "mcp.json")
+	} else {
+		// Local config: .cursor/mcp.json in current directory
+		configDir := ".cursor"
+		if err := os.MkdirAll(configDir, 0755); err != nil {
+			return fmt.Errorf("failed to create config directory: %w", err)
+		}
+		configPath = filepath.Join(configDir, "mcp.json")
+	}
+
+	// Read existing config or create new one
+	config := make(map[string]interface{})
+	if data, err := os.ReadFile(configPath); err == nil {
+		if err := json.Unmarshal(data, &config); err != nil {
+			return fmt.Errorf("failed to parse existing config at %s: %w", configPath, err)
+		}
+	}
+
+	// Get or create the mcpServers section
+	mcpServers, ok := config["mcpServers"].(map[string]interface{})
+	if !ok {
+		mcpServers = make(map[string]interface{})
+	}
+
+	// Check if grove already exists
+	if _, exists := mcpServers["grove"]; exists {
+		fmt.Printf("grove MCP server is already configured in %s\n", configPath)
+		fmt.Println("\nTo reinstall, remove the 'grove' entry from the 'mcpServers' section and run this command again.")
+		return nil
+	}
+
+	// Add grove MCP server configuration (Cursor format)
+	mcpServers["grove"] = map[string]interface{}{
+		"command": grovePath,
+		"args":    []string{"mcp"},
+	}
+	config["mcpServers"] = mcpServers
+
+	// Write updated config
+	data, err := json.MarshalIndent(config, "", "  ")
+	if err != nil {
+		return fmt.Errorf("failed to marshal config: %w", err)
+	}
+
+	if err := os.WriteFile(configPath, data, 0644); err != nil {
+		return fmt.Errorf("failed to write config to %s: %w", configPath, err)
+	}
+
+	location := "local"
+	if global {
+		location = "global"
+	}
+
+	fmt.Printf("✓ Installed grove MCP server in Cursor (%s)\n\n", location)
+	fmt.Printf("  Config file: %s\n", configPath)
+	fmt.Printf("  Binary path: %s\n\n", grovePath)
+	fmt.Println("Restart Cursor to load the MCP server.")
+	printMCPTools()
+
+	return nil
+}
+
+func installForCodex(grovePath string) error {
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		return fmt.Errorf("failed to get home directory: %w", err)
+	}
+
+	// Codex config is always at ~/.codex/config.toml
+	configDir := filepath.Join(homeDir, ".codex")
+	if err := os.MkdirAll(configDir, 0755); err != nil {
+		return fmt.Errorf("failed to create config directory: %w", err)
+	}
+	configPath := filepath.Join(configDir, "config.toml")
+
+	// Read existing config
+	existingContent := ""
+	if data, err := os.ReadFile(configPath); err == nil {
+		existingContent = string(data)
+	}
+
+	// Check if grove is already configured
+	if strings.Contains(existingContent, "[mcp_servers.grove]") {
+		fmt.Printf("grove MCP server is already configured in %s\n", configPath)
+		fmt.Println("\nTo reinstall, remove the '[mcp_servers.grove]' section and run this command again.")
+		return nil
+	}
+
+	// Build the grove MCP server TOML config
+	groveConfig := fmt.Sprintf(`
+[mcp_servers.grove]
+command = %q
+args = ["mcp"]
+`, grovePath)
+
+	// Append to existing config
+	newContent := existingContent + groveConfig
+
+	if err := os.WriteFile(configPath, []byte(newContent), 0644); err != nil {
+		return fmt.Errorf("failed to write config to %s: %w", configPath, err)
+	}
+
+	fmt.Printf("✓ Installed grove MCP server in Codex\n\n")
+	fmt.Printf("  Config file: %s\n", configPath)
+	fmt.Printf("  Binary path: %s\n\n", grovePath)
+	fmt.Println("Restart Codex to load the MCP server.")
+	printMCPTools()
+
+	return nil
+}
+
+func printMCPTools() {
 	fmt.Println("\nAvailable tools:")
 	fmt.Println("  - grove_list:   List all registered dev servers")
 	fmt.Println("  - grove_start:  Start a dev server for a git worktree")
 	fmt.Println("  - grove_stop:   Stop a running dev server")
 	fmt.Println("  - grove_url:    Get the URL for a worktree's dev server")
 	fmt.Println("  - grove_status: Get detailed status of a dev server")
-
-	return nil
 }
 
 // JSON-RPC types

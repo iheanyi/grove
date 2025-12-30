@@ -14,6 +14,7 @@ import (
 	"github.com/iheanyi/grove/internal/project"
 	"github.com/iheanyi/grove/internal/registry"
 	"github.com/iheanyi/grove/internal/worktree"
+	"github.com/iheanyi/grove/pkg/browser"
 	"github.com/spf13/cobra"
 )
 
@@ -36,6 +37,7 @@ Examples:
 func init() {
 	startCmd.Flags().IntP("port", "p", 0, "Override port allocation")
 	startCmd.Flags().BoolP("foreground", "f", false, "Run in foreground (don't daemonize)")
+	startCmd.Flags().BoolP("open", "o", false, "Open browser after server starts")
 }
 
 func runStart(cmd *cobra.Command, args []string) error {
@@ -115,6 +117,7 @@ func runStart(cmd *cobra.Command, args []string) error {
 	logFile := filepath.Join(logDir, fmt.Sprintf("%s.log", wt.Name))
 
 	foreground, _ := cmd.Flags().GetBool("foreground")
+	openBrowser, _ := cmd.Flags().GetBool("open")
 
 	fmt.Printf("Starting server for '%s' on port %d...\n", wt.Name, serverPort)
 
@@ -134,14 +137,14 @@ func runStart(cmd *cobra.Command, args []string) error {
 
 	if foreground {
 		// Run in foreground
-		return runForeground(server, reg, projConfig)
+		return runForeground(server, reg, projConfig, openBrowser)
 	}
 
 	// Run as daemon
-	return runDaemon(server, reg, projConfig)
+	return runDaemon(server, reg, projConfig, openBrowser)
 }
 
-func runForeground(server *registry.Server, reg *registry.Registry, projConfig *project.Config) error {
+func runForeground(server *registry.Server, reg *registry.Registry, projConfig *project.Config, openBrowser bool) error {
 	// Build command
 	cmdName := server.Command[0]
 	cmdArgs := server.Command[1:]
@@ -204,6 +207,14 @@ func runForeground(server *registry.Server, reg *registry.Registry, projConfig *
 	fmt.Printf("PID: %d\n", server.PID)
 	fmt.Println("Press Ctrl+C to stop...")
 
+	// Open browser if requested
+	if openBrowser {
+		fmt.Printf("Opening %s in browser...\n", server.URL)
+		if err := browser.Open(server.URL); err != nil {
+			fmt.Printf("Warning: failed to open browser: %v\n", err)
+		}
+	}
+
 	// Wait for signal or process exit
 	done := make(chan error, 1)
 	go func() {
@@ -252,7 +263,7 @@ func runForeground(server *registry.Server, reg *registry.Registry, projConfig *
 	return nil
 }
 
-func runDaemon(server *registry.Server, reg *registry.Registry, projConfig *project.Config) error {
+func runDaemon(server *registry.Server, reg *registry.Registry, projConfig *project.Config, openBrowser bool) error {
 	// Open log file
 	logFile, err := os.OpenFile(server.LogFile, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
 	if err != nil {
@@ -335,6 +346,14 @@ func runDaemon(server *registry.Server, reg *registry.Registry, projConfig *proj
 			if err := runHook(hook, server.Path); err != nil {
 				fmt.Printf("Warning: after_start hook failed: %v\n", err)
 			}
+		}
+	}
+
+	// Open browser if requested
+	if openBrowser {
+		fmt.Printf("Opening %s in browser...\n", server.URL)
+		if err := browser.Open(server.URL); err != nil {
+			fmt.Printf("Warning: failed to open browser: %v\n", err)
 		}
 	}
 
