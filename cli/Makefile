@@ -62,8 +62,23 @@ dev-doctor: build ## Run doctor
 	./$(BINARY_NAME) doctor
 
 # Release targets (requires goreleaser)
-release-dry: ## Dry run release
+release-dry: ## Dry run release locally
 	goreleaser release --snapshot --clean
 
-release: ## Create a release
+release-local: ## Create a release locally (not recommended)
 	goreleaser release --clean
+
+# GitHub release targets (recommended)
+release: ## Release via GitHub Actions (auto-increment patch)
+	gh workflow run release.yml --repo iheanyi/grove
+	@echo "Release triggered! Watch with: gh run watch"
+
+release-version: ## Release specific version (usage: make release-version V=0.3.0)
+	@if [ -z "$(V)" ]; then echo "Usage: make release-version V=0.3.0"; exit 1; fi
+	gh workflow run release.yml --repo iheanyi/grove -f version=$(V)
+	@echo "Release $(V) triggered! Watch with: gh run watch"
+
+release-prerelease: ## Release pre-release (usage: make release-prerelease V=0.3.0-beta.1)
+	@if [ -z "$(V)" ]; then echo "Usage: make release-prerelease V=0.3.0-beta.1"; exit 1; fi
+	gh workflow run release.yml --repo iheanyi/grove -f version=$(V) -f prerelease=true
+	@echo "Pre-release $(V) triggered! Watch with: gh run watch"
