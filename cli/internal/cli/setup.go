@@ -80,7 +80,10 @@ func runSetup(cmd *cobra.Command, args []string) error {
 	fmt.Print("Trust local CA certificate? [y/N] ")
 
 	var response string
-	fmt.Scanln(&response)
+	if _, err := fmt.Scanln(&response); err != nil {
+		// EOF or error reading input - treat as "no"
+		response = "n"
+	}
 
 	if response == "y" || response == "Y" {
 		// First, we need to start Caddy briefly to generate the CA certificate

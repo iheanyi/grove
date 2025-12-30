@@ -188,7 +188,7 @@ func runForeground(server *registry.Server, reg *registry.Registry, projConfig *
 
 	// Save to registry
 	if err := reg.Set(server); err != nil {
-		execCmd.Process.Kill()
+		execCmd.Process.Kill() //nolint:errcheck // Cleanup on error path
 		return fmt.Errorf("failed to save to registry: %w", err)
 	}
 
@@ -224,13 +224,17 @@ func runForeground(server *registry.Server, reg *registry.Registry, projConfig *
 	select {
 	case <-sigChan:
 		fmt.Println("\nStopping server...")
-		execCmd.Process.Signal(syscall.SIGTERM)
+		if err := execCmd.Process.Signal(syscall.SIGTERM); err != nil {
+			fmt.Fprintf(os.Stderr, "Warning: failed to send SIGTERM: %v\n", err)
+		}
 
 		// Wait a bit for graceful shutdown
 		select {
 		case <-done:
 		case <-time.After(5 * time.Second):
-			execCmd.Process.Kill()
+			if err := execCmd.Process.Kill(); err != nil {
+				fmt.Fprintf(os.Stderr, "Warning: failed to kill process: %v\n", err)
+			}
 		}
 	case err := <-done:
 		if err != nil {
@@ -244,7 +248,9 @@ func runForeground(server *registry.Server, reg *registry.Registry, projConfig *
 	server.Status = registry.StatusStopped
 	server.PID = 0
 	server.StoppedAt = time.Now()
-	reg.Set(server)
+	if err := reg.Set(server); err != nil {
+		fmt.Fprintf(os.Stderr, "Warning: failed to update registry: %v\n", err)
+	}
 
 	// Reload proxy to remove route (only in subdomain mode)
 	if cfg.IsSubdomainMode() {
@@ -256,7 +262,9 @@ func runForeground(server *registry.Server, reg *registry.Registry, projConfig *
 	// Run after_stop hooks
 	if projConfig != nil && len(projConfig.Hooks.BeforeStop) > 0 {
 		for _, hook := range projConfig.Hooks.BeforeStop {
-			runHook(hook, server.Path)
+			if err := runHook(hook, server.Path); err != nil {
+				fmt.Fprintf(os.Stderr, "Warning: after_stop hook failed: %v\n", err)
+			}
 		}
 	}
 
@@ -315,13 +323,15 @@ func runDaemon(server *registry.Server, reg *registry.Registry, projConfig *proj
 
 	// Save to registry
 	if err := reg.Set(server); err != nil {
-		execCmd.Process.Kill()
+		execCmd.Process.Kill() //nolint:errcheck // Cleanup on error path
 		logFile.Close()
 		return fmt.Errorf("failed to save to registry: %w", err)
 	}
 
 	// Detach from process - the process will continue running
-	execCmd.Process.Release()
+	if err := execCmd.Process.Release(); err != nil {
+		fmt.Fprintf(os.Stderr, "Warning: failed to release process: %v\n", err)
+	}
 	logFile.Close()
 
 	// Reload proxy to pick up new route (only in subdomain mode)

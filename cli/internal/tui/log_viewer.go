@@ -139,12 +139,8 @@ func (m *LogViewerModel) watchLogs() tea.Cmd {
 						return
 					}
 					if event.Op&fsnotify.Write == fsnotify.Write {
-						// Read new lines
-						if newLines := m.readNewLines(); len(newLines) > 0 {
-							// Send message to update UI
-							// Note: This is a simplified approach
-							// In a real implementation, you'd use a proper channel
-						}
+						// Read new lines (result currently unused as we'd need a channel for proper updates)
+						_ = m.readNewLines()
 					}
 				case err, ok := <-watcher.Errors:
 					if !ok {
@@ -193,7 +189,6 @@ func (m *LogViewerModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if !m.ready {
 			m.viewport = viewport.New(msg.Width, msg.Height-4)
 			m.viewport.YPosition = 0
-			m.viewport.HighPerformanceRendering = false
 			m.ready = true
 			m.updateViewport()
 		} else {

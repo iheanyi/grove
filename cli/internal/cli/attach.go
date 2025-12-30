@@ -232,8 +232,3 @@ func runDetach(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-// Helper to check if a port is from an attached (external) server
-func isAttachedServer(server *registry.Server) bool {
-	// An attached server has [attached] as first command element
-	return len(server.Command) > 0 && server.Command[0] == "[attached]"
-}

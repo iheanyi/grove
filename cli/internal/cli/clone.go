@@ -88,7 +88,7 @@ func runClone(cmd *cobra.Command, args []string) error {
 	// Create .git file that points to .bare
 	fmt.Println("Step 2/3: Setting up git directory reference...")
 	gitFile := filepath.Join(absDir, ".git")
-	gitContent := fmt.Sprintf("gitdir: .bare\n")
+	gitContent := "gitdir: .bare\n"
 	if err := os.WriteFile(gitFile, []byte(gitContent), 0644); err != nil {
 		os.RemoveAll(absDir)
 		return fmt.Errorf("failed to create .git file: %w", err)

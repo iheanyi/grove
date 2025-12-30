@@ -124,7 +124,9 @@ func runProxyForeground(reg *registry.Registry) error {
 		HTTPPort:  cfg.ProxyHTTPPort,
 		HTTPSPort: cfg.ProxyHTTPSPort,
 	}
-	reg.UpdateProxy(proxy)
+	if err := reg.UpdateProxy(proxy); err != nil {
+		return fmt.Errorf("failed to update proxy in registry: %w", err)
+	}
 
 	fmt.Printf("Proxy running (PID: %d)\n", proxy.PID)
 	fmt.Println("Press Ctrl+C to stop...")
@@ -142,11 +144,15 @@ func runProxyForeground(reg *registry.Registry) error {
 	select {
 	case <-sigChan:
 		fmt.Println("\nStopping proxy...")
-		cmd.Process.Signal(syscall.SIGTERM)
+		if err := cmd.Process.Signal(syscall.SIGTERM); err != nil {
+			fmt.Fprintf(os.Stderr, "Warning: failed to send SIGTERM: %v\n", err)
+		}
 		select {
 		case <-done:
 		case <-time.After(5 * time.Second):
-			cmd.Process.Kill()
+			if err := cmd.Process.Kill(); err != nil {
+				fmt.Fprintf(os.Stderr, "Warning: failed to kill proxy: %v\n", err)
+			}
 		}
 	case err := <-done:
 		if err != nil {
@@ -155,7 +161,9 @@ func runProxyForeground(reg *registry.Registry) error {
 	}
 
 	proxy.PID = 0
-	reg.UpdateProxy(proxy)
+	if err := reg.UpdateProxy(proxy); err != nil {
+		fmt.Fprintf(os.Stderr, "Warning: failed to update proxy in registry: %v\n", err)
+	}
 
 	return nil
 }
@@ -239,7 +247,9 @@ func runProxyDaemon(reg *registry.Registry) error {
 	}
 
 	// Detach
-	cmd.Process.Release()
+	if err := cmd.Process.Release(); err != nil {
+		fmt.Fprintf(os.Stderr, "Warning: failed to release proxy process: %v\n", err)
+	}
 	logFile.Close()
 
 	// Update registry
@@ -249,7 +259,9 @@ func runProxyDaemon(reg *registry.Registry) error {
 		HTTPPort:  cfg.ProxyHTTPPort,
 		HTTPSPort: cfg.ProxyHTTPSPort,
 	}
-	reg.UpdateProxy(proxy)
+	if err := reg.UpdateProxy(proxy); err != nil {
+		return fmt.Errorf("failed to update proxy in registry: %w", err)
+	}
 
 	fmt.Printf("Proxy started (PID: %d)\n", proxy.PID)
 	fmt.Printf("Logs: %s/proxy.log\n", config.ConfigDir())
@@ -277,7 +289,9 @@ func runProxyStop(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		// Process doesn't exist
 		proxy.PID = 0
-		reg.UpdateProxy(proxy)
+		if err := reg.UpdateProxy(proxy); err != nil {
+			fmt.Fprintf(os.Stderr, "Warning: failed to update registry: %v\n", err)
+		}
 		fmt.Println("Proxy process not found, marking as stopped")
 		return nil
 	}
@@ -285,7 +299,9 @@ func runProxyStop(cmd *cobra.Command, args []string) error {
 	// Send SIGTERM
 	if err := process.Signal(syscall.SIGTERM); err != nil {
 		proxy.PID = 0
-		reg.UpdateProxy(proxy)
+		if err := reg.UpdateProxy(proxy); err != nil {
+			fmt.Fprintf(os.Stderr, "Warning: failed to update registry: %v\n", err)
+		}
 		fmt.Println("Proxy stopped")
 		return nil
 	}
@@ -300,12 +316,16 @@ func runProxyStop(cmd *cobra.Command, args []string) error {
 	select {
 	case <-done:
 	case <-time.After(5 * time.Second):
-		process.Signal(syscall.SIGKILL)
+		if err := process.Signal(syscall.SIGKILL); err != nil {
+			fmt.Fprintf(os.Stderr, "Warning: failed to send SIGKILL: %v\n", err)
+		}
 		<-done
 	}
 
 	proxy.PID = 0
-	reg.UpdateProxy(proxy)
+	if err := reg.UpdateProxy(proxy); err != nil {
+		fmt.Fprintf(os.Stderr, "Warning: failed to update registry: %v\n", err)
+	}
 
 	fmt.Println("Proxy stopped")
 	return nil

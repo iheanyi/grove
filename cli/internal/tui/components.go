@@ -293,7 +293,7 @@ func (s *SearchBar) View() string {
 	prompt := "Search: "
 	cursor := "█"
 
-	displayValue := s.Value
+	var displayValue string
 	if s.Cursor < len(s.Value) {
 		displayValue = s.Value[:s.Cursor] + cursor + s.Value[s.Cursor:]
 	} else {

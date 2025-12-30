@@ -108,7 +108,10 @@ func runSelect(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to load registry: %w", err)
 	}
 
-	reg.Cleanup()
+	// Cleanup stale entries (non-critical)
+	if _, err := reg.Cleanup(); err != nil {
+		fmt.Fprintf(os.Stderr, "Warning: cleanup failed: %v\n", err)
+	}
 	servers := reg.List()
 
 	if len(servers) == 0 {

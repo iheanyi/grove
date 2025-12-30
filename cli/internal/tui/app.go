@@ -177,8 +177,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Refresh registry
 		if reg, err := registry.Load(); err == nil {
 			m.reg = reg
-			// Cleanup stale entries
-			m.reg.Cleanup()
+			// Cleanup stale entries (non-critical, ignore errors)
+			m.reg.Cleanup() //nolint:errcheck // Best effort cleanup during refresh
 			m.list.SetItems(makeItems(m.reg))
 		}
 		return m, tickCmd()
@@ -216,7 +216,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case key.Matches(msg, keys.Refresh):
 			if reg, err := registry.Load(); err == nil {
 				m.reg = reg
-				m.reg.Cleanup()
+				m.reg.Cleanup() //nolint:errcheck // Best effort cleanup during refresh
 				m.list.SetItems(makeItems(m.reg))
 			}
 			return m, nil
@@ -297,12 +297,14 @@ func (m *Model) toggleServer() tea.Cmd {
 		if server.IsRunning() {
 			// Stop server
 			if process, err := os.FindProcess(server.PID); err == nil {
-				process.Signal(syscall.SIGTERM)
+				process.Signal(syscall.SIGTERM) //nolint:errcheck // Best effort signal
 			}
 			server.Status = registry.StatusStopped
 			server.PID = 0
 			server.StoppedAt = time.Now()
-			m.reg.Set(server)
+			if err := m.reg.Set(server); err != nil {
+				return statusMsgCmd(fmt.Sprintf("Error updating registry: %v", err))
+			}
 			return statusMsgCmd(fmt.Sprintf("Stopped %s", server.Name))
 		}
 		// Can't start from TUI without knowing the command
@@ -325,7 +327,9 @@ func (m *Model) openServer() tea.Cmd {
 	}
 
 	return func() tea.Msg {
-		browser.Open(server.URL)
+		if err := browser.Open(server.URL); err != nil {
+			return statusMsgCmd(fmt.Sprintf("Failed to open browser: %v", err))
+		}
 		return statusMsgCmd(fmt.Sprintf("Opened %s", server.URL))
 	}
 }
@@ -365,10 +369,12 @@ func (m *Model) toggleProxy() tea.Cmd {
 		if proxy.IsRunning() && isProcessRunning(proxy.PID) {
 			// Stop proxy
 			if process, err := os.FindProcess(proxy.PID); err == nil {
-				process.Signal(syscall.SIGTERM)
+				process.Signal(syscall.SIGTERM) //nolint:errcheck // Best effort signal
 			}
 			proxy.PID = 0
-			m.reg.UpdateProxy(proxy)
+			if err := m.reg.UpdateProxy(proxy); err != nil {
+				return statusMsgCmd(fmt.Sprintf("Error updating registry: %v", err))
+			}
 			return statusMsgCmd("Proxy stopped")
 		}
 		return statusMsgCmd("Use 'grove proxy start' in terminal to start proxy")

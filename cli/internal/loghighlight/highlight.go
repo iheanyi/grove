@@ -76,12 +76,8 @@ var (
 	railsAlloc      = regexp.MustCompile(`Allocations:\s*\d+`)
 
 	// JSON
-	jsonKey    = regexp.MustCompile(`"(\w+)":\s*`)
-	jsonString = regexp.MustCompile(`"[^"]*"`)
-	jsonBool   = regexp.MustCompile(`\b(true|false|null)\b`)
-
-	// Key=value pairs
-	keyValue = regexp.MustCompile(`(\w+)=`)
+	jsonKey  = regexp.MustCompile(`"(\w+)":\s*`)
+	jsonBool = regexp.MustCompile(`\b(true|false|null)\b`)
 
 	// URLs/paths
 	urlPath = regexp.MustCompile(`"(/[^"]*)"`)

@@ -92,7 +92,9 @@ func stopServer(reg *registry.Registry, name string, timeout time.Duration) erro
 		server.Status = registry.StatusStopped
 		server.PID = 0
 		server.StoppedAt = time.Now()
-		reg.Set(server)
+		if err := reg.Set(server); err != nil {
+		fmt.Fprintf(os.Stderr, "Warning: failed to update registry: %v\n", err)
+	}
 		// Reload proxy to remove stale route (only in subdomain mode)
 		if cfg.IsSubdomainMode() {
 			if err := ReloadProxy(); err != nil {
@@ -105,14 +107,18 @@ func stopServer(reg *registry.Registry, name string, timeout time.Duration) erro
 
 	// Send SIGTERM for graceful shutdown
 	server.Status = registry.StatusStopping
-	reg.Set(server)
+	if err := reg.Set(server); err != nil {
+		fmt.Fprintf(os.Stderr, "Warning: failed to update registry: %v\n", err)
+	}
 
 	if err := process.Signal(syscall.SIGTERM); err != nil {
 		// Process might already be dead
 		server.Status = registry.StatusStopped
 		server.PID = 0
 		server.StoppedAt = time.Now()
-		reg.Set(server)
+		if err := reg.Set(server); err != nil {
+		fmt.Fprintf(os.Stderr, "Warning: failed to update registry: %v\n", err)
+	}
 		// Reload proxy to remove stale route (only in subdomain mode)
 		if cfg.IsSubdomainMode() {
 			if err := ReloadProxy(); err != nil {
@@ -136,7 +142,9 @@ func stopServer(reg *registry.Registry, name string, timeout time.Duration) erro
 	case <-time.After(timeout):
 		// Timeout, force kill
 		fmt.Println("Timeout waiting for graceful shutdown, sending SIGKILL...")
-		process.Signal(syscall.SIGKILL)
+		if err := process.Signal(syscall.SIGKILL); err != nil {
+			fmt.Fprintf(os.Stderr, "Warning: failed to send SIGKILL: %v\n", err)
+		}
 		<-done
 	}
 
@@ -144,7 +152,9 @@ func stopServer(reg *registry.Registry, name string, timeout time.Duration) erro
 	server.Status = registry.StatusStopped
 	server.PID = 0
 	server.StoppedAt = time.Now()
-	reg.Set(server)
+	if err := reg.Set(server); err != nil {
+		fmt.Fprintf(os.Stderr, "Warning: failed to update registry: %v\n", err)
+	}
 
 	// Reload proxy to remove route (only in subdomain mode)
 	if cfg.IsSubdomainMode() {
@@ -217,21 +227,27 @@ func stopServerNoReload(reg *registry.Registry, name string, timeout time.Durati
 		server.Status = registry.StatusStopped
 		server.PID = 0
 		server.StoppedAt = time.Now()
-		reg.Set(server)
+		if err := reg.Set(server); err != nil {
+		fmt.Fprintf(os.Stderr, "Warning: failed to update registry: %v\n", err)
+	}
 		fmt.Printf("Server '%s' process not found, marking as stopped\n", name)
 		return nil
 	}
 
 	// Send SIGTERM for graceful shutdown
 	server.Status = registry.StatusStopping
-	reg.Set(server)
+	if err := reg.Set(server); err != nil {
+		fmt.Fprintf(os.Stderr, "Warning: failed to update registry: %v\n", err)
+	}
 
 	if err := process.Signal(syscall.SIGTERM); err != nil {
 		// Process might already be dead
 		server.Status = registry.StatusStopped
 		server.PID = 0
 		server.StoppedAt = time.Now()
-		reg.Set(server)
+		if err := reg.Set(server); err != nil {
+		fmt.Fprintf(os.Stderr, "Warning: failed to update registry: %v\n", err)
+	}
 		fmt.Printf("Server '%s' stopped\n", name)
 		return nil
 	}
@@ -249,7 +265,9 @@ func stopServerNoReload(reg *registry.Registry, name string, timeout time.Durati
 	case <-time.After(timeout):
 		// Timeout, force kill
 		fmt.Printf("Timeout waiting for '%s' graceful shutdown, sending SIGKILL...\n", name)
-		process.Signal(syscall.SIGKILL)
+		if err := process.Signal(syscall.SIGKILL); err != nil {
+			fmt.Fprintf(os.Stderr, "Warning: failed to send SIGKILL: %v\n", err)
+		}
 		<-done
 	}
 
@@ -257,7 +275,9 @@ func stopServerNoReload(reg *registry.Registry, name string, timeout time.Durati
 	server.Status = registry.StatusStopped
 	server.PID = 0
 	server.StoppedAt = time.Now()
-	reg.Set(server)
+	if err := reg.Set(server); err != nil {
+		fmt.Fprintf(os.Stderr, "Warning: failed to update registry: %v\n", err)
+	}
 
 	fmt.Printf("Server '%s' stopped\n", name)
 	return nil

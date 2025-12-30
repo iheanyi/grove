@@ -134,7 +134,9 @@ func tailFollow(path string) error {
 	defer file.Close()
 
 	// Seek to end
-	file.Seek(0, io.SeekEnd)
+	if _, err := file.Seek(0, io.SeekEnd); err != nil {
+		return fmt.Errorf("failed to seek to end of file: %w", err)
+	}
 
 	reader := bufio.NewReader(file)
 	for {

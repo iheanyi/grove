@@ -586,7 +586,10 @@ func (s *mcpServer) toolList() callToolResult {
 		return mcpErrorResult(fmt.Sprintf("Failed to load registry: %v", err))
 	}
 
-	reg.Cleanup()
+	// Cleanup is best-effort for listing
+	if _, err := reg.Cleanup(); err != nil {
+		// Log but continue - we can still list servers
+	}
 	servers := reg.List()
 
 	if len(servers) == 0 {
@@ -698,7 +701,8 @@ func (s *mcpServer) toolStart(args map[string]interface{}) callToolResult {
 	pid := cmd.Process.Pid
 
 	go func() {
-		cmd.Wait()
+		// Wait for process to exit, close log file regardless of outcome
+		cmd.Wait() //nolint:errcheck // Process cleanup, error doesn't affect outcome
 		logFH.Close()
 	}()
 
@@ -759,13 +763,16 @@ func (s *mcpServer) toolStop(args map[string]interface{}) callToolResult {
 
 	process, err := os.FindProcess(server.PID)
 	if err == nil {
-		process.Kill()
+		// Best effort kill - process may already be dead
+		process.Kill() //nolint:errcheck // Best effort during shutdown
 	}
 
 	server.Status = registry.StatusStopped
 	server.PID = 0
 	server.StoppedAt = time.Now()
-	reg.Set(server)
+	if err := reg.Set(server); err != nil {
+		return mcpErrorResult(fmt.Sprintf("Failed to update registry: %v", err))
+	}
 
 	return mcpTextResult(fmt.Sprintf("Server '%s' stopped", name))
 }

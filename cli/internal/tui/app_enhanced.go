@@ -238,7 +238,7 @@ func (m EnhancedModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Refresh registry
 		if reg, err := registry.Load(); err == nil {
 			m.reg = reg
-			m.reg.Cleanup()
+			m.reg.Cleanup() //nolint:errcheck // Best effort cleanup during refresh
 			m.list.SetItems(makeEnhancedItems(m.reg))
 		}
 		return m, tickCmd()
@@ -259,7 +259,7 @@ func (m EnhancedModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if server, ok := m.reg.Get(msg.ServerName); ok {
 			server.Health = msg.Health
 			server.LastHealthCheck = msg.CheckTime
-			m.reg.Set(server)
+			m.reg.Set(server) //nolint:errcheck // Best effort health update
 			m.serverHealth[msg.ServerName] = msg.Health
 			m.list.SetItems(makeEnhancedItems(m.reg))
 		}
@@ -311,7 +311,7 @@ func (m EnhancedModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case key.Matches(msg, enhancedKeys.Refresh):
 			if reg, err := registry.Load(); err == nil {
 				m.reg = reg
-				m.reg.Cleanup()
+				m.reg.Cleanup() //nolint:errcheck // Best effort cleanup during refresh
 				m.list.SetItems(makeEnhancedItems(m.reg))
 			}
 			return m, nil
@@ -511,12 +511,17 @@ func (m *EnhancedModel) stopServer() tea.Cmd {
 	return func() tea.Msg {
 		// Stop server
 		if process, err := os.FindProcess(server.PID); err == nil {
-			process.Signal(syscall.SIGTERM)
+			process.Signal(syscall.SIGTERM) //nolint:errcheck // Best effort signal
 		}
 		server.Status = registry.StatusStopped
 		server.PID = 0
 		server.StoppedAt = time.Now()
-		m.reg.Set(server)
+		if err := m.reg.Set(server); err != nil {
+			return NotificationMsg{
+				Message: fmt.Sprintf("Failed to update registry: %v", err),
+				Type:    NotificationError,
+			}
+		}
 		return NotificationMsg{
 			Message: fmt.Sprintf("Stopped %s", server.Name),
 			Type:    NotificationSuccess,
@@ -544,7 +549,7 @@ func (m *EnhancedModel) restartServer() tea.Cmd {
 	return func() tea.Msg {
 		// Stop server first
 		if process, err := os.FindProcess(server.PID); err == nil {
-			process.Signal(syscall.SIGTERM)
+			process.Signal(syscall.SIGTERM) //nolint:errcheck // Best effort signal
 		}
 		return NotificationMsg{
 			Message: fmt.Sprintf("Restart %s with 'grove start %s'", server.Name, server.Name),
@@ -571,7 +576,12 @@ func (m *EnhancedModel) openServer() tea.Cmd {
 	}
 
 	return func() tea.Msg {
-		browser.Open(server.URL)
+		if err := browser.Open(server.URL); err != nil {
+			return NotificationMsg{
+				Message: fmt.Sprintf("Failed to open browser: %v", err),
+				Type:    NotificationError,
+			}
+		}
 		return NotificationMsg{
 			Message: fmt.Sprintf("Opened %s", server.URL),
 			Type:    NotificationSuccess,
@@ -639,10 +649,15 @@ func (m *EnhancedModel) toggleProxy() tea.Cmd {
 		if proxy.IsRunning() && isProcessRunning(proxy.PID) {
 			// Stop proxy
 			if process, err := os.FindProcess(proxy.PID); err == nil {
-				process.Signal(syscall.SIGTERM)
+				process.Signal(syscall.SIGTERM) //nolint:errcheck // Best effort signal
 			}
 			proxy.PID = 0
-			m.reg.UpdateProxy(proxy)
+			if err := m.reg.UpdateProxy(proxy); err != nil {
+				return NotificationMsg{
+					Message: fmt.Sprintf("Failed to update registry: %v", err),
+					Type:    NotificationError,
+				}
+			}
 			return NotificationMsg{
 				Message: "Proxy stopped",
 				Type:    NotificationSuccess,
