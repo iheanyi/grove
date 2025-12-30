@@ -1,0 +1,48 @@
+version: 2
+
+project_name: grove
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - main: ./cmd/grove
+    binary: grove
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - darwin
+      - linux
+    goarch:
+      - amd64
+      - arm64
+    ldflags:
+      - -s -w
+      - -X github.com/iheanyi/grove/internal/cli.Version={{.Version}}
+      - -X github.com/iheanyi/grove/internal/cli.Commit={{.ShortCommit}}
+      - -X github.com/iheanyi/grove/internal/cli.Date={{.Date}}
+
+archives:
+  - formats: [tar.gz]
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+
+checksum:
+  name_template: "checksums.txt"
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+      - "^chore:"
+      - Merge pull request
+      - Merge branch
+
+release:
+  github:
+    owner: iheanyi
+    name: grove
+  draft: false
+  prerelease: auto
