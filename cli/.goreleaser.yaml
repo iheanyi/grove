@@ -46,3 +46,19 @@ release:
     name: grove
   draft: false
   prerelease: auto
+
+brews:
+  - repository:
+      owner: iheanyi
+      name: homebrew-tap
+      token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
+    directory: Formula
+    homepage: "https://github.com/iheanyi/grove"
+    description: "Development server manager for git worktrees"
+    license: "MIT"
+    install: |
+      bin.install "grove"
+    test: |
+      system "#{bin}/grove", "version"
+    # Skip Homebrew if token isn't set
+    skip_upload: auto
