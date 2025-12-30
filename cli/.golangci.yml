@@ -1,0 +1,67 @@
+# golangci-lint configuration
+# https://golangci-lint.run/usage/configuration/
+
+run:
+  timeout: 5m
+  go: "1.21"
+  tests: true
+
+linters:
+  enable:
+    - errcheck
+    - gosimple
+    - govet
+    - ineffassign
+    - staticcheck
+    - unused
+
+linters-settings:
+  errcheck:
+    # Check for ignoring errors with blank identifier
+    check-blank: false
+    # Ignore functions where error is intentionally not handled
+    # These are common patterns where checking error doesn't make sense
+    exclude-functions:
+      # Close methods - errors in defer are not actionable
+      - (io.Closer).Close
+      - (*os.File).Close
+      - (*net.Conn).Close
+      - (net.Conn).Close
+      - (net.Listener).Close
+      - (*net.TCPListener).Close
+      - (*github.com/fsnotify/fsnotify.Watcher).Close
+      # HTTP response writing
+      - (net/http.ResponseWriter).Write
+      # Output functions where error handling isn't meaningful
+      - fmt.Fprint
+      - fmt.Fprintf
+      - fmt.Fprintln
+      - fmt.Print
+      - fmt.Printf
+      - fmt.Println
+      # OS cleanup operations that are best-effort
+      - os.RemoveAll
+      - os.Remove
+      - os.Setenv
+
+  staticcheck:
+    checks:
+      - all
+      - "-SA1019" # Ignore deprecation warnings (we handle them explicitly)
+
+issues:
+  # Show all issues from a linter
+  max-issues-per-linter: 0
+  max-same-issues: 0
+
+  # Don't skip any files
+  exclude-dirs: []
+
+  # Allow nolint comments
+  exclude-use-default: false
+
+output:
+  formats:
+    - format: colored-line-number
+  print-issued-lines: true
+  print-linter-name: true

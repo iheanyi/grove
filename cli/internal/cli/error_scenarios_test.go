@@ -285,8 +285,13 @@ func TestConcurrentRegistryAccess(t *testing.T) {
 	initial := &registry.Registry{
 		Servers: make(map[string]*registry.Server),
 	}
-	data, _ := json.MarshalIndent(initial, "", "  ")
-	os.WriteFile(registryPath, data, 0644)
+	data, err := json.MarshalIndent(initial, "", "  ")
+	if err != nil {
+		t.Fatalf("Failed to marshal initial registry: %v", err)
+	}
+	if err := os.WriteFile(registryPath, data, 0644); err != nil {
+		t.Fatalf("Failed to write registry file: %v", err)
+	}
 
 	// Simulate concurrent operations that might happen in the TUI
 	done := make(chan bool)
@@ -296,10 +301,11 @@ func TestConcurrentRegistryAccess(t *testing.T) {
 		go func() {
 			for j := 0; j < 10; j++ {
 				data, err := os.ReadFile(registryPath)
-				if err == nil {
-					var r registry.Registry
-					json.Unmarshal(data, &r)
+				if err != nil {
+					continue
 				}
+				var r registry.Registry
+				_ = json.Unmarshal(data, &r) //nolint:errcheck // Best effort in concurrent test
 			}
 			done <- true
 		}()

@@ -171,7 +171,9 @@ func TestSave_ReadOnlyDirectory(t *testing.T) {
 	if err := os.Chmod(readOnlyDir, 0555); err != nil {
 		t.Fatalf("Failed to chmod directory: %v", err)
 	}
-	defer os.Chmod(readOnlyDir, 0755) // Cleanup
+	defer func() {
+		_ = os.Chmod(readOnlyDir, 0755) //nolint:errcheck // Best effort cleanup in test
+	}()
 
 	registryPath := filepath.Join(readOnlyDir, "registry.json")
 
@@ -236,7 +238,9 @@ func TestSet_UpdatesExisting(t *testing.T) {
 		Port:   3000,
 		Status: StatusRunning,
 	}
-	r.Set(server)
+	if err := r.Set(server); err != nil {
+		t.Fatalf("Failed to set initial server: %v", err)
+	}
 
 	// Update server
 	server.Port = 4000
@@ -267,7 +271,9 @@ func TestRemove(t *testing.T) {
 	}
 
 	// Add a server
-	r.Set(&Server{Name: "to-remove", Port: 3000})
+	if err := r.Set(&Server{Name: "to-remove", Port: 3000}); err != nil {
+		t.Fatalf("Failed to add server: %v", err)
+	}
 
 	// Remove it
 	err := r.Remove("to-remove")
@@ -604,7 +610,7 @@ func TestConcurrentAccess(t *testing.T) {
 	// Writer goroutine
 	go func() {
 		for i := 0; i < 100; i++ {
-			r.Set(&Server{
+			_ = r.Set(&Server{ //nolint:errcheck // Best effort in concurrent test
 				Name: "server",
 				Port: 3000 + i,
 			})

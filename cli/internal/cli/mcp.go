@@ -586,10 +586,8 @@ func (s *mcpServer) toolList() callToolResult {
 		return mcpErrorResult(fmt.Sprintf("Failed to load registry: %v", err))
 	}
 
-	// Cleanup is best-effort for listing
-	if _, err := reg.Cleanup(); err != nil {
-		// Log but continue - we can still list servers
-	}
+	// Cleanup is best-effort for listing - ignore errors as we can still list servers
+	_, _ = reg.Cleanup() //nolint:errcheck
 	servers := reg.List()
 
 	if len(servers) == 0 {
