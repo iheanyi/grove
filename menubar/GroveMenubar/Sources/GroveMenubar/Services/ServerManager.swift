@@ -191,7 +191,7 @@ class ServerManager: ObservableObject {
         error = nil
 
         print("[Grove] refresh() calling runGrove...")
-        runGrove(["ls", "--json"]) { [weak self] result in
+        runGrove(["ls", "--json", "--fast"]) { [weak self] result in
             print("[Grove] refresh() runGrove completed in \(String(format: "%.3f", CFAbsoluteTimeGetCurrent() - refreshStart))s - thread: \(Thread.isMainThread ? "MAIN" : "bg")")
 
             switch result {

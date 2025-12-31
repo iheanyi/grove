@@ -36,6 +36,7 @@ func init() {
 	lsCmd.Flags().Bool("active", false, "Only show worktrees with any activity")
 	lsCmd.Flags().Bool("all", false, "Show all discovered worktrees (default)")
 	lsCmd.Flags().Bool("running", false, "Only show running servers (deprecated, use --servers)")
+	lsCmd.Flags().Bool("fast", false, "Skip activity detection (Claude, VSCode, git status) for faster output")
 }
 
 func runLs(cmd *cobra.Command, args []string) error {
@@ -44,6 +45,7 @@ func runLs(cmd *cobra.Command, args []string) error {
 	onlyServers, _ := cmd.Flags().GetBool("servers")
 	onlyActive, _ := cmd.Flags().GetBool("active")
 	showAll, _ := cmd.Flags().GetBool("all")
+	fastMode, _ := cmd.Flags().GetBool("fast")
 	_ = showAll // Reserved for future use
 
 	// Backward compatibility: --running implies --servers
@@ -63,11 +65,16 @@ func runLs(cmd *cobra.Command, args []string) error {
 	}
 
 	// Auto-discover worktrees from current repo (fast operation)
-	autoDiscoverCurrentRepo(reg)
+	if !fastMode {
+		autoDiscoverCurrentRepo(reg)
+	}
 
 	// Update worktree activities (non-critical, continue on error)
-	if err := reg.UpdateWorktreeActivities(); err != nil {
-		fmt.Fprintf(os.Stderr, "Warning: failed to update worktree activities: %v\n", err)
+	// Skip in fast mode - this is the slow part (ps, lsof, git status for each worktree)
+	if !fastMode {
+		if err := reg.UpdateWorktreeActivities(); err != nil {
+			fmt.Fprintf(os.Stderr, "Warning: failed to update worktree activities: %v\n", err)
+		}
 	}
 
 	// Build combined view
