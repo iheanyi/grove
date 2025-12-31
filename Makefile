@@ -1,4 +1,4 @@
-.PHONY: all build build-cli build-menubar run run-menubar restart dev clean clean-cli clean-menubar kill
+.PHONY: all build build-cli build-menubar run run-menubar restart dev clean clean-cli clean-menubar kill release-menubar install-menubar
 
 # Default target: build both apps
 all: build
@@ -56,3 +56,25 @@ install-cli: build-cli
 	@echo "Installing CLI to /usr/local/bin..."
 	cp cli/grove /usr/local/bin/grove
 	@echo "Installed: /usr/local/bin/grove"
+
+# Install menubar app to /Applications
+install-menubar:
+	@echo "Building menubar for release..."
+	cd menubar/GroveMenubar && swift build -c release
+	@echo "Creating Grove.app bundle..."
+	@mkdir -p menubar/GroveMenubar/dist/Grove.app/Contents/MacOS
+	@mkdir -p menubar/GroveMenubar/dist/Grove.app/Contents/Resources
+	@cp menubar/GroveMenubar/.build/release/GroveMenubar menubar/GroveMenubar/dist/Grove.app/Contents/MacOS/Grove 2>/dev/null || \
+		cp menubar/GroveMenubar/.build/arm64-apple-macosx/release/GroveMenubar menubar/GroveMenubar/dist/Grove.app/Contents/MacOS/Grove
+	@echo '<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd"><plist version="1.0"><dict><key>CFBundleExecutable</key><string>Grove</string><key>CFBundleIdentifier</key><string>com.iheanyi.grove</string><key>CFBundleName</key><string>Grove</string><key>CFBundlePackageType</key><string>APPL</string><key>CFBundleShortVersionString</key><string>1.0</string><key>LSMinimumSystemVersion</key><string>14.0</string><key>LSUIElement</key><true/></dict></plist>' > menubar/GroveMenubar/dist/Grove.app/Contents/Info.plist
+	@echo "Installing Grove.app to /Applications..."
+	@rm -rf /Applications/Grove.app
+	@cp -R menubar/GroveMenubar/dist/Grove.app /Applications/
+	@echo "Installed: /Applications/Grove.app"
+	@echo ""
+	@echo "Note: First launch, right-click the app and select 'Open' to bypass Gatekeeper."
+
+# Release menubar app via GitHub Actions
+release-menubar:
+	gh workflow run release-menubar.yml --repo iheanyi/grove
+	@echo "Menubar release triggered! Watch with: gh run watch"

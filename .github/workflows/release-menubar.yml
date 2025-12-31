@@ -1,0 +1,198 @@
+name: Release Menubar
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to release (e.g., 1.0.0). Leave empty to use CLI version.'
+        required: false
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build and Release Menubar
+    runs-on: macos-14  # Apple Silicon runner
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Determine version
+        id: version
+        run: |
+          if [ -n "${{ inputs.version }}" ]; then
+            VERSION="${{ inputs.version }}"
+          else
+            # Use latest CLI version
+            VERSION=$(git describe --tags --abbrev=0 2>/dev/null | sed 's/^v//' || echo "0.1.0")
+          fi
+          echo "version=${VERSION}" >> $GITHUB_OUTPUT
+          echo "tag=menubar-v${VERSION}" >> $GITHUB_OUTPUT
+
+      - name: Check if tag exists
+        id: check_tag
+        run: |
+          if git rev-parse "${{ steps.version.outputs.tag }}" >/dev/null 2>&1; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Select Xcode
+        run: sudo xcode-select -s /Applications/Xcode_15.4.app/Contents/Developer
+
+      - name: Build Release
+        working-directory: menubar/GroveMenubar
+        run: |
+          # Build for release
+          swift build -c release
+
+          # Create .app bundle structure
+          APP_NAME="Grove.app"
+          APP_DIR="dist/${APP_NAME}"
+          CONTENTS_DIR="${APP_DIR}/Contents"
+          MACOS_DIR="${CONTENTS_DIR}/MacOS"
+          RESOURCES_DIR="${CONTENTS_DIR}/Resources"
+
+          mkdir -p "${MACOS_DIR}" "${RESOURCES_DIR}"
+
+          # Copy binary
+          cp .build/release/GroveMenubar "${MACOS_DIR}/Grove"
+
+          # Create Info.plist
+          cat > "${CONTENTS_DIR}/Info.plist" << EOF
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+              <key>CFBundleDevelopmentRegion</key>
+              <string>en</string>
+              <key>CFBundleExecutable</key>
+              <string>Grove</string>
+              <key>CFBundleIconFile</key>
+              <string>AppIcon</string>
+              <key>CFBundleIdentifier</key>
+              <string>com.iheanyi.grove</string>
+              <key>CFBundleInfoDictionaryVersion</key>
+              <string>6.0</string>
+              <key>CFBundleName</key>
+              <string>Grove</string>
+              <key>CFBundlePackageType</key>
+              <string>APPL</string>
+              <key>CFBundleShortVersionString</key>
+              <string>${{ steps.version.outputs.version }}</string>
+              <key>CFBundleVersion</key>
+              <string>${{ steps.version.outputs.version }}</string>
+              <key>LSMinimumSystemVersion</key>
+              <string>14.0</string>
+              <key>LSUIElement</key>
+              <true/>
+              <key>NSHighResolutionCapable</key>
+              <true/>
+              <key>LSApplicationCategoryType</key>
+              <string>public.app-category.developer-tools</string>
+          </dict>
+          </plist>
+          EOF
+
+          # Copy icon if exists
+          if [ -f "Resources/AppIcon.icns" ]; then
+            cp "Resources/AppIcon.icns" "${RESOURCES_DIR}/"
+          fi
+
+          # Create ZIP
+          cd dist
+          zip -r "Grove-${{ steps.version.outputs.version }}-macos.zip" "${APP_NAME}"
+
+          # Calculate SHA256
+          shasum -a 256 "Grove-${{ steps.version.outputs.version }}-macos.zip" > "Grove-${{ steps.version.outputs.version }}-macos.zip.sha256"
+
+      - name: Create tag
+        if: steps.check_tag.outputs.exists == 'false'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag -a ${{ steps.version.outputs.tag }} -m "Menubar Release ${{ steps.version.outputs.version }}"
+          git push origin ${{ steps.version.outputs.tag }}
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ steps.version.outputs.tag }}
+          name: "Grove Menubar ${{ steps.version.outputs.version }}"
+          body: |
+            ## Grove Menubar App v${{ steps.version.outputs.version }}
+
+            Native macOS menubar app for managing Grove dev servers.
+
+            ### Installation
+
+            **Via Homebrew (recommended):**
+            ```bash
+            brew install --cask iheanyi/tap/grove-menubar
+            ```
+
+            **Manual installation:**
+            1. Download `Grove-${{ steps.version.outputs.version }}-macos.zip`
+            2. Extract and move `Grove.app` to `/Applications`
+            3. Right-click → Open (first time only, to bypass Gatekeeper)
+
+            ### Requirements
+            - macOS 14.0 (Sonoma) or later
+            - Grove CLI installed (`brew install iheanyi/tap/grove`)
+          files: |
+            menubar/GroveMenubar/dist/Grove-${{ steps.version.outputs.version }}-macos.zip
+            menubar/GroveMenubar/dist/Grove-${{ steps.version.outputs.version }}-macos.zip.sha256
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Update Homebrew Cask
+        env:
+          HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+        run: |
+          # Get SHA256
+          SHA256=$(cat menubar/GroveMenubar/dist/Grove-${{ steps.version.outputs.version }}-macos.zip.sha256 | awk '{print $1}')
+          VERSION="${{ steps.version.outputs.version }}"
+
+          # Clone tap repo
+          git clone https://x-access-token:${HOMEBREW_TAP_TOKEN}@github.com/iheanyi/homebrew-tap.git tap-repo
+          cd tap-repo
+
+          # Create Casks directory if needed
+          mkdir -p Casks
+
+          # Create/update cask
+          cat > Casks/grove-menubar.rb << EOF
+          cask "grove-menubar" do
+            version "${VERSION}"
+            sha256 "${SHA256}"
+
+            url "https://github.com/iheanyi/grove/releases/download/menubar-v#{version}/Grove-#{version}-macos.zip"
+            name "Grove"
+            desc "Menubar app for managing Grove dev servers"
+            homepage "https://github.com/iheanyi/grove"
+
+            depends_on formula: "iheanyi/tap/grove"
+            depends_on macos: ">= :sonoma"
+
+            app "Grove.app"
+
+            zap trash: [
+              "~/Library/Application Support/grove",
+              "~/Library/Preferences/com.iheanyi.grove.plist",
+            ]
+          end
+          EOF
+
+          # Commit and push
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add Casks/grove-menubar.rb
+          git commit -m "Update grove-menubar to ${VERSION}" || echo "No changes to commit"
+          git push
