@@ -117,7 +117,7 @@ func runAttach(cmd *cobra.Command, args []string) error {
 		Branch:    branch,
 		Status:    registry.StatusRunning,
 		PID:       pid,
-		URL:       fmt.Sprintf("https://%s.%s", name, cfg.TLD),
+		URL:       cfg.ServerURL(name, portNum),
 		StartedAt: time.Now(),
 		Health:    registry.HealthUnknown,
 	}
@@ -150,11 +150,13 @@ func runAttach(cmd *cobra.Command, args []string) error {
 		fmt.Println("  PID:    unknown (server won't be tracked for lifecycle)")
 	}
 
-	// Check if proxy is running
-	proxy := reg.GetProxy()
-	if !proxy.IsRunning() || !isProcessRunning(proxy.PID) {
-		fmt.Println()
-		fmt.Println("Note: The proxy is not running. Start it with: grove proxy start")
+	// Check if proxy is running (only relevant in subdomain mode)
+	if cfg.IsSubdomainMode() {
+		proxy := reg.GetProxy()
+		if !proxy.IsRunning() || !isProcessRunning(proxy.PID) {
+			fmt.Println()
+			fmt.Println("Note: The proxy is not running. Start it with: grove proxy start")
+		}
 	}
 
 	return nil

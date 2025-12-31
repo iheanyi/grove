@@ -487,7 +487,7 @@ func (s *mcpServer) handleToolsList(req *jsonRPCRequest) {
 		},
 		{
 			Name:        "grove_start",
-			Description: "Start a dev server for a git worktree. The server will be accessible at https://<worktree-name>.localhost with wildcard subdomain support.",
+			Description: "Start a dev server for a git worktree. The server will be accessible at a URL based on the configured mode (port or subdomain).",
 			InputSchema: inputSchema{
 				Type: "object",
 				Properties: map[string]property{
@@ -797,7 +797,7 @@ func (s *mcpServer) toolURL(args map[string]interface{}) callToolResult {
 	if !ok {
 		// Server not registered - show what URL would be
 		if cfg.IsSubdomainMode() {
-			return mcpTextResult(fmt.Sprintf("Server '%s' is not registered, but would be available at:\n\n- URL: https://%s.%s\n- Subdomains: %s\n\nUse grove_start to start the server.", name, name, cfg.TLD, cfg.SubdomainURL(name)))
+			return mcpTextResult(fmt.Sprintf("Server '%s' is not registered, but would be available at:\n\n- URL: %s\n- Subdomains: %s\n\nUse grove_start to start the server.", name, cfg.ServerURL(name, 0), cfg.SubdomainURL(name)))
 		}
 		return mcpTextResult(fmt.Sprintf("Server '%s' is not registered.\n\nUse grove_start to start the server. It will be available at http://localhost:PORT", name))
 	}

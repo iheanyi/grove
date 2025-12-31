@@ -51,7 +51,9 @@ func runStatus(cmd *cobra.Command, args []string) error {
 	fmt.Printf("Name:        %s\n", server.Name)
 	fmt.Printf("Status:      %s\n", formatStatus(server.Status))
 	fmt.Printf("URL:         %s\n", server.URL)
-	fmt.Printf("Subdomains:  https://*.%s.%s\n", server.Name, cfg.TLD)
+	if cfg.IsSubdomainMode() {
+		fmt.Printf("Subdomains:  %s\n", cfg.SubdomainURL(server.Name))
+	}
 	fmt.Printf("Port:        %d\n", server.Port)
 	fmt.Printf("Path:        %s\n", server.Path)
 

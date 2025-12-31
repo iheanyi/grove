@@ -50,13 +50,16 @@ func runURL(cmd *cobra.Command, args []string) error {
 
 	server, ok := reg.Get(name)
 	if !ok {
-		// Server not registered, but we can still generate the URL
-		url := fmt.Sprintf("https://%s.%s", name, cfg.TLD)
+		// Server not registered - in port mode we can't know the URL without a port
+		if !cfg.IsSubdomainMode() {
+			return fmt.Errorf("server '%s' is not registered (port unknown)", name)
+		}
+		url := cfg.ServerURL(name, 0)
 		if outputJSON {
 			return json.NewEncoder(os.Stdout).Encode(map[string]string{
 				"name":       name,
 				"url":        url,
-				"subdomains": fmt.Sprintf("https://*.%s.%s", name, cfg.TLD),
+				"subdomains": cfg.SubdomainURL(name),
 				"status":     "not_registered",
 			})
 		}
@@ -65,13 +68,16 @@ func runURL(cmd *cobra.Command, args []string) error {
 	}
 
 	if outputJSON {
-		return json.NewEncoder(os.Stdout).Encode(map[string]interface{}{
-			"name":       server.Name,
-			"url":        server.URL,
-			"subdomains": fmt.Sprintf("https://*.%s.%s", server.Name, cfg.TLD),
-			"port":       server.Port,
-			"status":     server.Status,
-		})
+		result := map[string]interface{}{
+			"name":   server.Name,
+			"url":    server.URL,
+			"port":   server.Port,
+			"status": server.Status,
+		}
+		if cfg.IsSubdomainMode() {
+			result["subdomains"] = cfg.SubdomainURL(server.Name)
+		}
+		return json.NewEncoder(os.Stdout).Encode(result)
 	}
 
 	fmt.Println(server.URL)

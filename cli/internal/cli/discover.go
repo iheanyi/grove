@@ -181,7 +181,7 @@ func runDiscover(cmd *cobra.Command, args []string) error {
 			Name:   wt.Name,
 			Port:   serverPort,
 			Path:   wt.Path,
-			URL:    fmt.Sprintf("https://%s.%s", wt.Name, cfg.TLD),
+			URL:    cfg.ServerURL(wt.Name, serverPort),
 			Status: registry.StatusStopped,
 			Branch: wt.Branch,
 		}
