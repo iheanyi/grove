@@ -318,6 +318,30 @@ hooks:
 
 A native macOS menubar app for quick server management without the terminal.
 
+### Installation
+
+**Via Homebrew (recommended):**
+
+```bash
+# Install both CLI and menubar app
+brew install iheanyi/tap/grove
+brew install --cask iheanyi/tap/grove-menubar
+```
+
+**Manual download:**
+
+1. Download `Grove-X.X.X-macos.zip` from [GitHub Releases](https://github.com/iheanyi/grove/releases)
+2. Extract and move `Grove.app` to `/Applications`
+3. Right-click → Open (first time only, to bypass Gatekeeper)
+
+**Build from source:**
+
+```bash
+git clone https://github.com/iheanyi/grove.git
+cd grove
+make install-menubar  # Builds and installs to /Applications
+```
+
 ### Features
 
 - **Server list**: See all running/stopped servers at a glance
@@ -337,23 +361,15 @@ A native macOS menubar app for quick server management without the terminal.
 | `⌘,` | Open preferences |
 | `⌘Q` | Quit |
 
-### Building
+### Requirements
 
-```bash
-cd menubar/GroveMenubar
-make build   # Build the app
-make run     # Build and run
-```
+- macOS 14.0 (Sonoma) or later
+- Grove CLI installed
 
-The app bundle will be at `.build/GroveMenubar.app`. Drag it to your Applications folder.
-
-### Note
-
-The menubar app communicates with the `grove` CLI. Make sure `grove` is installed and accessible. The app looks for `grove` in these locations:
-- `~/development/go/bin/grove`
-- `/usr/local/bin/grove`
-- `/opt/homebrew/bin/grove`
-- `~/go/bin/grove`
+The menubar app communicates with the `grove` CLI. The app looks for `grove` in these locations:
+- `/opt/homebrew/bin/grove` (Homebrew on Apple Silicon)
+- `/usr/local/bin/grove` (Homebrew on Intel / manual install)
+- `~/go/bin/grove` (Go install)
 
 ## MCP Server for Claude Code
 
