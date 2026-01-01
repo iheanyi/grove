@@ -2,8 +2,9 @@ package cli
 
 import (
 	"fmt"
-	"net"
+	"os/exec"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/iheanyi/grove/internal/port"
@@ -162,18 +163,37 @@ func runAttach(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-// findPIDOnPort attempts to find the PID of a process listening on the given port
+// findPIDOnPort attempts to find the PID of a process listening on the given port.
+// Uses lsof on macOS/Linux which is reliable and commonly available on dev machines.
 func findPIDOnPort(targetPort int) int {
-	// Try lsof (macOS/Linux)
-	conn, err := net.Dial("tcp", fmt.Sprintf("localhost:%d", targetPort))
+	// lsof -ti:PORT returns PIDs listening on that port (one per line)
+	// -t = terse output (PIDs only)
+	// -i:PORT = filter by port
+	// -sTCP:LISTEN = only show listening sockets (not established connections)
+	cmd := exec.Command("lsof", "-ti", fmt.Sprintf(":%d", targetPort), "-sTCP:LISTEN")
+	output, err := cmd.Output()
+	if err != nil {
+		// lsof failed or not found - try without -sTCP:LISTEN for older versions
+		cmd = exec.Command("lsof", "-ti", fmt.Sprintf(":%d", targetPort))
+		output, err = cmd.Output()
+		if err != nil {
+			return 0
+		}
+	}
+
+	// Parse output - may have multiple PIDs (parent/child, SO_REUSEPORT)
+	// Take the first one, which is typically the main/parent process
+	lines := strings.Split(strings.TrimSpace(string(output)), "\n")
+	if len(lines) == 0 || lines[0] == "" {
+		return 0
+	}
+
+	pid, err := strconv.Atoi(strings.TrimSpace(lines[0]))
 	if err != nil {
 		return 0
 	}
-	defer conn.Close()
 
-	// We can't easily get PID from a connection, so return 0
-	// In a real implementation, we'd use lsof or /proc
-	return 0
+	return pid
 }
 
 // DetachCmd removes a server from tracking without stopping it
