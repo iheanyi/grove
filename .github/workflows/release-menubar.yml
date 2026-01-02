@@ -104,6 +104,9 @@ jobs:
             cp "Resources/AppIcon.icns" "${RESOURCES_DIR}/"
           fi
 
+          # Clear quarantine attributes before zipping (prevents "damaged app" errors)
+          xattr -cr "${APP_DIR}"
+
           # Create ZIP
           cd dist
           zip -r "Grove-${{ steps.version.outputs.version }}-macos.zip" "${APP_NAME}"
