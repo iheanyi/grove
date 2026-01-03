@@ -167,29 +167,72 @@ func (r *Registry) GetProxy() *ProxyInfo {
 	return r.Proxy
 }
 
-// Cleanup removes stale entries (servers with dead PIDs)
-func (r *Registry) Cleanup() ([]string, error) {
+// CleanupResult holds the results of a cleanup operation
+type CleanupResult struct {
+	Stopped          []string // Servers whose PIDs are no longer running
+	RemovedServers   []string // Servers whose paths no longer exist
+	RemovedWorktrees []string // Worktrees whose paths no longer exist
+}
+
+// Cleanup removes stale entries (servers/worktrees with missing paths, dead PIDs)
+func (r *Registry) Cleanup() (*CleanupResult, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	removed := []string{}
+	result := &CleanupResult{
+		Stopped:          []string{},
+		RemovedServers:   []string{},
+		RemovedWorktrees: []string{},
+	}
 
+	serversToDelete := []string{}
+	worktreesToDelete := []string{}
+
+	// Check servers
 	for name, server := range r.Servers {
+		// Check if the path still exists
+		if server.Path != "" {
+			if _, err := os.Stat(server.Path); os.IsNotExist(err) {
+				serversToDelete = append(serversToDelete, name)
+				result.RemovedServers = append(result.RemovedServers, name)
+				continue
+			}
+		}
+
+		// Check if PID is still running
 		if server.PID > 0 && !isProcessRunning(server.PID) {
 			server.Status = StatusStopped
 			server.PID = 0
-			removed = append(removed, name)
+			result.Stopped = append(result.Stopped, name)
 		}
 	}
 
-	if len(removed) > 0 {
+	// Check worktrees
+	for name, wt := range r.Worktrees {
+		if wt.Path != "" {
+			if _, err := os.Stat(wt.Path); os.IsNotExist(err) {
+				worktreesToDelete = append(worktreesToDelete, name)
+				result.RemovedWorktrees = append(result.RemovedWorktrees, name)
+			}
+		}
+	}
+
+	// Remove entries with missing paths
+	for _, name := range serversToDelete {
+		delete(r.Servers, name)
+	}
+	for _, name := range worktreesToDelete {
+		delete(r.Worktrees, name)
+	}
+
+	if len(result.Stopped) > 0 || len(result.RemovedServers) > 0 || len(result.RemovedWorktrees) > 0 {
 		r.mu.Unlock()
 		err := r.Save()
 		r.mu.Lock()
-		return removed, err
+		return result, err
 	}
 
-	return removed, nil
+	return result, nil
 }
 
 // isProcessRunning checks if a process with the given PID is running

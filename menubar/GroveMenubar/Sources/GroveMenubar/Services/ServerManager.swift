@@ -67,6 +67,8 @@ class ServerManager: ObservableObject {
         // This prevents blocking the main thread during the critical app startup period
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
             print("[Grove] Initial refresh starting (0.3s after init)")
+            // Run cleanup first to remove stale entries (non-existent paths)
+            self?.runCleanup()
             self?.refresh()
             self?.startAutoRefresh()
         }
@@ -381,6 +383,21 @@ class ServerManager: ObservableObject {
         runGrove(["proxy", "stop"]) { [weak self] _ in
             DispatchQueue.main.async {
                 self?.refresh()
+            }
+        }
+    }
+
+    /// Run cleanup to remove stale entries (non-existent paths, dead processes)
+    /// This runs silently in the background
+    private func runCleanup() {
+        runGrove(["cleanup"]) { result in
+            switch result {
+            case .success(let output):
+                if !output.contains("No stale entries") {
+                    print("[Grove] Cleanup: \(output.trimmingCharacters(in: .whitespacesAndNewlines))")
+                }
+            case .failure(let error):
+                print("[Grove] Cleanup failed: \(error.localizedDescription)")
             }
         }
     }

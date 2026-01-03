@@ -433,13 +433,13 @@ func TestCleanup_RemovesDeadProcesses(t *testing.T) {
 		PID:    os.Getpid(),
 	}
 
-	removed, err := r.Cleanup()
+	result, err := r.Cleanup()
 	if err != nil {
 		t.Errorf("Cleanup() failed: %v", err)
 	}
 
-	if len(removed) != 1 || removed[0] != "dead-server" {
-		t.Errorf("Expected [dead-server] to be removed, got %v", removed)
+	if len(result.Stopped) != 1 || result.Stopped[0] != "dead-server" {
+		t.Errorf("Expected [dead-server] to be stopped, got %v", result.Stopped)
 	}
 
 	// Verify dead server status changed
@@ -476,13 +476,14 @@ func TestCleanup_NoChangesWhenNoDeadProcesses(t *testing.T) {
 		PID:    os.Getpid(),
 	}
 
-	removed, err := r.Cleanup()
+	result, err := r.Cleanup()
 	if err != nil {
 		t.Errorf("Cleanup() failed: %v", err)
 	}
 
-	if len(removed) != 0 {
-		t.Errorf("Expected no servers removed, got %v", removed)
+	if len(result.Stopped) != 0 || len(result.RemovedServers) != 0 || len(result.RemovedWorktrees) != 0 {
+		t.Errorf("Expected no changes, got stopped=%v, removedServers=%v, removedWorktrees=%v",
+			result.Stopped, result.RemovedServers, result.RemovedWorktrees)
 	}
 }
 
