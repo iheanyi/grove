@@ -375,6 +375,10 @@ class ServerManager: ObservableObject {
         let stoppedServers = servers.filter { !$0.isRunning }
         guard !stoppedServers.isEmpty else { return }
 
+        // Pause auto-refresh during batch operation
+        refreshTimer?.invalidate()
+        refreshTimer = nil
+
         let group = DispatchGroup()
 
         for server in stoppedServers {
@@ -384,9 +388,10 @@ class ServerManager: ObservableObject {
             }
         }
 
-        // Refresh once all detaches complete
+        // Refresh once all detaches complete, then restart auto-refresh
         group.notify(queue: .main) { [weak self] in
             self?.refresh()
+            self?.startAutoRefresh()
         }
     }
 
