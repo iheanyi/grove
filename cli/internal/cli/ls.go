@@ -384,4 +384,3 @@ func autoDiscoverCurrentRepo(reg *registry.Registry) {
 		}
 	}
 }
-

@@ -9,14 +9,20 @@ import (
 // TestBuildCaddyfileContent tests the Caddyfile content generation logic
 func TestBuildCaddyfileContent(t *testing.T) {
 	tests := []struct {
-		name     string
-		servers  []struct{ name string; port int }
-		expected []string
+		name    string
+		servers []struct {
+			name string
+			port int
+		}
+		expected    []string
 		notExpected []string
 	}{
 		{
 			name: "single server",
-			servers: []struct{ name string; port int }{
+			servers: []struct {
+				name string
+				port int
+			}{
 				{"test-server", 3000},
 			},
 			expected: []string{
@@ -31,7 +37,7 @@ func TestBuildCaddyfileContent(t *testing.T) {
 			},
 		},
 		{
-			name: "no servers",
+			name:    "no servers",
 			servers: nil,
 			expected: []string{
 				"local_certs",
@@ -41,7 +47,10 @@ func TestBuildCaddyfileContent(t *testing.T) {
 		},
 		{
 			name: "multiple servers",
-			servers: []struct{ name string; port int }{
+			servers: []struct {
+				name string
+				port int
+			}{
 				{"server-one", 3001},
 				{"server-two", 3002},
 			},
@@ -74,7 +83,10 @@ func TestBuildCaddyfileContent(t *testing.T) {
 }
 
 // buildTestCaddyfileContent is a test helper that mimics generateCaddyfile logic
-func buildTestCaddyfileContent(servers []struct{ name string; port int }) string {
+func buildTestCaddyfileContent(servers []struct {
+	name string
+	port int
+}) string {
 	var sb strings.Builder
 
 	// Global options (same as generateCaddyfile)
