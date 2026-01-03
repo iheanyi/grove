@@ -10,6 +10,15 @@ import (
 	"time"
 )
 
+// AgentInfo represents an active AI agent/assistant session
+type AgentInfo struct {
+	Type      string    `json:"type"`       // "claude", "cursor", "copilot", etc.
+	PID       int       `json:"pid"`        // Process ID
+	Path      string    `json:"path"`       // Working directory
+	StartTime time.Time `json:"start_time"` // When the process started
+	Command   string    `json:"command"`    // Full command line
+}
+
 // Worktree represents a discovered git worktree
 type Worktree struct {
 	Name         string    `json:"name"`
@@ -24,6 +33,9 @@ type Worktree struct {
 	HasClaude bool `json:"has_claude"` // Claude Code is active (detected via socket/process)
 	HasVSCode bool `json:"has_vscode"` // VS Code is open (detected via process)
 	GitDirty  bool `json:"git_dirty"`  // Has uncommitted changes
+
+	// Detailed agent info (populated when HasClaude is true)
+	Agent *AgentInfo `json:"agent,omitempty"`
 }
 
 // Discover finds all worktrees for a given repo
@@ -116,14 +128,15 @@ func parseWorktreeList(output string) ([]*Worktree, error) {
 // All checks run in parallel for performance.
 func DetectActivity(wt *Worktree) error {
 	var wg sync.WaitGroup
-	var hasClaude, hasVSCode, gitDirty bool
+	var agent *AgentInfo
+	var hasVSCode, gitDirty bool
 
 	// Run all detection checks in parallel
 	wg.Add(3)
 
 	go func() {
 		defer wg.Done()
-		hasClaude = detectClaude(wt.Path)
+		agent = detectAgent(wt.Path)
 	}()
 
 	go func() {
@@ -138,7 +151,8 @@ func DetectActivity(wt *Worktree) error {
 
 	wg.Wait()
 
-	wt.HasClaude = hasClaude
+	wt.Agent = agent
+	wt.HasClaude = agent != nil
 	wt.HasVSCode = hasVSCode
 	wt.GitDirty = gitDirty
 
@@ -150,30 +164,87 @@ func DetectActivity(wt *Worktree) error {
 	return nil
 }
 
-// detectClaude checks for Claude Code activity
-func detectClaude(path string) bool {
+// detectAgent checks for AI agent activity and returns detailed info
+func detectAgent(path string) *AgentInfo {
+	// Check for Claude Code first
+	if agent := detectClaudeAgent(path); agent != nil {
+		return agent
+	}
+
+	// Add other agent detection here in the future (Cursor, Copilot, etc.)
+
+	return nil
+}
+
+// detectClaudeAgent checks for Claude Code activity
+func detectClaudeAgent(path string) *AgentInfo {
 	// Find Claude Code processes using ps aux
-	// Claude processes show as "claude" at the end of the command line
-	cmd := exec.Command("bash", "-c", "ps aux | grep -E 'claude\\s*$' | grep -v grep | awk '{print $2}'")
+	// Claude processes have "claude" in the command (with optional flags)
+	cmd := exec.Command("bash", "-c", "ps aux | grep -E '[c]laude\\s*(--|-|$)' | awk '{print $2}'")
 	output, err := cmd.Output()
 	if err != nil {
-		return false
+		return nil
 	}
 
 	pids := strings.Fields(strings.TrimSpace(string(output)))
 	if len(pids) == 0 {
-		return false
+		return nil
 	}
 
 	// Check each claude process's working directory using lsof
-	for _, pid := range pids {
-		cwd := getProcessCwd(pid)
+	for _, pidStr := range pids {
+		cwd := getProcessCwd(pidStr)
 		if cwd != "" && cwd == path {
-			return true
+			pid := 0
+			fmt.Sscanf(pidStr, "%d", &pid)
+
+			// Get process start time and command
+			startTime := getProcessStartTime(pidStr)
+			command := getProcessCommand(pidStr)
+
+			return &AgentInfo{
+				Type:      "claude",
+				PID:       pid,
+				Path:      cwd,
+				StartTime: startTime,
+				Command:   command,
+			}
 		}
 	}
 
-	return false
+	return nil
+}
+
+// getProcessStartTime returns the start time of a process
+func getProcessStartTime(pid string) time.Time {
+	// Use ps to get process start time
+	cmd := exec.Command("ps", "-p", pid, "-o", "lstart=")
+	output, err := cmd.Output()
+	if err != nil {
+		return time.Time{}
+	}
+
+	// Parse the date string (format: "Mon Jan  2 15:04:05 2006")
+	timeStr := strings.TrimSpace(string(output))
+	t, err := time.Parse("Mon Jan  2 15:04:05 2006", timeStr)
+	if err != nil {
+		// Try alternative format
+		t, err = time.Parse("Mon Jan 2 15:04:05 2006", timeStr)
+		if err != nil {
+			return time.Time{}
+		}
+	}
+	return t
+}
+
+// getProcessCommand returns the full command line of a process
+func getProcessCommand(pid string) string {
+	cmd := exec.Command("ps", "-p", pid, "-o", "command=")
+	output, err := cmd.Output()
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(output))
 }
 
 // getProcessCwd returns the current working directory of a process
