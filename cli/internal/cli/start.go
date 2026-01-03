@@ -10,6 +10,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/iheanyi/grove/internal/discovery"
 	"github.com/iheanyi/grove/internal/port"
 	"github.com/iheanyi/grove/internal/project"
 	"github.com/iheanyi/grove/internal/registry"
@@ -192,6 +193,9 @@ func runForeground(server *registry.Server, reg *registry.Registry, projConfig *
 		return fmt.Errorf("failed to save to registry: %w", err)
 	}
 
+	// Auto-register worktree with main_repo for proper grouping
+	registerWorktree(reg, server)
+
 	// Reload proxy to pick up new route (only in subdomain mode)
 	if cfg.IsSubdomainMode() {
 		if err := ReloadProxy(); err != nil {
@@ -328,6 +332,9 @@ func runDaemon(server *registry.Server, reg *registry.Registry, projConfig *proj
 		return fmt.Errorf("failed to save to registry: %w", err)
 	}
 
+	// Auto-register worktree with main_repo for proper grouping
+	registerWorktree(reg, server)
+
 	// Detach from process - the process will continue running
 	if err := execCmd.Process.Release(); err != nil {
 		fmt.Fprintf(os.Stderr, "Warning: failed to release process: %v\n", err)
@@ -387,4 +394,43 @@ func runHook(hook string, dir string) error {
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	return cmd.Run()
+}
+
+// registerWorktree ensures the worktree is registered with main_repo for proper grouping.
+// This is called after starting a server to ensure grove ls can group by project.
+func registerWorktree(reg *registry.Registry, server *registry.Server) {
+	// Detect worktree info to get main repo path
+	wt, err := worktree.DetectAt(server.Path)
+	if err != nil {
+		return // Can't detect worktree, skip registration
+	}
+
+	// Check if worktree already exists with correct main_repo
+	existing, ok := reg.GetWorktree(server.Name)
+	if ok && existing.MainRepo != "" {
+		return // Already has main_repo, no update needed
+	}
+
+	// Create or update worktree entry
+	now := time.Now()
+	wtEntry := &discovery.Worktree{
+		Name:         server.Name,
+		Path:         server.Path,
+		Branch:       server.Branch,
+		MainRepo:     wt.MainWorktreePath,
+		DiscoveredAt: now,
+		LastActivity: now,
+		HasServer:    true,
+	}
+
+	// If worktree existed, preserve discovery time
+	if ok {
+		wtEntry.DiscoveredAt = existing.DiscoveredAt
+		wtEntry.HasClaude = existing.HasClaude
+		wtEntry.HasVSCode = existing.HasVSCode
+		wtEntry.GitDirty = existing.GitDirty
+	}
+
+	// Save worktree (ignore errors - this is best-effort)
+	_ = reg.SetWorktree(wtEntry)
 }
