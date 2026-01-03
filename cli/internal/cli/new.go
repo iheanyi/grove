@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"bufio"
 	"fmt"
 	"os"
 	"os/exec"
@@ -28,13 +29,17 @@ Examples:
   grove new feature-auth              # Create worktree from main/master
   grove new feature-auth develop      # Create worktree from develop branch
   grove new bugfix-123 v1.0.0         # Create worktree from v1.0.0 tag
-  grove new feature-auth --dir ~/worktrees  # Override worktree location`,
+  grove new feature-auth --dir ~/worktrees  # Override worktree location
+  grove new feature-auth --track      # Force tracking existing remote branch
+  grove new feature-auth --no-track   # Force creating new branch (ignore remote)`,
 	Args: cobra.RangeArgs(1, 2),
 	RunE: runNew,
 }
 
 func init() {
 	newCmd.Flags().String("dir", "", "Override worktree parent directory")
+	newCmd.Flags().Bool("track", false, "Force tracking existing remote branch without prompt")
+	newCmd.Flags().Bool("no-track", false, "Force creating new branch even if remote exists")
 }
 
 func runNew(cmd *cobra.Command, args []string) error {
@@ -43,6 +48,15 @@ func runNew(cmd *cobra.Command, args []string) error {
 	// Validate branch name
 	if strings.TrimSpace(branchName) == "" {
 		return fmt.Errorf("branch name cannot be empty")
+	}
+
+	// Get flags
+	forceTrack, _ := cmd.Flags().GetBool("track")
+	forceNoTrack, _ := cmd.Flags().GetBool("no-track")
+
+	// Validate conflicting flags
+	if forceTrack && forceNoTrack {
+		return fmt.Errorf("cannot use both --track and --no-track")
 	}
 
 	// Detect current worktree/repo
@@ -69,9 +83,28 @@ func runNew(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	// Verify base branch exists
-	if err := verifyRefExists(mainRepoPath, baseBranch); err != nil {
-		return fmt.Errorf("base branch '%s' does not exist: %w", baseBranch, err)
+	// Check if the branch exists on remote (unless --no-track is set)
+	trackRemote := false
+	if !forceNoTrack {
+		remoteBranchExists := remoteBranchExists(mainRepoPath, branchName)
+		if remoteBranchExists {
+			if forceTrack {
+				// User explicitly wants to track remote
+				trackRemote = true
+			} else {
+				// Prompt user
+				fmt.Printf("\nBranch '%s' exists on remote (origin/%s).\n", branchName, branchName)
+				trackRemote = promptYesNo("Track existing remote branch?", true)
+				fmt.Println()
+			}
+		}
+	}
+
+	// If not tracking remote, verify base branch exists
+	if !trackRemote {
+		if err := verifyRefExists(mainRepoPath, baseBranch); err != nil {
+			return fmt.Errorf("base branch '%s' does not exist: %w", baseBranch, err)
+		}
 	}
 
 	// Determine repository name from the main repo path
@@ -112,10 +145,18 @@ func runNew(cmd *cobra.Command, args []string) error {
 	}
 
 	// Create the worktree
-	fmt.Printf("Creating worktree '%s' from '%s'...\n", branchName, baseBranch)
-	fmt.Printf("Location: %s\n", worktreePath)
-
-	gitCmd := exec.Command("git", "worktree", "add", "-b", branchName, worktreePath, baseBranch)
+	var gitCmd *exec.Cmd
+	if trackRemote {
+		// Track existing remote branch
+		fmt.Printf("Creating worktree tracking 'origin/%s'...\n", branchName)
+		fmt.Printf("Location: %s\n", worktreePath)
+		gitCmd = exec.Command("git", "worktree", "add", worktreePath, "origin/"+branchName)
+	} else {
+		// Create new branch from base
+		fmt.Printf("Creating worktree '%s' from '%s'...\n", branchName, baseBranch)
+		fmt.Printf("Location: %s\n", worktreePath)
+		gitCmd = exec.Command("git", "worktree", "add", "-b", branchName, worktreePath, baseBranch)
+	}
 	gitCmd.Dir = mainRepoPath
 	gitCmd.Stdout = os.Stdout
 	gitCmd.Stderr = os.Stderr
@@ -126,6 +167,9 @@ func runNew(cmd *cobra.Command, args []string) error {
 
 	fmt.Printf("\nWorktree created successfully!\n")
 	fmt.Printf("Branch: %s\n", branchName)
+	if trackRemote {
+		fmt.Printf("Tracking: origin/%s\n", branchName)
+	}
 	fmt.Printf("Path: %s\n", worktreePath)
 	fmt.Printf("\nTo switch to this worktree:\n")
 	fmt.Printf("  cd %s\n", worktreePath)
@@ -176,4 +220,37 @@ func expandPath(path string) string {
 		}
 	}
 	return path
+}
+
+// remoteBranchExists checks if a branch exists on origin
+func remoteBranchExists(repoPath, branchName string) bool {
+	cmd := exec.Command("git", "rev-parse", "--verify", "origin/"+branchName)
+	cmd.Dir = repoPath
+	return cmd.Run() == nil
+}
+
+// promptYesNo prompts the user with a yes/no question
+// defaultYes determines the default answer when user just presses Enter
+func promptYesNo(question string, defaultYes bool) bool {
+	reader := bufio.NewReader(os.Stdin)
+
+	prompt := question
+	if defaultYes {
+		prompt += " [Y/n]: "
+	} else {
+		prompt += " [y/N]: "
+	}
+	fmt.Print(prompt)
+
+	input, err := reader.ReadString('\n')
+	if err != nil {
+		return defaultYes
+	}
+
+	input = strings.TrimSpace(strings.ToLower(input))
+	if input == "" {
+		return defaultYes
+	}
+
+	return input == "y" || input == "yes"
 }
