@@ -4,6 +4,7 @@ import Combine
 
 class ServerManager: ObservableObject {
     @Published var servers: [Server] = []
+    @Published var agents: [Agent] = []  // Active AI agent sessions
     @Published var proxy: ProxyInfo?
     @Published var urlMode: String = "port"
     @Published var isLoading = false
@@ -227,6 +228,7 @@ class ServerManager: ObservableObject {
                     print("[Grove] refresh() UI updated, cooldown=\(self.isWakeCooldown), calling fetchGitHubInfoForServers...")
                     self.fetchGitHubInfoForServers()
                     self.checkServerHealth()
+                    self.fetchAgents()  // Fetch active AI agents
                     print("[Grove] refresh() DONE - total \(String(format: "%.3f", CFAbsoluteTimeGetCurrent() - refreshStart))s")
                 }
 
@@ -841,6 +843,41 @@ class ServerManager: ObservableObject {
         for name in staleNames {
             previousServerStates.removeValue(forKey: name)
         }
+    }
+
+    // MARK: - Agents
+
+    /// Fetch active AI agent sessions
+    private func fetchAgents() {
+        runGrove(["agents", "--json"]) { [weak self] result in
+            switch result {
+            case .success(let output):
+                guard let data = output.data(using: .utf8),
+                      let agents = try? JSONDecoder().decode([Agent].self, from: data) else {
+                    DispatchQueue.main.async {
+                        self?.agents = []
+                    }
+                    return
+                }
+
+                DispatchQueue.main.async {
+                    self?.agents = agents
+                }
+
+            case .failure:
+                DispatchQueue.main.async {
+                    self?.agents = []
+                }
+            }
+        }
+    }
+
+    var hasActiveAgents: Bool {
+        !agents.isEmpty
+    }
+
+    var agentCount: Int {
+        agents.count
     }
 
     private func fetchGitHubInfoForServers() {

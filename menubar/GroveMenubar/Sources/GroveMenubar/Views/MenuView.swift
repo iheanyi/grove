@@ -238,6 +238,12 @@ struct MenuView: View {
 
             Divider()
 
+            // Active Agents Section
+            if !serverManager.agents.isEmpty {
+                AgentsSectionView()
+                Divider()
+            }
+
             // Servers
             if serverManager.servers.isEmpty {
                 // Enhanced empty state with onboarding
@@ -1159,6 +1165,144 @@ struct DetailRow: View {
                 Text(value)
                     .font(.system(.caption, design: .monospaced))
                     .lineLimit(1)
+            }
+        }
+    }
+}
+
+// MARK: - Agents Section
+
+struct AgentsSectionView: View {
+    @EnvironmentObject var serverManager: ServerManager
+    @State private var isCollapsed = false
+
+    var body: some View {
+        VStack(spacing: 0) {
+            // Section header
+            HStack {
+                HStack(spacing: 6) {
+                    Image(systemName: "brain.head.profile")
+                        .foregroundColor(.purple)
+                        .font(.system(size: 10))
+                    Text("ACTIVE AGENTS")
+                        .font(.caption.weight(.medium))
+                        .foregroundColor(.secondary)
+                }
+                Spacer()
+                Text("\(serverManager.agents.count)")
+                    .font(.caption.weight(.semibold))
+                    .foregroundColor(.secondary)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2)
+                    .background(Color.purple.opacity(0.15))
+                    .cornerRadius(4)
+
+                Image(systemName: isCollapsed ? "chevron.right" : "chevron.down")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+            .padding(.horizontal)
+            .padding(.vertical, 6)
+            .background(Color(NSColor.windowBackgroundColor).opacity(0.6))
+            .contentShape(Rectangle())
+            .onTapGesture {
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    isCollapsed.toggle()
+                }
+            }
+
+            if !isCollapsed {
+                ForEach(serverManager.agents) { agent in
+                    AgentRowView(agent: agent)
+                }
+            }
+        }
+    }
+}
+
+struct AgentRowView: View {
+    let agent: Agent
+    @State private var isHovered = false
+
+    var body: some View {
+        HStack(spacing: 8) {
+            // Agent type icon
+            Image(systemName: agent.iconName)
+                .foregroundColor(.purple)
+                .font(.system(size: 12))
+                .frame(width: 16)
+
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(spacing: 6) {
+                    Text(agent.displayType)
+                        .font(.system(.body, design: .default))
+                        .fontWeight(.medium)
+                        .lineLimit(1)
+
+                    if let duration = agent.duration {
+                        Text(duration)
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                            .padding(.horizontal, 4)
+                            .padding(.vertical, 1)
+                            .background(Color.secondary.opacity(0.1))
+                            .cornerRadius(3)
+                    }
+                }
+
+                HStack(spacing: 4) {
+                    Text(agent.worktree)
+                        .font(.system(.caption, design: .monospaced))
+                        .foregroundColor(.secondary)
+                    Text("•")
+                        .foregroundColor(.secondary.opacity(0.5))
+                    Text(agent.branch)
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+            }
+
+            Spacer()
+
+            // PID badge
+            Text("PID \(agent.pid)")
+                .font(.system(size: 9, design: .monospaced))
+                .foregroundColor(.secondary)
+                .padding(.horizontal, 4)
+                .padding(.vertical, 2)
+                .background(Color.secondary.opacity(0.1))
+                .cornerRadius(3)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .background(
+            RoundedRectangle(cornerRadius: 6)
+                .fill(isHovered ? Color.purple.opacity(0.08) : Color.clear)
+        )
+        .onHover { hovering in
+            withAnimation(.easeInOut(duration: 0.15)) {
+                isHovered = hovering
+            }
+        }
+        .contextMenu {
+            Button {
+                NSWorkspace.shared.selectFile(nil, inFileViewerRootedAtPath: agent.path)
+            } label: {
+                Label("Open in Finder", systemImage: "folder")
+            }
+
+            Button {
+                // Open path in terminal
+                PreferencesManager.shared.openInTerminal(path: agent.path)
+            } label: {
+                Label("Open in Terminal", systemImage: "terminal")
+            }
+
+            Button {
+                NSPasteboard.general.clearContents()
+                NSPasteboard.general.setString(agent.path, forType: .string)
+            } label: {
+                Label("Copy Path", systemImage: "doc.on.doc")
             }
         }
     }
