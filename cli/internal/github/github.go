@@ -10,10 +10,12 @@ import (
 
 // PRInfo contains pull request information
 type PRInfo struct {
-	Number int    `json:"number"`
-	Title  string `json:"title"`
-	URL    string `json:"url"`
-	State  string `json:"state"`
+	Number       int    `json:"number"`
+	Title        string `json:"title"`
+	URL          string `json:"url"`
+	State        string `json:"state"`
+	IsDraft      bool   `json:"isDraft"`
+	ReviewStatus string `json:"reviewStatus,omitempty"` // approved, changes_requested, pending, none
 }
 
 // CIStatus represents CI status for a branch
@@ -71,7 +73,7 @@ func getPRForBranch(branch string) *PRInfo {
 	// Use gh pr list to find PR for this branch
 	cmd := exec.Command("gh", "pr", "list",
 		"--head", branch,
-		"--json", "number,title,url,state",
+		"--json", "number,title,url,state,isDraft,reviewDecision",
 		"--limit", "1")
 
 	output, err := cmd.Output()
@@ -79,7 +81,14 @@ func getPRForBranch(branch string) *PRInfo {
 		return nil
 	}
 
-	var prs []PRInfo
+	var prs []struct {
+		Number         int    `json:"number"`
+		Title          string `json:"title"`
+		URL            string `json:"url"`
+		State          string `json:"state"`
+		IsDraft        bool   `json:"isDraft"`
+		ReviewDecision string `json:"reviewDecision"`
+	}
 	if err := json.Unmarshal(output, &prs); err != nil {
 		return nil
 	}
@@ -88,7 +97,27 @@ func getPRForBranch(branch string) *PRInfo {
 		return nil
 	}
 
-	return &prs[0]
+	pr := &PRInfo{
+		Number:  prs[0].Number,
+		Title:   prs[0].Title,
+		URL:     prs[0].URL,
+		State:   prs[0].State,
+		IsDraft: prs[0].IsDraft,
+	}
+
+	// Map reviewDecision to our status
+	switch prs[0].ReviewDecision {
+	case "APPROVED":
+		pr.ReviewStatus = "approved"
+	case "CHANGES_REQUESTED":
+		pr.ReviewStatus = "changes_requested"
+	case "REVIEW_REQUIRED":
+		pr.ReviewStatus = "pending"
+	default:
+		pr.ReviewStatus = "none"
+	}
+
+	return pr
 }
 
 func getCIStatus(branch string) *CIStatus {
@@ -179,4 +208,58 @@ func FormatPRInfo(pr *PRInfo) string {
 		return ""
 	}
 	return fmt.Sprintf("#%d", pr.Number)
+}
+
+// FormatPRStatus returns a formatted PR state (open, merged, draft, closed)
+func FormatPRStatus(pr *PRInfo) string {
+	if pr == nil {
+		return "-"
+	}
+	if pr.IsDraft {
+		return "draft"
+	}
+	switch pr.State {
+	case "OPEN":
+		return "open"
+	case "MERGED":
+		return "merged"
+	case "CLOSED":
+		return "closed"
+	default:
+		return strings.ToLower(pr.State)
+	}
+}
+
+// FormatReviewStatus returns a formatted review status
+func FormatReviewStatus(pr *PRInfo) string {
+	if pr == nil {
+		return "-"
+	}
+	switch pr.ReviewStatus {
+	case "approved":
+		return "approved"
+	case "changes_requested":
+		return "changes"
+	case "pending":
+		return "pending"
+	default:
+		return "-"
+	}
+}
+
+// FormatReviewStatusEmoji returns an emoji for review status
+func FormatReviewStatusEmoji(pr *PRInfo) string {
+	if pr == nil {
+		return ""
+	}
+	switch pr.ReviewStatus {
+	case "approved":
+		return "✓"
+	case "changes_requested":
+		return "⚠"
+	case "pending":
+		return "◐"
+	default:
+		return ""
+	}
 }

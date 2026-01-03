@@ -64,11 +64,44 @@ type Server struct {
 
 	// LogFile is the path to the log file
 	LogFile string `json:"log_file,omitempty"`
+
+	// Tags is a list of user-defined tags for categorization
+	Tags []string `json:"tags,omitempty"`
 }
 
 // IsRunning returns true if the server is currently running
 func (s *Server) IsRunning() bool {
 	return s.Status == StatusRunning || s.Status == StatusStarting
+}
+
+// HasTag returns true if the server has the specified tag
+func (s *Server) HasTag(tag string) bool {
+	for _, t := range s.Tags {
+		if t == tag {
+			return true
+		}
+	}
+	return false
+}
+
+// AddTag adds a tag to the server if it doesn't already exist
+func (s *Server) AddTag(tag string) bool {
+	if s.HasTag(tag) {
+		return false
+	}
+	s.Tags = append(s.Tags, tag)
+	return true
+}
+
+// RemoveTag removes a tag from the server, returns true if tag was removed
+func (s *Server) RemoveTag(tag string) bool {
+	for i, t := range s.Tags {
+		if t == tag {
+			s.Tags = append(s.Tags[:i], s.Tags[i+1:]...)
+			return true
+		}
+	}
+	return false
 }
 
 // Uptime returns the duration the server has been running

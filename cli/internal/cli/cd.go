@@ -2,6 +2,10 @@ package cli
 
 import (
 	"fmt"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"strings"
 
 	"github.com/iheanyi/grove/internal/registry"
 	"github.com/iheanyi/grove/internal/worktree"
@@ -9,63 +13,137 @@ import (
 )
 
 var cdCmd = &cobra.Command{
-	Use:   "cd [name]",
-	Short: "Print the path to a worktree's directory",
-	Long: `Print the path to a worktree's directory for shell integration.
+	Use:   "cd <name>",
+	Short: "Output the path to a worktree (for shell integration)",
+	Long: `Output the path to a worktree for use in shell functions.
 
-This command is designed to work with a shell function. Add this to your
-shell configuration:
+This command prints ONLY the path to stdout, making it suitable for shell integration.
+It looks up the worktree by name in the registry first, then falls back to git worktree list.
 
-  # Bash/Zsh
-  wtcd() { cd "$(grove cd "$@")" }
+Shell integration example (add to .bashrc/.zshrc):
 
-  # Fish
-  function wtcd; cd (grove cd $argv); end
-
-Then use 'wtcd <name>' to change to a worktree's directory.
+  grovecd() { cd "$(grove cd "$@")" && grove start 2>/dev/null || true; }
 
 Examples:
-  grove cd                # Print path for current worktree
-  grove cd feature-auth   # Print path for named worktree
-  wtcd feature-auth    # Change to worktree directory (with shell function)`,
-	Args: cobra.MaximumNArgs(1),
+  grove cd feature-auth     # Output path to feature-auth worktree
+  cd "$(grove cd myapp)"    # Change to myapp worktree directory`,
+	Args: cobra.ExactArgs(1),
 	RunE: runCd,
 }
 
-func init() {
-	rootCmd.AddCommand(cdCmd)
+func runCd(cmd *cobra.Command, args []string) error {
+	name := args[0]
+
+	// First, try to find in registry (servers)
+	reg, err := registry.Load()
+	if err == nil {
+		if server, ok := reg.Get(name); ok {
+			if _, err := os.Stat(server.Path); err == nil {
+				fmt.Println(server.Path)
+				return nil
+			}
+		}
+
+		// Try worktrees in registry
+		if wt, ok := reg.GetWorktree(name); ok {
+			if _, err := os.Stat(wt.Path); err == nil {
+				fmt.Println(wt.Path)
+				return nil
+			}
+		}
+	}
+
+	// Fallback: try to find via git worktree list
+	path, err := findWorktreeByName(name)
+	if err != nil {
+		return fmt.Errorf("worktree '%s' not found", name)
+	}
+
+	fmt.Println(path)
+	return nil
 }
 
-func runCd(cmd *cobra.Command, args []string) error {
-	var name string
-
-	if len(args) > 0 {
-		name = args[0]
-	} else {
-		// Use current worktree
-		wt, err := worktree.Detect()
-		if err != nil {
-			return fmt.Errorf("failed to detect worktree: %w", err)
+// findWorktreeByName searches for a worktree by name using git worktree list
+func findWorktreeByName(name string) (string, error) {
+	// First, try to detect current repo to get main repo path
+	currentWt, err := worktree.Detect()
+	if err == nil {
+		// Determine the main repository path
+		mainRepoPath := currentWt.Path
+		if currentWt.IsWorktree && currentWt.MainWorktreePath != "" {
+			mainRepoPath = currentWt.MainWorktreePath
 		}
-		name = wt.Name
+
+		// Search worktrees from current repo
+		path, err := searchWorktreesFromRepo(mainRepoPath, name)
+		if err == nil {
+			return path, nil
+		}
 	}
 
-	// Load registry
+	// If not in a git repo or not found, try searching from registry worktrees
 	reg, err := registry.Load()
 	if err != nil {
-		return fmt.Errorf("failed to load registry: %w", err)
+		return "", fmt.Errorf("not found")
 	}
 
-	server, ok := reg.Get(name)
-	if !ok {
-		return fmt.Errorf("no server registered for '%s'", name)
+	// Get a list of unique main repo paths from worktrees
+	seenRepos := make(map[string]bool)
+	for _, wt := range reg.ListWorktrees() {
+		mainRepo := wt.MainRepo
+		if mainRepo == "" {
+			mainRepo = wt.Path
+		}
+		if !seenRepos[mainRepo] {
+			seenRepos[mainRepo] = true
+			path, err := searchWorktreesFromRepo(mainRepo, name)
+			if err == nil {
+				return path, nil
+			}
+		}
 	}
 
-	if server.Path == "" {
-		return fmt.Errorf("no path stored for '%s'", name)
+	// Also check server paths for main repos
+	for _, server := range reg.List() {
+		if server.Path != "" && !seenRepos[server.Path] {
+			seenRepos[server.Path] = true
+			path, err := searchWorktreesFromRepo(server.Path, name)
+			if err == nil {
+				return path, nil
+			}
+		}
 	}
 
-	// Just print the path - the shell function handles the cd
-	fmt.Println(server.Path)
-	return nil
+	return "", fmt.Errorf("worktree '%s' not found", name)
+}
+
+// searchWorktreesFromRepo searches for a worktree by name within a git repository
+func searchWorktreesFromRepo(repoPath string, name string) (string, error) {
+	cmd := exec.Command("git", "worktree", "list", "--porcelain")
+	cmd.Dir = repoPath
+	output, err := cmd.Output()
+	if err != nil {
+		return "", err
+	}
+
+	lines := strings.Split(string(output), "\n")
+	var currentPath string
+
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if strings.HasPrefix(line, "worktree ") {
+			currentPath = strings.TrimPrefix(line, "worktree ")
+
+			// Check if the base name matches
+			baseName := filepath.Base(currentPath)
+			if baseName == name {
+				// Verify the path exists
+				if _, err := os.Stat(currentPath); err == nil {
+					return currentPath, nil
+				}
+			}
+		}
+	}
+
+	return "", fmt.Errorf("not found in repo")
 }
