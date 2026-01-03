@@ -16,17 +16,25 @@ var newCmd = &cobra.Command{
 	Short: "Create a new git worktree with the given branch name",
 	Long: `Create a new git worktree with the given branch name.
 
-The worktree is created in a sibling directory to the current repository,
+By default, the worktree is created in a sibling directory to the current repository,
 using the pattern: <repo-name>-<branch-name>
+
+If worktrees_dir is configured in ~/.config/grove/config.yaml, worktrees are created
+in a centralized location: <worktrees_dir>/<project>/<branch>
 
 If base-branch is not specified, it defaults to 'main' or 'master' (auto-detected).
 
 Examples:
   grove new feature-auth              # Create worktree from main/master
   grove new feature-auth develop      # Create worktree from develop branch
-  grove new bugfix-123 v1.0.0         # Create worktree from v1.0.0 tag`,
+  grove new bugfix-123 v1.0.0         # Create worktree from v1.0.0 tag
+  grove new feature-auth --dir ~/worktrees  # Override worktree location`,
 	Args: cobra.RangeArgs(1, 2),
 	RunE: runNew,
+}
+
+func init() {
+	newCmd.Flags().String("dir", "", "Override worktree parent directory")
 }
 
 func runNew(cmd *cobra.Command, args []string) error {
@@ -69,16 +77,38 @@ func runNew(cmd *cobra.Command, args []string) error {
 	// Determine repository name from the main repo path
 	repoName := filepath.Base(mainRepoPath)
 
-	// Create worktree directory name
-	worktreeName := fmt.Sprintf("%s-%s", repoName, branchName)
+	// Determine worktree path based on config/flags
+	var worktreePath string
+	var worktreeName string
 
-	// Determine parent directory (sibling to main repo)
-	parentDir := filepath.Dir(mainRepoPath)
-	worktreePath := filepath.Join(parentDir, worktreeName)
+	dirOverride, _ := cmd.Flags().GetString("dir")
+
+	if dirOverride != "" {
+		// Flag override: use <dir>/<project>/<branch>
+		expandedDir := expandPath(dirOverride)
+		worktreePath = filepath.Join(expandedDir, repoName, branchName)
+		worktreeName = fmt.Sprintf("%s-%s", repoName, branchName)
+	} else if cfg.WorktreesDir != "" {
+		// Centralized worktrees: use <worktrees_dir>/<project>/<branch>
+		expandedDir := expandPath(cfg.WorktreesDir)
+		worktreePath = filepath.Join(expandedDir, repoName, branchName)
+		worktreeName = fmt.Sprintf("%s-%s", repoName, branchName)
+	} else {
+		// Default: sibling directory to main repo
+		worktreeName = fmt.Sprintf("%s-%s", repoName, branchName)
+		parentDir := filepath.Dir(mainRepoPath)
+		worktreePath = filepath.Join(parentDir, worktreeName)
+	}
 
 	// Check if worktree path already exists
 	if _, err := os.Stat(worktreePath); err == nil {
 		return fmt.Errorf("worktree directory already exists: %s", worktreePath)
+	}
+
+	// Ensure parent directory exists for centralized worktrees
+	parentDir := filepath.Dir(worktreePath)
+	if err := os.MkdirAll(parentDir, 0755); err != nil {
+		return fmt.Errorf("failed to create parent directory: %w", err)
 	}
 
 	// Create the worktree
@@ -136,4 +166,14 @@ func verifyRefExists(repoPath, ref string) error {
 	cmd := exec.Command("git", "rev-parse", "--verify", ref)
 	cmd.Dir = repoPath
 	return cmd.Run()
+}
+
+// expandPath expands ~ to the home directory
+func expandPath(path string) string {
+	if strings.HasPrefix(path, "~/") {
+		if home, err := os.UserHomeDir(); err == nil {
+			return filepath.Join(home, path[2:])
+		}
+	}
+	return path
 }

@@ -2,6 +2,7 @@ package cli
 
 import (
 	"fmt"
+	"os"
 	"time"
 
 	"github.com/iheanyi/grove/internal/registry"
@@ -58,8 +59,9 @@ func runRestart(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("server '%s' is not running\nUse 'grove start' to start it", name)
 	}
 
-	// Remember the command for restart
+	// Remember the command and path for restart
 	command := server.Command
+	serverPath := server.Path
 
 	// Stop the server
 	fmt.Println("Stopping server...")
@@ -69,6 +71,17 @@ func runRestart(cmd *cobra.Command, args []string) error {
 
 	// Wait a moment for port to be released
 	time.Sleep(500 * time.Millisecond)
+
+	// Change to the server's directory before starting
+	// This ensures worktree detection finds the correct worktree
+	originalDir, err := os.Getwd()
+	if err != nil {
+		return fmt.Errorf("failed to get current directory: %w", err)
+	}
+	if err := os.Chdir(serverPath); err != nil {
+		return fmt.Errorf("failed to change to server directory %s: %w", serverPath, err)
+	}
+	defer os.Chdir(originalDir) //nolint:errcheck
 
 	// Start the server with the same command
 	fmt.Println("Starting server...")

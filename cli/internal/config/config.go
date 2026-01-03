@@ -25,6 +25,12 @@ type Config struct {
 	PortMin int `yaml:"port_min"`
 	PortMax int `yaml:"port_max"`
 
+	// Worktree management
+	// WorktreesDir is the centralized directory for worktrees.
+	// When set, new worktrees are created in: <worktrees_dir>/<project>/<branch>
+	// When empty (default), worktrees are created as siblings to the main repo.
+	WorktreesDir string `yaml:"worktrees_dir"`
+
 	// URL mode: "port" (default) or "subdomain"
 	// - port: http://localhost:PORT (simpler, no proxy needed)
 	// - subdomain: https://name.localhost (requires proxy, may conflict with app subdomains)
