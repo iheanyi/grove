@@ -17,15 +17,26 @@ func IsAvailable(port int) bool {
 	return true
 }
 
-// IsListening checks if something is listening on the given port
+// IsListening checks if something is listening on the given port.
+// Tries both IPv4 (127.0.0.1) and IPv6 (::1) since servers may bind to either.
 func IsListening(port int) bool {
+	// Try IPv4 first
 	addr := fmt.Sprintf("127.0.0.1:%d", port)
 	conn, err := net.DialTimeout("tcp", addr, 100*time.Millisecond)
-	if err != nil {
-		return false
+	if err == nil {
+		conn.Close()
+		return true
 	}
-	conn.Close()
-	return true
+
+	// Try IPv6
+	addr = fmt.Sprintf("[::1]:%d", port)
+	conn, err = net.DialTimeout("tcp", addr, 100*time.Millisecond)
+	if err == nil {
+		conn.Close()
+		return true
+	}
+
+	return false
 }
 
 // WaitForPort waits for a port to become available (listening)
