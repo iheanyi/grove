@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
 	"sort"
 	"strings"
 
@@ -44,6 +45,8 @@ func init() {
 	lsCmd.Flags().Bool("running", false, "Only show running servers (deprecated, use --servers)")
 	lsCmd.Flags().Bool("fast", false, "Skip activity detection (Claude, VSCode, git status) for faster output")
 	lsCmd.Flags().Bool("full", false, "Show full info including GitHub PR/CI/review status")
+	lsCmd.Flags().StringSlice("tag", nil, "Filter by tag (can be specified multiple times, uses OR logic)")
+	lsCmd.Flags().String("group", "mainRepo", "Group by: mainRepo (default), activity, status, none")
 }
 
 func runLs(cmd *cobra.Command, args []string) error {
@@ -54,6 +57,8 @@ func runLs(cmd *cobra.Command, args []string) error {
 	showAll, _ := cmd.Flags().GetBool("all")
 	fastMode, _ := cmd.Flags().GetBool("fast")
 	fullMode, _ := cmd.Flags().GetBool("full")
+	tagFilters, _ := cmd.Flags().GetStringSlice("tag")
+	groupBy, _ := cmd.Flags().GetString("group")
 	_ = showAll // Reserved for future use
 
 	// Backward compatibility: --running implies --servers
@@ -102,6 +107,7 @@ func runLs(cmd *cobra.Command, args []string) error {
 			MainRepo:  mainRepo,
 			Server:    server,
 			HasServer: true,
+			Tags:      server.Tags,
 		}
 	}
 
@@ -140,6 +146,24 @@ func runLs(cmd *cobra.Command, args []string) error {
 		if onlyActive && !view.HasServer && !view.HasClaude && !view.HasVSCode && !view.GitDirty {
 			continue
 		}
+		// Tag filtering (OR logic - match any of the specified tags)
+		if len(tagFilters) > 0 {
+			hasMatchingTag := false
+			for _, filterTag := range tagFilters {
+				for _, viewTag := range view.Tags {
+					if viewTag == filterTag {
+						hasMatchingTag = true
+						break
+					}
+				}
+				if hasMatchingTag {
+					break
+				}
+			}
+			if !hasMatchingTag {
+				continue
+			}
+		}
 		filtered = append(filtered, view)
 	}
 
@@ -161,10 +185,10 @@ func runLs(cmd *cobra.Command, args []string) error {
 	}
 
 	if outputJSON {
-		return outputJSONFormatNew(filtered, reg.GetProxy(), fullMode, githubInfoMap)
+		return outputJSONFormatNew(filtered, reg.GetProxy(), fullMode, githubInfoMap, groupBy)
 	}
 
-	return outputTableFormatNew(filtered, reg.GetProxy(), fullMode, githubInfoMap)
+	return outputTableFormatNew(filtered, reg.GetProxy(), fullMode, githubInfoMap, groupBy)
 }
 
 type jsonProxy struct {
@@ -202,9 +226,10 @@ type WorktreeView struct {
 	HasClaude bool
 	HasVSCode bool
 	GitDirty  bool
+	Tags      []string
 }
 
-func outputJSONFormatNew(views []*WorktreeView, proxy *registry.ProxyInfo, fullMode bool, githubInfoMap map[string]*github.BranchInfo) error {
+func outputJSONFormatNew(views []*WorktreeView, proxy *registry.ProxyInfo, fullMode bool, githubInfoMap map[string]*github.BranchInfo, groupBy string) error {
 	type jsonGitHubInfo struct {
 		PRNumber     int    `json:"pr_number,omitempty"`
 		PRStatus     string `json:"pr_status,omitempty"`
@@ -228,6 +253,8 @@ func outputJSONFormatNew(views []*WorktreeView, proxy *registry.ProxyInfo, fullM
 		PID       int             `json:"pid,omitempty"`
 		Uptime    string          `json:"uptime,omitempty"`
 		LogFile   string          `json:"log_file,omitempty"`
+		Tags      []string        `json:"tags,omitempty"`
+		Group     string          `json:"group,omitempty"`
 		GitHub    *jsonGitHubInfo `json:"github,omitempty"`
 	}
 
@@ -235,11 +262,13 @@ func outputJSONFormatNew(views []*WorktreeView, proxy *registry.ProxyInfo, fullM
 		Worktrees []*jsonWorktreeView `json:"worktrees"`
 		Proxy     *jsonProxy          `json:"proxy,omitempty"`
 		URLMode   string              `json:"url_mode"`
+		GroupBy   string              `json:"group_by,omitempty"`
 	}
 
 	out := output{
 		Worktrees: make([]*jsonWorktreeView, 0, len(views)),
 		URLMode:   string(cfg.URLMode),
+		GroupBy:   groupBy,
 	}
 
 	// Only include proxy info if in subdomain mode
@@ -266,6 +295,8 @@ func outputJSONFormatNew(views []*WorktreeView, proxy *registry.ProxyInfo, fullM
 			HasClaude: view.HasClaude,
 			HasVSCode: view.HasVSCode,
 			GitDirty:  view.GitDirty,
+			Tags:      view.Tags,
+			Group:     getGroupForView(view, groupBy),
 		}
 
 		if view.Server != nil {
@@ -305,14 +336,61 @@ func outputJSONFormatNew(views []*WorktreeView, proxy *registry.ProxyInfo, fullM
 	return enc.Encode(out)
 }
 
-func outputTableFormatNew(views []*WorktreeView, proxy *registry.ProxyInfo, fullMode bool, githubInfoMap map[string]*github.BranchInfo) error {
+func outputTableFormatNew(views []*WorktreeView, proxy *registry.ProxyInfo, fullMode bool, githubInfoMap map[string]*github.BranchInfo, groupBy string) error {
 	if len(views) == 0 {
 		fmt.Println("No worktrees discovered")
 		fmt.Println("\nUse 'grove discover' to scan for git worktrees, or 'grove start <command>' to start a server")
 		return nil
 	}
 
-	// Build table rows
+	// Group views if grouping is enabled
+	if groupBy != "none" && groupBy != "" {
+		groups := groupViewsMap(views, groupBy)
+		groupOrder := getGroupOrder(groupBy, groups)
+
+		for _, groupName := range groupOrder {
+			groupViews := groups[groupName]
+			if len(groupViews) == 0 {
+				continue
+			}
+
+			// Print group header
+			fmt.Printf("\n=== %s ===\n", strings.ToUpper(groupName))
+			printViewsTable(groupViews, fullMode, githubInfoMap)
+		}
+	} else {
+		// No grouping, print flat list
+		printViewsTable(views, fullMode, githubInfoMap)
+	}
+
+	// Legend
+	fmt.Println()
+	if fullMode {
+		fmt.Println("Legend: running  stopped  Claude  clean  dirty")
+		fmt.Println("PR: open/draft/merged/closed  CI: success  failure  pending")
+		fmt.Println("Review: approved/changes/pending")
+	} else {
+		fmt.Println("Legend: running  stopped  Claude  VS Code  clean  dirty")
+	}
+
+	// Proxy status (only relevant in subdomain mode)
+	fmt.Println()
+	if cfg.IsSubdomainMode() {
+		if proxy.IsRunning() {
+			fmt.Printf("Proxy: running on :%d/:%d (PID: %d)\n",
+				proxy.HTTPPort, proxy.HTTPSPort, proxy.PID)
+		} else {
+			fmt.Println("Proxy: not running (use 'grove proxy start' to start)")
+		}
+	} else {
+		fmt.Printf("URL mode: port (access servers directly via http://localhost:PORT)\n")
+	}
+
+	return nil
+}
+
+// printViewsTable prints a table of views
+func printViewsTable(views []*WorktreeView, fullMode bool, githubInfoMap map[string]*github.BranchInfo) {
 	var rows [][]string
 	for _, view := range views {
 		// Server status with emoji
@@ -436,31 +514,6 @@ func outputTableFormatNew(views []*WorktreeView, proxy *registry.ProxyInfo, full
 	}
 
 	fmt.Println(t)
-
-	// Legend
-	fmt.Println()
-	if fullMode {
-		fmt.Println("Legend: ● running  ○ stopped  🤖 Claude  ✓ clean  📝 dirty")
-		fmt.Println("PR: open/draft/merged/closed  CI: ✓ success  ✗ failure  ◐ pending")
-		fmt.Println("Review: approved/changes/pending")
-	} else {
-		fmt.Println("Legend: ● running  ○ stopped  🤖 Claude  💻 VS Code  ✓ clean  📝 dirty")
-	}
-
-	// Proxy status (only relevant in subdomain mode)
-	fmt.Println()
-	if cfg.IsSubdomainMode() {
-		if proxy.IsRunning() {
-			fmt.Printf("Proxy: running on :%d/:%d (PID: %d)\n",
-				proxy.HTTPPort, proxy.HTTPSPort, proxy.PID)
-		} else {
-			fmt.Println("Proxy: not running (use 'grove proxy start' to start)")
-		}
-	} else {
-		fmt.Printf("URL mode: port (access servers directly via http://localhost:PORT)\n")
-	}
-
-	return nil
 }
 
 // autoDiscoverCurrentRepo discovers worktrees from the current git repo and registers them.
@@ -488,5 +541,92 @@ func autoDiscoverCurrentRepo(reg *registry.Registry) {
 				continue
 			}
 		}
+	}
+}
+
+// getGroupForView returns the group name for a view based on the groupBy strategy
+func getGroupForView(view *WorktreeView, groupBy string) string {
+	switch groupBy {
+	case "mainRepo":
+		if view.MainRepo != "" {
+			return filepath.Base(view.MainRepo)
+		}
+		return "unknown"
+	case "activity":
+		// Active: has running server, Claude, or VSCode
+		if view.Server != nil && view.Server.IsRunning() {
+			return "active"
+		}
+		if view.HasClaude || view.HasVSCode {
+			return "active"
+		}
+		// Recent: has git changes (dirty)
+		if view.GitDirty {
+			return "recent"
+		}
+		// Stale: no activity
+		return "stale"
+	case "status":
+		if view.Server == nil {
+			return "no-server"
+		}
+		switch view.Server.Status {
+		case registry.StatusRunning, registry.StatusStarting:
+			return "running"
+		case registry.StatusStopped, registry.StatusStopping:
+			return "stopped"
+		case registry.StatusCrashed:
+			return "error"
+		default:
+			return "stopped"
+		}
+	case "none":
+		return ""
+	default:
+		return ""
+	}
+}
+
+// groupViewsMap groups views by the specified groupBy strategy
+func groupViewsMap(views []*WorktreeView, groupBy string) map[string][]*WorktreeView {
+	groups := make(map[string][]*WorktreeView)
+	for _, view := range views {
+		group := getGroupForView(view, groupBy)
+		groups[group] = append(groups[group], view)
+	}
+	return groups
+}
+
+// getGroupOrder returns the ordered list of group names for display
+func getGroupOrder(groupBy string, groups map[string][]*WorktreeView) []string {
+	switch groupBy {
+	case "activity":
+		// Fixed order: active, recent, stale
+		order := []string{}
+		for _, g := range []string{"active", "recent", "stale"} {
+			if _, ok := groups[g]; ok {
+				order = append(order, g)
+			}
+		}
+		return order
+	case "status":
+		// Fixed order: running, stopped, error, no-server
+		order := []string{}
+		for _, g := range []string{"running", "stopped", "error", "no-server"} {
+			if _, ok := groups[g]; ok {
+				order = append(order, g)
+			}
+		}
+		return order
+	case "mainRepo":
+		// Sort alphabetically
+		order := make([]string, 0, len(groups))
+		for g := range groups {
+			order = append(order, g)
+		}
+		sort.Strings(order)
+		return order
+	default:
+		return []string{""}
 	}
 }
