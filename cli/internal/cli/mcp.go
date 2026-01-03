@@ -543,6 +543,42 @@ func (s *mcpServer) handleToolsList(req *jsonRPCRequest) {
 				},
 			},
 		},
+		{
+			Name:        "grove_restart",
+			Description: "Restart a running dev server by name.",
+			InputSchema: inputSchema{
+				Type: "object",
+				Properties: map[string]property{
+					"name": {
+						Type:        "string",
+						Description: "Name of the server to restart (from grove_list)",
+					},
+				},
+				Required: []string{"name"},
+			},
+		},
+		{
+			Name:        "grove_new",
+			Description: "Create a new git worktree for a branch. Creates the worktree and registers it with grove.",
+			InputSchema: inputSchema{
+				Type: "object",
+				Properties: map[string]property{
+					"branch": {
+						Type:        "string",
+						Description: "Name of the branch to create (e.g., 'feature-auth')",
+					},
+					"base": {
+						Type:        "string",
+						Description: "Base branch to create from (optional, defaults to main/master)",
+					},
+					"path": {
+						Type:        "string",
+						Description: "Path to the main repository (optional, defaults to current directory)",
+					},
+				},
+				Required: []string{"branch"},
+			},
+		},
 	}
 
 	s.sendResult(req.ID, toolsListResult{Tools: tools})
@@ -568,6 +604,10 @@ func (s *mcpServer) handleToolsCall(req *jsonRPCRequest) {
 		result = s.toolURL(params.Arguments)
 	case "grove_status":
 		result = s.toolStatus(params.Arguments)
+	case "grove_restart":
+		result = s.toolRestart(params.Arguments)
+	case "grove_new":
+		result = s.toolNew(params.Arguments)
 	default:
 		result = callToolResult{
 			Content: []toolContent{{Type: "text", Text: fmt.Sprintf("Unknown tool: %s", params.Name)}},
@@ -869,6 +909,151 @@ func (s *mcpServer) toolStatus(args map[string]interface{}) callToolResult {
 	if server.LogFile != "" {
 		sb.WriteString(fmt.Sprintf("- Log File: %s\n", server.LogFile))
 	}
+
+	return mcpTextResult(sb.String())
+}
+
+func (s *mcpServer) toolRestart(args map[string]interface{}) callToolResult {
+	name, ok := args["name"].(string)
+	if !ok || name == "" {
+		return mcpErrorResult("name is required")
+	}
+
+	reg, err := registry.Load()
+	if err != nil {
+		return mcpErrorResult(fmt.Sprintf("Failed to load registry: %v", err))
+	}
+
+	server, ok := reg.Get(name)
+	if !ok {
+		return mcpErrorResult(fmt.Sprintf("No server registered for '%s'", name))
+	}
+
+	// Stop if running
+	if server.IsRunning() {
+		process, err := os.FindProcess(server.PID)
+		if err == nil {
+			process.Kill() //nolint:errcheck // Best effort during restart
+		}
+		time.Sleep(500 * time.Millisecond)
+	}
+
+	// Restart using the same command
+	if len(server.Command) == 0 {
+		return mcpErrorResult(fmt.Sprintf("Server '%s' has no command recorded", name))
+	}
+
+	// Re-use the start logic
+	startArgs := map[string]interface{}{
+		"command": strings.Join(server.Command, " "),
+		"path":    server.Path,
+	}
+
+	return s.toolStart(startArgs)
+}
+
+func (s *mcpServer) toolNew(args map[string]interface{}) callToolResult {
+	branch, ok := args["branch"].(string)
+	if !ok || branch == "" {
+		return mcpErrorResult("branch is required")
+	}
+
+	baseBranch := ""
+	if b, ok := args["base"].(string); ok {
+		baseBranch = b
+	}
+
+	path := "."
+	if p, ok := args["path"].(string); ok && p != "" {
+		path = p
+	}
+
+	// Make path absolute
+	absPath, err := filepath.Abs(path)
+	if err != nil {
+		return mcpErrorResult(fmt.Sprintf("Invalid path: %v", err))
+	}
+
+	// Detect worktree/repo info
+	wt, err := worktree.DetectAt(absPath)
+	if err != nil {
+		return mcpErrorResult(fmt.Sprintf("Failed to detect git repository: %v", err))
+	}
+
+	// Get the main repo path
+	mainRepoPath := absPath
+	if wt.IsWorktree && wt.MainWorktreePath != "" {
+		mainRepoPath = wt.MainWorktreePath
+	}
+
+	// Determine base branch
+	if baseBranch == "" {
+		// Try to detect default branch
+		cmd := exec.Command("git", "symbolic-ref", "refs/remotes/origin/HEAD")
+		cmd.Dir = mainRepoPath
+		output, err := cmd.Output()
+		if err == nil {
+			ref := strings.TrimSpace(string(output))
+			baseBranch = strings.TrimPrefix(ref, "refs/remotes/origin/")
+		} else {
+			// Fallback to main or master
+			for _, candidate := range []string{"main", "master"} {
+				checkCmd := exec.Command("git", "rev-parse", "--verify", candidate)
+				checkCmd.Dir = mainRepoPath
+				if err := checkCmd.Run(); err == nil {
+					baseBranch = candidate
+					break
+				}
+			}
+		}
+		if baseBranch == "" {
+			return mcpErrorResult("Could not determine base branch. Please specify with 'base' parameter.")
+		}
+	}
+
+	// Get repo name for worktree naming
+	repoName := filepath.Base(mainRepoPath)
+	if repoName == ".bare" {
+		repoName = filepath.Base(filepath.Dir(mainRepoPath))
+	}
+
+	// Sanitize branch name for directory
+	sanitizedBranch := worktree.Sanitize(branch)
+	worktreeName := fmt.Sprintf("%s-%s", repoName, sanitizedBranch)
+
+	// Determine worktree path
+	var worktreePath string
+	if cfg.WorktreesDir != "" {
+		expandedDir := expandPath(cfg.WorktreesDir)
+		worktreePath = filepath.Join(expandedDir, repoName, sanitizedBranch)
+	} else {
+		// Create as sibling to main repo
+		parentDir := filepath.Dir(mainRepoPath)
+		worktreePath = filepath.Join(parentDir, worktreeName)
+	}
+
+	// Create parent directories if needed
+	if err := os.MkdirAll(filepath.Dir(worktreePath), 0755); err != nil {
+		return mcpErrorResult(fmt.Sprintf("Failed to create parent directory: %v", err))
+	}
+
+	// Create the worktree
+	cmd := exec.Command("git", "worktree", "add", "-b", branch, worktreePath, baseBranch)
+	cmd.Dir = mainRepoPath
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return mcpErrorResult(fmt.Sprintf("Failed to create worktree: %v\nOutput: %s", err, string(output)))
+	}
+
+	var sb strings.Builder
+	sb.WriteString("Worktree created successfully!\n\n")
+	sb.WriteString(fmt.Sprintf("- Name: %s\n", worktreeName))
+	sb.WriteString(fmt.Sprintf("- Branch: %s\n", branch))
+	sb.WriteString(fmt.Sprintf("- Path: %s\n", worktreePath))
+	sb.WriteString(fmt.Sprintf("- Based on: %s\n", baseBranch))
+	sb.WriteString("\nTo start working:\n")
+	sb.WriteString(fmt.Sprintf("  cd %s\n", worktreePath))
+	sb.WriteString("  grove start <command>\n")
 
 	return mcpTextResult(sb.String())
 }

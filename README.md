@@ -134,6 +134,8 @@ grove clone https://github.com/user/repo.git --branch develop
 grove new <branch-name> [base-branch]
 grove new feature-auth              # From main/master
 grove new bugfix-123 develop        # From develop branch
+grove new feature-auth --name auth  # Custom short name
+grove new feature-auth --dir ~/worktrees  # Override worktree location
 
 # Switch to a worktree (opens new terminal)
 grove switch <worktree-name>
@@ -207,6 +209,7 @@ grove attach 8080 --url /api         # Only route /api paths
 # Remove from tracking without stopping
 grove detach
 grove detach my-server
+grove detach server1 server2 server3  # Remove multiple at once
 ```
 
 ### Interactive Selection
@@ -246,6 +249,21 @@ grove doctor   # Diagnose common issues
 grove cleanup  # Remove stale registry entries
 grove setup    # One-time setup (trust CA cert for HTTPS)
 ```
+
+### Claude Code Hooks
+
+Install hooks that help AI agents use Grove effectively:
+
+```bash
+grove hooks install    # Install hooks to .claude/settings.json
+grove hooks uninstall  # Remove Grove hooks
+```
+
+The hooks:
+- Show grove server status at session start
+- Suggest `grove start` when running dev server commands directly
+- Suggest `grove new` when using `git worktree add`
+- Remind about documentation updates when code changes
 
 ## TUI Dashboard
 
@@ -394,8 +412,10 @@ claude mcp list
 | `grove_list` | List all registered dev servers and their URLs |
 | `grove_start` | Start a dev server for a git worktree |
 | `grove_stop` | Stop a running dev server by name |
+| `grove_restart` | Restart a dev server |
 | `grove_url` | Get the URL for a worktree's dev server |
 | `grove_status` | Get detailed status of a dev server |
+| `grove_new` | Create a new git worktree |
 
 ## Configuration
 
@@ -411,6 +431,10 @@ port_max: 3999
 
 # TLD for local domains (only used in subdomain mode)
 tld: localhost
+
+# Centralized worktree directory (optional)
+# When set, grove new creates worktrees at: <worktrees_dir>/<project>/<branch>
+# worktrees_dir: ~/worktrees
 
 # Server behavior
 idle_timeout: 30m          # Auto-stop after inactivity (0 to disable)
