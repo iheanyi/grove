@@ -82,10 +82,16 @@ func runLs(cmd *cobra.Command, args []string) error {
 
 	// Add all registered servers
 	for _, server := range reg.List() {
+		// Try to get main_repo from worktree registry
+		var mainRepo string
+		if wt, exists := reg.GetWorktree(server.Name); exists {
+			mainRepo = wt.MainRepo
+		}
 		views[server.Name] = &WorktreeView{
 			Name:      server.Name,
 			Path:      server.Path,
 			Branch:    server.Branch,
+			MainRepo:  mainRepo,
 			Server:    server,
 			HasServer: true,
 		}
@@ -98,12 +104,14 @@ func runLs(cmd *cobra.Command, args []string) error {
 			view.HasClaude = wt.HasClaude
 			view.HasVSCode = wt.HasVSCode
 			view.GitDirty = wt.GitDirty
+			view.MainRepo = wt.MainRepo
 		} else {
 			// New worktree without server
 			views[wt.Name] = &WorktreeView{
 				Name:      wt.Name,
 				Path:      wt.Path,
 				Branch:    wt.Branch,
+				MainRepo:  wt.MainRepo,
 				HasServer: false,
 				HasClaude: wt.HasClaude,
 				HasVSCode: wt.HasVSCode,
@@ -168,6 +176,7 @@ type WorktreeView struct {
 	Name      string
 	Path      string
 	Branch    string
+	MainRepo  string
 	Server    *registry.Server
 	HasServer bool
 	HasClaude bool
@@ -180,6 +189,7 @@ func outputJSONFormatNew(views []*WorktreeView, proxy *registry.ProxyInfo) error
 		Name      string `json:"name"`
 		Path      string `json:"path"`
 		Branch    string `json:"branch,omitempty"`
+		MainRepo  string `json:"main_repo,omitempty"`
 		URL       string `json:"url,omitempty"`
 		Port      int    `json:"port,omitempty"`
 		Status    string `json:"status,omitempty"`
@@ -222,6 +232,7 @@ func outputJSONFormatNew(views []*WorktreeView, proxy *registry.ProxyInfo) error
 			Name:      view.Name,
 			Path:      view.Path,
 			Branch:    view.Branch,
+			MainRepo:  view.MainRepo,
 			HasServer: view.HasServer,
 			HasClaude: view.HasClaude,
 			HasVSCode: view.HasVSCode,
@@ -373,3 +384,4 @@ func autoDiscoverCurrentRepo(reg *registry.Registry) {
 		}
 	}
 }
+

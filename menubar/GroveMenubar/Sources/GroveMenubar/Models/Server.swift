@@ -53,6 +53,7 @@ struct Server: Identifiable, Codable {
     let health: String?
     let path: String
     let branch: String?
+    let mainRepo: String?    // Path to the main repo this worktree belongs to
     let uptime: String?
     let pid: Int?
     let logFile: String?
@@ -64,6 +65,7 @@ struct Server: Identifiable, Codable {
 
     enum CodingKeys: String, CodingKey {
         case name, url, subdomains, port, status, health, path, branch, uptime, pid
+        case mainRepo = "main_repo"
         case logFile = "log_file"
         case hasServer = "has_server"
         case hasClaude = "has_claude"

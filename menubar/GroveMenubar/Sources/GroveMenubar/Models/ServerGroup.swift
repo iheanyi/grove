@@ -21,11 +21,11 @@ struct ServerGroup: Identifiable {
 
 class ServerGrouper {
     static func groupServers(_ servers: [Server]) -> [ServerGroup] {
-        // Group servers by their parent directory
+        // Group servers by their main repo (project they belong to)
         var groups: [String: [Server]] = [:]
 
         for server in servers {
-            let groupKey = extractGroupKey(from: server.path)
+            let groupKey = extractGroupKey(from: server)
             groups[groupKey, default: []].append(server)
         }
 
@@ -40,34 +40,29 @@ class ServerGrouper {
         }.sorted { $0.name < $1.name }
     }
 
-    private static func extractGroupKey(from path: String) -> String {
-        // Extract the parent directory as the group key
-        let url = URL(fileURLWithPath: path)
+    private static func extractGroupKey(from server: Server) -> String {
+        // Prefer mainRepo if available (identifies the project)
+        if let mainRepo = server.mainRepo, !mainRepo.isEmpty {
+            return mainRepo
+        }
+
+        // Fallback to parent directory
+        let url = URL(fileURLWithPath: server.path)
         let parentPath = url.deletingLastPathComponent().path
 
-        // If the parent is the home directory or root, use the immediate parent
+        // If the parent is the home directory or root, use the path itself
         let homeDir = NSHomeDirectory()
         if parentPath == homeDir || parentPath == "/" {
-            return path
+            return server.path
         }
 
         return parentPath
     }
 
     private static func extractGroupName(from path: String) -> String {
-        // Extract a friendly name from the path
+        // Extract a friendly name from the path (last component = project name)
         let url = URL(fileURLWithPath: path)
-        let lastComponent = url.lastPathComponent
-
-        // If it looks like a home directory path, show the last 2 components
-        if path.contains(NSHomeDirectory()) {
-            let components = url.pathComponents
-            if components.count >= 2 {
-                return components.suffix(2).joined(separator: "/")
-            }
-        }
-
-        return lastComponent
+        return url.lastPathComponent
     }
 
     // Check if servers should be grouped (only group if there are multiple groups)

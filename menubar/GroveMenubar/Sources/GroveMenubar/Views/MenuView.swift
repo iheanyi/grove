@@ -308,6 +308,30 @@ struct MenuView: View {
                                 ServerGroupView(group: group, searchText: searchText)
                                     .environment(\.groupIndex, index)
                             }
+
+                            // Show "Remove All Stopped" if there are stopped servers in grouped view
+                            let stoppedInGroups = filteredServers.filter { !$0.isRunning }
+                            if !stoppedInGroups.isEmpty {
+                                Divider()
+                                    .padding(.vertical, 4)
+                                HStack {
+                                    Text("\(stoppedInGroups.count) stopped")
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                    Spacer()
+                                    Button {
+                                        serverManager.removeAllStoppedServers()
+                                    } label: {
+                                        Text("Remove All")
+                                            .font(.caption2)
+                                            .foregroundColor(.red)
+                                    }
+                                    .buttonStyle(.plain)
+                                    .help("Remove all stopped servers from Grove")
+                                }
+                                .padding(.horizontal)
+                                .padding(.bottom, 4)
+                            }
                         } else {
                             // Show simple running/stopped sections
                             // Running servers
