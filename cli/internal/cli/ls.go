@@ -10,6 +10,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/lipgloss/table"
 	"github.com/iheanyi/grove/internal/discovery"
+	"github.com/iheanyi/grove/internal/github"
 	"github.com/iheanyi/grove/internal/registry"
 	"github.com/iheanyi/grove/internal/worktree"
 	"github.com/spf13/cobra"
@@ -22,11 +23,16 @@ var lsCmd = &cobra.Command{
 	Long: `List all registered servers and discovered worktrees with their status.
 
 Examples:
-  grove ls            # List all discovered worktrees
-  grove ls --json     # Output as JSON (for MCP/tooling)
-  grove ls --servers  # Only show worktrees with servers (old behavior)
-  grove ls --active   # Only show worktrees with any activity
-  grove ls --all      # Show all discovered worktrees (default)`,
+  grove ls                      # List all discovered worktrees (grouped by mainRepo)
+  grove ls --json               # Output as JSON (for MCP/tooling)
+  grove ls --servers            # Only show worktrees with servers
+  grove ls --active             # Only show worktrees with any activity
+  grove ls --tag frontend       # Filter by tag
+  grove ls --group activity     # Group by: active, recent, stale
+  grove ls --group status       # Group by: running, stopped, error
+  grove ls --group none         # No grouping (flat list)
+  grove ls --full               # Show GitHub info (PR, CI, review status)
+  grove ls --all                # Show all discovered worktrees (default)`,
 	RunE: runLs,
 }
 
@@ -37,6 +43,7 @@ func init() {
 	lsCmd.Flags().Bool("all", false, "Show all discovered worktrees (default)")
 	lsCmd.Flags().Bool("running", false, "Only show running servers (deprecated, use --servers)")
 	lsCmd.Flags().Bool("fast", false, "Skip activity detection (Claude, VSCode, git status) for faster output")
+	lsCmd.Flags().Bool("full", false, "Show full info including GitHub PR/CI/review status")
 }
 
 func runLs(cmd *cobra.Command, args []string) error {
@@ -46,6 +53,7 @@ func runLs(cmd *cobra.Command, args []string) error {
 	onlyActive, _ := cmd.Flags().GetBool("active")
 	showAll, _ := cmd.Flags().GetBool("all")
 	fastMode, _ := cmd.Flags().GetBool("fast")
+	fullMode, _ := cmd.Flags().GetBool("full")
 	_ = showAll // Reserved for future use
 
 	// Backward compatibility: --running implies --servers
@@ -140,11 +148,23 @@ func runLs(cmd *cobra.Command, args []string) error {
 		return filtered[i].Name < filtered[j].Name
 	})
 
-	if outputJSON {
-		return outputJSONFormatNew(filtered, reg.GetProxy())
+	// Fetch GitHub info for all worktrees if --full is set
+	var githubInfoMap map[string]*github.BranchInfo
+	if fullMode {
+		branches := make([]string, 0, len(filtered))
+		for _, view := range filtered {
+			if view.Branch != "" {
+				branches = append(branches, view.Branch)
+			}
+		}
+		githubInfoMap = github.GetBranchInfoBatch(branches)
 	}
 
-	return outputTableFormatNew(filtered, reg.GetProxy())
+	if outputJSON {
+		return outputJSONFormatNew(filtered, reg.GetProxy(), fullMode, githubInfoMap)
+	}
+
+	return outputTableFormatNew(filtered, reg.GetProxy(), fullMode, githubInfoMap)
 }
 
 type jsonProxy struct {
@@ -184,22 +204,31 @@ type WorktreeView struct {
 	GitDirty  bool
 }
 
-func outputJSONFormatNew(views []*WorktreeView, proxy *registry.ProxyInfo) error {
+func outputJSONFormatNew(views []*WorktreeView, proxy *registry.ProxyInfo, fullMode bool, githubInfoMap map[string]*github.BranchInfo) error {
+	type jsonGitHubInfo struct {
+		PRNumber     int    `json:"pr_number,omitempty"`
+		PRStatus     string `json:"pr_status,omitempty"`
+		PRURL        string `json:"pr_url,omitempty"`
+		CIStatus     string `json:"ci_status,omitempty"`
+		ReviewStatus string `json:"review_status,omitempty"`
+	}
+
 	type jsonWorktreeView struct {
-		Name      string `json:"name"`
-		Path      string `json:"path"`
-		Branch    string `json:"branch,omitempty"`
-		MainRepo  string `json:"main_repo,omitempty"`
-		URL       string `json:"url,omitempty"`
-		Port      int    `json:"port,omitempty"`
-		Status    string `json:"status,omitempty"`
-		HasServer bool   `json:"has_server"`
-		HasClaude bool   `json:"has_claude"`
-		HasVSCode bool   `json:"has_vscode"`
-		GitDirty  bool   `json:"git_dirty"`
-		PID       int    `json:"pid,omitempty"`
-		Uptime    string `json:"uptime,omitempty"`
-		LogFile   string `json:"log_file,omitempty"`
+		Name      string          `json:"name"`
+		Path      string          `json:"path"`
+		Branch    string          `json:"branch,omitempty"`
+		MainRepo  string          `json:"main_repo,omitempty"`
+		URL       string          `json:"url,omitempty"`
+		Port      int             `json:"port,omitempty"`
+		Status    string          `json:"status,omitempty"`
+		HasServer bool            `json:"has_server"`
+		HasClaude bool            `json:"has_claude"`
+		HasVSCode bool            `json:"has_vscode"`
+		GitDirty  bool            `json:"git_dirty"`
+		PID       int             `json:"pid,omitempty"`
+		Uptime    string          `json:"uptime,omitempty"`
+		LogFile   string          `json:"log_file,omitempty"`
+		GitHub    *jsonGitHubInfo `json:"github,omitempty"`
 	}
 
 	type output struct {
@@ -248,6 +277,26 @@ func outputJSONFormatNew(views []*WorktreeView, proxy *registry.ProxyInfo) error
 			jv.LogFile = view.Server.LogFile
 		}
 
+		// Add GitHub info if --full is set
+		if fullMode && view.Branch != "" {
+			if info, ok := githubInfoMap[view.Branch]; ok && info != nil {
+				ghInfo := &jsonGitHubInfo{}
+				if info.PR != nil {
+					ghInfo.PRNumber = info.PR.Number
+					ghInfo.PRStatus = github.FormatPRStatus(info.PR)
+					ghInfo.PRURL = info.PR.URL
+					ghInfo.ReviewStatus = github.FormatReviewStatus(info.PR)
+				}
+				if info.CI != nil {
+					ghInfo.CIStatus = info.CI.State
+				}
+				// Only include if we have some GitHub info
+				if ghInfo.PRNumber > 0 || ghInfo.CIStatus != "" {
+					jv.GitHub = ghInfo
+				}
+			}
+		}
+
 		out.Worktrees = append(out.Worktrees, jv)
 	}
 
@@ -256,7 +305,7 @@ func outputJSONFormatNew(views []*WorktreeView, proxy *registry.ProxyInfo) error
 	return enc.Encode(out)
 }
 
-func outputTableFormatNew(views []*WorktreeView, proxy *registry.ProxyInfo) error {
+func outputTableFormatNew(views []*WorktreeView, proxy *registry.ProxyInfo, fullMode bool, githubInfoMap map[string]*github.BranchInfo) error {
 	if len(views) == 0 {
 		fmt.Println("No worktrees discovered")
 		fmt.Println("\nUse 'grove discover' to scan for git worktrees, or 'grove start <command>' to start a server")
@@ -302,44 +351,101 @@ func outputTableFormatNew(views []*WorktreeView, proxy *registry.ProxyInfo) erro
 			}
 		}
 
-		rows = append(rows, []string{
-			view.Name,
-			status,
-			port,
-			claudeStatus,
-			vscodeStatus,
-			gitStatus,
-			displayPath,
-		})
+		if fullMode {
+			// Full mode: include GitHub info columns
+			prStatus := "-"
+			ciStatus := "-"
+			reviewStatus := "-"
+
+			if view.Branch != "" {
+				if info, ok := githubInfoMap[view.Branch]; ok && info != nil {
+					if info.PR != nil {
+						prStatus = github.FormatPRStatus(info.PR)
+						reviewStatus = github.FormatReviewStatus(info.PR)
+					}
+					if info.CI != nil {
+						ciStatus = github.FormatCIStatus(info.CI)
+					}
+				}
+			}
+
+			rows = append(rows, []string{
+				view.Name,
+				status,
+				port,
+				prStatus,
+				ciStatus,
+				reviewStatus,
+				claudeStatus,
+				gitStatus,
+			})
+		} else {
+			rows = append(rows, []string{
+				view.Name,
+				status,
+				port,
+				claudeStatus,
+				vscodeStatus,
+				gitStatus,
+				displayPath,
+			})
+		}
 	}
 
 	// Style definitions
 	headerStyle := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("252")).PaddingRight(2)
 	cellStyle := lipgloss.NewStyle().PaddingRight(2)
 
-	// Create table with lipgloss
-	t := table.New().
-		Border(lipgloss.NormalBorder()).
-		BorderRow(false).
-		BorderColumn(false).
-		BorderTop(false).
-		BorderBottom(false).
-		BorderLeft(false).
-		BorderRight(false).
-		Headers("NAME", "STATUS", "PORT", "CLAUDE", "VSCODE", "GIT", "PATH").
-		Rows(rows...).
-		StyleFunc(func(row, col int) lipgloss.Style {
-			if row == table.HeaderRow {
-				return headerStyle
-			}
-			return cellStyle
-		})
+	var t *table.Table
+	if fullMode {
+		// Full mode table with GitHub columns
+		t = table.New().
+			Border(lipgloss.NormalBorder()).
+			BorderRow(false).
+			BorderColumn(false).
+			BorderTop(false).
+			BorderBottom(false).
+			BorderLeft(false).
+			BorderRight(false).
+			Headers("NAME", "SERVER", "PORT", "PR", "CI", "REVIEW", "CLAUDE", "GIT").
+			Rows(rows...).
+			StyleFunc(func(row, col int) lipgloss.Style {
+				if row == table.HeaderRow {
+					return headerStyle
+				}
+				return cellStyle
+			})
+	} else {
+		// Default table
+		t = table.New().
+			Border(lipgloss.NormalBorder()).
+			BorderRow(false).
+			BorderColumn(false).
+			BorderTop(false).
+			BorderBottom(false).
+			BorderLeft(false).
+			BorderRight(false).
+			Headers("NAME", "STATUS", "PORT", "CLAUDE", "VSCODE", "GIT", "PATH").
+			Rows(rows...).
+			StyleFunc(func(row, col int) lipgloss.Style {
+				if row == table.HeaderRow {
+					return headerStyle
+				}
+				return cellStyle
+			})
+	}
 
 	fmt.Println(t)
 
 	// Legend
 	fmt.Println()
-	fmt.Println("Legend: ● running  ○ stopped  🤖 Claude  💻 VS Code  ✓ clean  📝 dirty")
+	if fullMode {
+		fmt.Println("Legend: ● running  ○ stopped  🤖 Claude  ✓ clean  📝 dirty")
+		fmt.Println("PR: open/draft/merged/closed  CI: ✓ success  ✗ failure  ◐ pending")
+		fmt.Println("Review: approved/changes/pending")
+	} else {
+		fmt.Println("Legend: ● running  ○ stopped  🤖 Claude  💻 VS Code  ✓ clean  📝 dirty")
+	}
 
 	// Proxy status (only relevant in subdomain mode)
 	fmt.Println()

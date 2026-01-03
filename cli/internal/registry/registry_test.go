@@ -19,6 +19,9 @@ func TestNewRegistry(t *testing.T) {
 	if r.Worktrees == nil {
 		t.Error("Worktrees map should be initialized")
 	}
+	if r.Workspaces == nil {
+		t.Error("Workspaces map should be initialized")
+	}
 	if r.Proxy == nil {
 		t.Error("Proxy should be initialized")
 	}
@@ -32,10 +35,11 @@ func TestLoad_NonExistentFile(t *testing.T) {
 	defer os.Setenv("XDG_CONFIG_HOME", oldPath)
 
 	r := &Registry{
-		path:      filepath.Join(tmpDir, "nonexistent", "registry.json"),
-		Servers:   make(map[string]*Server),
-		Worktrees: make(map[string]*discovery.Worktree),
-		Proxy:     &ProxyInfo{},
+		path:       filepath.Join(tmpDir, "nonexistent", "registry.json"),
+		Workspaces: make(map[string]*Workspace),
+		Servers:    make(map[string]*Server),
+		Worktrees:  make(map[string]*discovery.Worktree),
+		Proxy:      &ProxyInfo{},
 	}
 
 	err := r.load()
@@ -54,10 +58,11 @@ func TestLoad_InvalidJSON(t *testing.T) {
 	}
 
 	r := &Registry{
-		path:      registryPath,
-		Servers:   make(map[string]*Server),
-		Worktrees: make(map[string]*discovery.Worktree),
-		Proxy:     &ProxyInfo{},
+		path:       registryPath,
+		Workspaces: make(map[string]*Workspace),
+		Servers:    make(map[string]*Server),
+		Worktrees:  make(map[string]*discovery.Worktree),
+		Proxy:      &ProxyInfo{},
 	}
 
 	err := r.load()
@@ -66,22 +71,22 @@ func TestLoad_InvalidJSON(t *testing.T) {
 	}
 }
 
-func TestLoad_ValidJSON(t *testing.T) {
+func TestLoad_ValidJSON_LegacyFormat(t *testing.T) {
 	tmpDir := t.TempDir()
 	registryPath := filepath.Join(tmpDir, "registry.json")
 
-	// Create valid registry JSON
-	data := &Registry{
-		Servers: map[string]*Server{
-			"test-server": {
-				Name:   "test-server",
-				Port:   3000,
-				Status: StatusRunning,
-				PID:    12345,
+	// Create valid registry JSON in legacy format (no workspaces)
+	data := map[string]interface{}{
+		"servers": map[string]interface{}{
+			"test-server": map[string]interface{}{
+				"name":   "test-server",
+				"port":   3000,
+				"status": "running",
+				"pid":    12345,
 			},
 		},
-		Worktrees: make(map[string]*discovery.Worktree),
-		Proxy:     &ProxyInfo{HTTPPort: 80, HTTPSPort: 443},
+		"worktrees": map[string]interface{}{},
+		"proxy":     map[string]interface{}{"http_port": 80, "https_port": 443},
 	}
 
 	jsonData, err := json.MarshalIndent(data, "", "  ")
@@ -94,10 +99,11 @@ func TestLoad_ValidJSON(t *testing.T) {
 	}
 
 	r := &Registry{
-		path:      registryPath,
-		Servers:   make(map[string]*Server),
-		Worktrees: make(map[string]*discovery.Worktree),
-		Proxy:     &ProxyInfo{},
+		path:       registryPath,
+		Workspaces: make(map[string]*Workspace),
+		Servers:    make(map[string]*Server),
+		Worktrees:  make(map[string]*discovery.Worktree),
+		Proxy:      &ProxyInfo{},
 	}
 
 	err = r.load()
@@ -105,16 +111,90 @@ func TestLoad_ValidJSON(t *testing.T) {
 		t.Errorf("load() failed: %v", err)
 	}
 
-	if len(r.Servers) != 1 {
-		t.Errorf("Expected 1 server, got %d", len(r.Servers))
+	// Should have migrated to workspaces
+	if len(r.Workspaces) != 1 {
+		t.Errorf("Expected 1 workspace after migration, got %d", len(r.Workspaces))
 	}
 
-	server, ok := r.Servers["test-server"]
+	ws, ok := r.Workspaces["test-server"]
 	if !ok {
-		t.Error("Expected test-server to be loaded")
+		t.Error("Expected test-server workspace to exist")
 	} else {
-		if server.Port != 3000 {
-			t.Errorf("Expected port 3000, got %d", server.Port)
+		if ws.Server == nil {
+			t.Error("Expected workspace to have server state")
+		} else if ws.Server.Port != 3000 {
+			t.Errorf("Expected port 3000, got %d", ws.Server.Port)
+		}
+	}
+
+	// Backward-compatible Get should still work
+	server, ok := r.Get("test-server")
+	if !ok {
+		t.Error("Get() should find test-server")
+	} else if server.Port != 3000 {
+		t.Errorf("Expected port 3000, got %d", server.Port)
+	}
+}
+
+func TestLoad_ValidJSON_NewFormat(t *testing.T) {
+	tmpDir := t.TempDir()
+	registryPath := filepath.Join(tmpDir, "registry.json")
+
+	// Create valid registry JSON in new format (with workspaces)
+	data := map[string]interface{}{
+		"workspaces": map[string]interface{}{
+			"test-server": map[string]interface{}{
+				"name":   "test-server",
+				"path":   "/test/path",
+				"branch": "main",
+				"server": map[string]interface{}{
+					"port":   3000,
+					"status": "running",
+					"pid":    12345,
+				},
+			},
+		},
+		"proxy": map[string]interface{}{"http_port": 80, "https_port": 443},
+	}
+
+	jsonData, err := json.MarshalIndent(data, "", "  ")
+	if err != nil {
+		t.Fatalf("Failed to marshal test data: %v", err)
+	}
+
+	if err := os.WriteFile(registryPath, jsonData, 0644); err != nil {
+		t.Fatalf("Failed to write test file: %v", err)
+	}
+
+	r := &Registry{
+		path:       registryPath,
+		Workspaces: make(map[string]*Workspace),
+		Servers:    make(map[string]*Server),
+		Worktrees:  make(map[string]*discovery.Worktree),
+		Proxy:      &ProxyInfo{},
+	}
+
+	err = r.load()
+	if err != nil {
+		t.Errorf("load() failed: %v", err)
+	}
+
+	// Should load workspaces directly
+	if len(r.Workspaces) != 1 {
+		t.Errorf("Expected 1 workspace, got %d", len(r.Workspaces))
+	}
+
+	ws, ok := r.Workspaces["test-server"]
+	if !ok {
+		t.Error("Expected test-server workspace to exist")
+	} else {
+		if ws.Path != "/test/path" {
+			t.Errorf("Expected path /test/path, got %s", ws.Path)
+		}
+		if ws.Server == nil {
+			t.Error("Expected workspace to have server state")
+		} else if ws.Server.Port != 3000 {
+			t.Errorf("Expected port 3000, got %d", ws.Server.Port)
 		}
 	}
 }
@@ -124,15 +204,21 @@ func TestSave_Success(t *testing.T) {
 	registryPath := filepath.Join(tmpDir, "registry.json")
 
 	r := &Registry{
-		path:      registryPath,
-		Servers:   make(map[string]*Server),
-		Worktrees: make(map[string]*discovery.Worktree),
-		Proxy:     &ProxyInfo{HTTPPort: 80},
+		path:       registryPath,
+		Workspaces: make(map[string]*Workspace),
+		Servers:    make(map[string]*Server),
+		Worktrees:  make(map[string]*discovery.Worktree),
+		Proxy:      &ProxyInfo{HTTPPort: 80},
 	}
 
-	r.Servers["test"] = &Server{
+	// Add a workspace with server state
+	r.Workspaces["test"] = &Workspace{
 		Name: "test",
-		Port: 3000,
+		Path: "/test/path",
+		Server: &ServerState{
+			Port:   3000,
+			Status: StatusRunning,
+		},
 	}
 
 	err := r.Save()
@@ -146,13 +232,25 @@ func TestSave_Success(t *testing.T) {
 		t.Errorf("Failed to read saved file: %v", err)
 	}
 
-	var loaded Registry
+	var loaded map[string]interface{}
 	if err := json.Unmarshal(data, &loaded); err != nil {
 		t.Errorf("Failed to unmarshal saved data: %v", err)
 	}
 
-	if len(loaded.Servers) != 1 {
-		t.Errorf("Expected 1 server in saved data, got %d", len(loaded.Servers))
+	// Check workspaces exist
+	workspaces, ok := loaded["workspaces"].(map[string]interface{})
+	if !ok {
+		t.Error("Expected workspaces to be saved")
+	} else if len(workspaces) != 1 {
+		t.Errorf("Expected 1 workspace in saved data, got %d", len(workspaces))
+	}
+
+	// Check legacy servers are synced
+	servers, ok := loaded["servers"].(map[string]interface{})
+	if !ok {
+		t.Error("Expected servers to be synced for backward compatibility")
+	} else if len(servers) != 1 {
+		t.Errorf("Expected 1 server in saved data (legacy), got %d", len(servers))
 	}
 }
 
@@ -178,10 +276,11 @@ func TestSave_ReadOnlyDirectory(t *testing.T) {
 	registryPath := filepath.Join(readOnlyDir, "registry.json")
 
 	r := &Registry{
-		path:      registryPath,
-		Servers:   make(map[string]*Server),
-		Worktrees: make(map[string]*discovery.Worktree),
-		Proxy:     &ProxyInfo{},
+		path:       registryPath,
+		Workspaces: make(map[string]*Workspace),
+		Servers:    make(map[string]*Server),
+		Worktrees:  make(map[string]*discovery.Worktree),
+		Proxy:      &ProxyInfo{},
 	}
 
 	err := r.Save()
@@ -195,10 +294,11 @@ func TestSet_Success(t *testing.T) {
 	registryPath := filepath.Join(tmpDir, "registry.json")
 
 	r := &Registry{
-		path:      registryPath,
-		Servers:   make(map[string]*Server),
-		Worktrees: make(map[string]*discovery.Worktree),
-		Proxy:     &ProxyInfo{},
+		path:       registryPath,
+		Workspaces: make(map[string]*Workspace),
+		Servers:    make(map[string]*Server),
+		Worktrees:  make(map[string]*discovery.Worktree),
+		Proxy:      &ProxyInfo{},
 	}
 
 	server := &Server{
@@ -212,12 +312,20 @@ func TestSet_Success(t *testing.T) {
 		t.Errorf("Set() failed: %v", err)
 	}
 
-	// Verify server was added
+	// Verify server was added via Get (backward compatible)
 	got, ok := r.Get("new-server")
 	if !ok {
 		t.Error("Server was not added")
 	} else if got.Port != 3000 {
 		t.Errorf("Expected port 3000, got %d", got.Port)
+	}
+
+	// Verify workspace was created
+	ws, ok := r.Workspaces["new-server"]
+	if !ok {
+		t.Error("Workspace should have been created")
+	} else if ws.Server == nil || ws.Server.Port != 3000 {
+		t.Error("Workspace should have server state with port 3000")
 	}
 }
 
@@ -226,10 +334,11 @@ func TestSet_UpdatesExisting(t *testing.T) {
 	registryPath := filepath.Join(tmpDir, "registry.json")
 
 	r := &Registry{
-		path:      registryPath,
-		Servers:   make(map[string]*Server),
-		Worktrees: make(map[string]*discovery.Worktree),
-		Proxy:     &ProxyInfo{},
+		path:       registryPath,
+		Workspaces: make(map[string]*Workspace),
+		Servers:    make(map[string]*Server),
+		Worktrees:  make(map[string]*discovery.Worktree),
+		Proxy:      &ProxyInfo{},
 	}
 
 	// Add initial server
@@ -264,10 +373,11 @@ func TestRemove(t *testing.T) {
 	registryPath := filepath.Join(tmpDir, "registry.json")
 
 	r := &Registry{
-		path:      registryPath,
-		Servers:   make(map[string]*Server),
-		Worktrees: make(map[string]*discovery.Worktree),
-		Proxy:     &ProxyInfo{},
+		path:       registryPath,
+		Workspaces: make(map[string]*Workspace),
+		Servers:    make(map[string]*Server),
+		Worktrees:  make(map[string]*discovery.Worktree),
+		Proxy:      &ProxyInfo{},
 	}
 
 	// Add a server
@@ -286,6 +396,12 @@ func TestRemove(t *testing.T) {
 	if ok {
 		t.Error("Server should have been removed")
 	}
+
+	// Verify workspace is also gone
+	_, ok = r.Workspaces["to-remove"]
+	if ok {
+		t.Error("Workspace should have been removed")
+	}
 }
 
 func TestList(t *testing.T) {
@@ -293,16 +409,17 @@ func TestList(t *testing.T) {
 	registryPath := filepath.Join(tmpDir, "registry.json")
 
 	r := &Registry{
-		path:      registryPath,
-		Servers:   make(map[string]*Server),
-		Worktrees: make(map[string]*discovery.Worktree),
-		Proxy:     &ProxyInfo{},
+		path:       registryPath,
+		Workspaces: make(map[string]*Workspace),
+		Servers:    make(map[string]*Server),
+		Worktrees:  make(map[string]*discovery.Worktree),
+		Proxy:      &ProxyInfo{},
 	}
 
-	// Add multiple servers
-	r.Servers["server1"] = &Server{Name: "server1", Port: 3000}
-	r.Servers["server2"] = &Server{Name: "server2", Port: 3001}
-	r.Servers["server3"] = &Server{Name: "server3", Port: 3002}
+	// Add multiple workspaces
+	r.Workspaces["server1"] = &Workspace{Name: "server1", Server: &ServerState{Port: 3000}}
+	r.Workspaces["server2"] = &Workspace{Name: "server2", Server: &ServerState{Port: 3001}}
+	r.Workspaces["server3"] = &Workspace{Name: "server3", Server: &ServerState{Port: 3002}}
 
 	servers := r.List()
 	if len(servers) != 3 {
@@ -315,16 +432,26 @@ func TestListRunning(t *testing.T) {
 	registryPath := filepath.Join(tmpDir, "registry.json")
 
 	r := &Registry{
-		path:      registryPath,
-		Servers:   make(map[string]*Server),
-		Worktrees: make(map[string]*discovery.Worktree),
-		Proxy:     &ProxyInfo{},
+		path:       registryPath,
+		Workspaces: make(map[string]*Workspace),
+		Servers:    make(map[string]*Server),
+		Worktrees:  make(map[string]*discovery.Worktree),
+		Proxy:      &ProxyInfo{},
 	}
 
-	// Add servers with different statuses
-	r.Servers["running1"] = &Server{Name: "running1", Status: StatusRunning, PID: os.Getpid()}
-	r.Servers["running2"] = &Server{Name: "running2", Status: StatusRunning, PID: os.Getpid()}
-	r.Servers["stopped"] = &Server{Name: "stopped", Status: StatusStopped}
+	// Add workspaces with different server statuses
+	r.Workspaces["running1"] = &Workspace{
+		Name:   "running1",
+		Server: &ServerState{Status: StatusRunning, PID: os.Getpid()},
+	}
+	r.Workspaces["running2"] = &Workspace{
+		Name:   "running2",
+		Server: &ServerState{Status: StatusRunning, PID: os.Getpid()},
+	}
+	r.Workspaces["stopped"] = &Workspace{
+		Name:   "stopped",
+		Server: &ServerState{Status: StatusStopped},
+	}
 
 	running := r.ListRunning()
 	if len(running) != 2 {
@@ -337,16 +464,26 @@ func TestGetUsedPorts(t *testing.T) {
 	registryPath := filepath.Join(tmpDir, "registry.json")
 
 	r := &Registry{
-		path:      registryPath,
-		Servers:   make(map[string]*Server),
-		Worktrees: make(map[string]*discovery.Worktree),
-		Proxy:     &ProxyInfo{},
+		path:       registryPath,
+		Workspaces: make(map[string]*Workspace),
+		Servers:    make(map[string]*Server),
+		Worktrees:  make(map[string]*discovery.Worktree),
+		Proxy:      &ProxyInfo{},
 	}
 
-	// Add running servers with ports
-	r.Servers["server1"] = &Server{Name: "server1", Port: 3000, Status: StatusRunning, PID: os.Getpid()}
-	r.Servers["server2"] = &Server{Name: "server2", Port: 3001, Status: StatusRunning, PID: os.Getpid()}
-	r.Servers["stopped"] = &Server{Name: "stopped", Port: 3002, Status: StatusStopped}
+	// Add running workspaces with ports
+	r.Workspaces["server1"] = &Workspace{
+		Name:   "server1",
+		Server: &ServerState{Port: 3000, Status: StatusRunning, PID: os.Getpid()},
+	}
+	r.Workspaces["server2"] = &Workspace{
+		Name:   "server2",
+		Server: &ServerState{Port: 3001, Status: StatusRunning, PID: os.Getpid()},
+	}
+	r.Workspaces["stopped"] = &Workspace{
+		Name:   "stopped",
+		Server: &ServerState{Port: 3002, Status: StatusStopped},
+	}
 
 	ports := r.GetUsedPorts()
 
@@ -366,10 +503,11 @@ func TestUpdateProxy(t *testing.T) {
 	registryPath := filepath.Join(tmpDir, "registry.json")
 
 	r := &Registry{
-		path:      registryPath,
-		Servers:   make(map[string]*Server),
-		Worktrees: make(map[string]*discovery.Worktree),
-		Proxy:     &ProxyInfo{},
+		path:       registryPath,
+		Workspaces: make(map[string]*Workspace),
+		Servers:    make(map[string]*Server),
+		Worktrees:  make(map[string]*discovery.Worktree),
+		Proxy:      &ProxyInfo{},
 	}
 
 	proxy := &ProxyInfo{
@@ -395,9 +533,10 @@ func TestUpdateProxy(t *testing.T) {
 
 func TestGetProxy_NilProxy(t *testing.T) {
 	r := &Registry{
-		Servers:   make(map[string]*Server),
-		Worktrees: make(map[string]*discovery.Worktree),
-		Proxy:     nil,
+		Workspaces: make(map[string]*Workspace),
+		Servers:    make(map[string]*Server),
+		Worktrees:  make(map[string]*discovery.Worktree),
+		Proxy:      nil,
 	}
 
 	got := r.GetProxy()
@@ -411,26 +550,31 @@ func TestCleanup_RemovesDeadProcesses(t *testing.T) {
 	registryPath := filepath.Join(tmpDir, "registry.json")
 
 	r := &Registry{
-		path:      registryPath,
-		Servers:   make(map[string]*Server),
-		Worktrees: make(map[string]*discovery.Worktree),
-		Proxy:     &ProxyInfo{},
+		path:       registryPath,
+		Workspaces: make(map[string]*Workspace),
+		Servers:    make(map[string]*Server),
+		Worktrees:  make(map[string]*discovery.Worktree),
+		Proxy:      &ProxyInfo{},
 	}
 
-	// Add server with non-existent PID
-	r.Servers["dead-server"] = &Server{
-		Name:   "dead-server",
-		Port:   3000,
-		Status: StatusRunning,
-		PID:    999999999, // Very high PID that almost certainly doesn't exist
+	// Add workspace with non-existent PID
+	r.Workspaces["dead-server"] = &Workspace{
+		Name: "dead-server",
+		Server: &ServerState{
+			Port:   3000,
+			Status: StatusRunning,
+			PID:    999999999, // Very high PID that almost certainly doesn't exist
+		},
 	}
 
-	// Add server with valid PID (current process)
-	r.Servers["alive-server"] = &Server{
-		Name:   "alive-server",
-		Port:   3001,
-		Status: StatusRunning,
-		PID:    os.Getpid(),
+	// Add workspace with valid PID (current process)
+	r.Workspaces["alive-server"] = &Workspace{
+		Name: "alive-server",
+		Server: &ServerState{
+			Port:   3001,
+			Status: StatusRunning,
+			PID:    os.Getpid(),
+		},
 	}
 
 	result, err := r.Cleanup()
@@ -443,18 +587,18 @@ func TestCleanup_RemovesDeadProcesses(t *testing.T) {
 	}
 
 	// Verify dead server status changed
-	deadServer := r.Servers["dead-server"]
-	if deadServer.Status != StatusStopped {
-		t.Errorf("Expected dead server status to be %s, got %s", StatusStopped, deadServer.Status)
+	deadWs := r.Workspaces["dead-server"]
+	if deadWs.Server.Status != StatusStopped {
+		t.Errorf("Expected dead server status to be %s, got %s", StatusStopped, deadWs.Server.Status)
 	}
-	if deadServer.PID != 0 {
-		t.Errorf("Expected dead server PID to be 0, got %d", deadServer.PID)
+	if deadWs.Server.PID != 0 {
+		t.Errorf("Expected dead server PID to be 0, got %d", deadWs.Server.PID)
 	}
 
 	// Verify alive server unchanged
-	aliveServer := r.Servers["alive-server"]
-	if aliveServer.Status != StatusRunning {
-		t.Errorf("Expected alive server status to remain %s, got %s", StatusRunning, aliveServer.Status)
+	aliveWs := r.Workspaces["alive-server"]
+	if aliveWs.Server.Status != StatusRunning {
+		t.Errorf("Expected alive server status to remain %s, got %s", StatusRunning, aliveWs.Server.Status)
 	}
 }
 
@@ -463,17 +607,20 @@ func TestCleanup_NoChangesWhenNoDeadProcesses(t *testing.T) {
 	registryPath := filepath.Join(tmpDir, "registry.json")
 
 	r := &Registry{
-		path:      registryPath,
-		Servers:   make(map[string]*Server),
-		Worktrees: make(map[string]*discovery.Worktree),
-		Proxy:     &ProxyInfo{},
+		path:       registryPath,
+		Workspaces: make(map[string]*Workspace),
+		Servers:    make(map[string]*Server),
+		Worktrees:  make(map[string]*discovery.Worktree),
+		Proxy:      &ProxyInfo{},
 	}
 
-	// Add only alive server
-	r.Servers["alive"] = &Server{
-		Name:   "alive",
-		Status: StatusRunning,
-		PID:    os.Getpid(),
+	// Add only alive workspace
+	r.Workspaces["alive"] = &Workspace{
+		Name: "alive",
+		Server: &ServerState{
+			Status: StatusRunning,
+			PID:    os.Getpid(),
+		},
 	}
 
 	result, err := r.Cleanup()
@@ -492,10 +639,11 @@ func TestWorktreeOperations(t *testing.T) {
 	registryPath := filepath.Join(tmpDir, "registry.json")
 
 	r := &Registry{
-		path:      registryPath,
-		Servers:   make(map[string]*Server),
-		Worktrees: make(map[string]*discovery.Worktree),
-		Proxy:     &ProxyInfo{},
+		path:       registryPath,
+		Workspaces: make(map[string]*Workspace),
+		Servers:    make(map[string]*Server),
+		Worktrees:  make(map[string]*discovery.Worktree),
+		Proxy:      &ProxyInfo{},
 	}
 
 	// Test SetWorktree
@@ -518,6 +666,14 @@ func TestWorktreeOperations(t *testing.T) {
 		t.Errorf("Expected path /path/to/worktree, got %s", got.Path)
 	}
 
+	// Verify workspace was created
+	ws, ok := r.Workspaces["feature-branch"]
+	if !ok {
+		t.Error("Workspace should have been created from worktree")
+	} else if ws.Path != "/path/to/worktree" {
+		t.Errorf("Expected workspace path /path/to/worktree, got %s", ws.Path)
+	}
+
 	// Test ListWorktrees
 	worktrees := r.ListWorktrees()
 	if len(worktrees) != 1 {
@@ -533,6 +689,12 @@ func TestWorktreeOperations(t *testing.T) {
 	_, ok = r.GetWorktree("feature-branch")
 	if ok {
 		t.Error("Worktree should have been removed")
+	}
+
+	// Verify workspace was also removed
+	_, ok = r.Workspaces["feature-branch"]
+	if ok {
+		t.Error("Workspace should have been removed")
 	}
 }
 
@@ -579,6 +741,43 @@ func TestServerStatus(t *testing.T) {
 	}
 }
 
+func TestWorkspaceIsRunning(t *testing.T) {
+	tests := []struct {
+		name     string
+		ws       *Workspace
+		expected bool
+	}{
+		{
+			"nil server is not running",
+			&Workspace{Name: "test", Server: nil},
+			false,
+		},
+		{
+			"running server is running",
+			&Workspace{Name: "test", Server: &ServerState{Status: StatusRunning}},
+			true,
+		},
+		{
+			"starting server is running",
+			&Workspace{Name: "test", Server: &ServerState{Status: StatusStarting}},
+			true,
+		},
+		{
+			"stopped server is not running",
+			&Workspace{Name: "test", Server: &ServerState{Status: StatusStopped}},
+			false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := tt.ws.IsRunning(); got != tt.expected {
+				t.Errorf("Workspace.IsRunning() = %v, want %v", got, tt.expected)
+			}
+		})
+	}
+}
+
 func TestProxyIsRunning(t *testing.T) {
 	proxy := &ProxyInfo{
 		PID: os.Getpid(),
@@ -599,10 +798,11 @@ func TestConcurrentAccess(t *testing.T) {
 	registryPath := filepath.Join(tmpDir, "registry.json")
 
 	r := &Registry{
-		path:      registryPath,
-		Servers:   make(map[string]*Server),
-		Worktrees: make(map[string]*discovery.Worktree),
-		Proxy:     &ProxyInfo{},
+		path:       registryPath,
+		Workspaces: make(map[string]*Workspace),
+		Servers:    make(map[string]*Server),
+		Worktrees:  make(map[string]*discovery.Worktree),
+		Proxy:      &ProxyInfo{},
 	}
 
 	// Test concurrent reads and writes
@@ -631,4 +831,164 @@ func TestConcurrentAccess(t *testing.T) {
 	// Wait for both goroutines
 	<-done
 	<-done
+}
+
+func TestWorkspaceConversion(t *testing.T) {
+	// Test WorkspaceFromServer
+	server := &Server{
+		Name:      "test-server",
+		Port:      3000,
+		PID:       12345,
+		Status:    StatusRunning,
+		URL:       "http://test.localhost",
+		Path:      "/test/path",
+		Branch:    "main",
+		Command:   []string{"npm", "start"},
+		LogFile:   "/var/log/test.log",
+		StartedAt: time.Now(),
+		Tags:      []string{"frontend"},
+	}
+
+	ws := WorkspaceFromServer(server)
+	if ws == nil {
+		t.Fatal("WorkspaceFromServer returned nil")
+	}
+	if ws.Name != "test-server" {
+		t.Errorf("Expected name test-server, got %s", ws.Name)
+	}
+	if ws.Server == nil {
+		t.Fatal("Expected server state")
+	}
+	if ws.Server.Port != 3000 {
+		t.Errorf("Expected port 3000, got %d", ws.Server.Port)
+	}
+
+	// Test ToServer round-trip
+	backToServer := ws.ToServer()
+	if backToServer.Name != server.Name {
+		t.Errorf("Expected name %s, got %s", server.Name, backToServer.Name)
+	}
+	if backToServer.Port != server.Port {
+		t.Errorf("Expected port %d, got %d", server.Port, backToServer.Port)
+	}
+
+	// Test WorkspaceFromWorktree
+	wt := &discovery.Worktree{
+		Name:         "feature-branch",
+		Path:         "/worktree/path",
+		Branch:       "feature",
+		MainRepo:     "/main/repo",
+		GitDirty:     true,
+		HasClaude:    true,
+		HasVSCode:    false,
+		DiscoveredAt: time.Now(),
+	}
+
+	wsFromWt := WorkspaceFromWorktree(wt)
+	if wsFromWt == nil {
+		t.Fatal("WorkspaceFromWorktree returned nil")
+	}
+	if wsFromWt.Name != "feature-branch" {
+		t.Errorf("Expected name feature-branch, got %s", wsFromWt.Name)
+	}
+	if wsFromWt.GitDirty != true {
+		t.Error("Expected GitDirty to be true")
+	}
+	if wsFromWt.HasClaude != true {
+		t.Error("Expected HasClaude to be true")
+	}
+	if wsFromWt.Server != nil {
+		t.Error("Expected no server state for worktree-only workspace")
+	}
+}
+
+func TestMigration(t *testing.T) {
+	tmpDir := t.TempDir()
+	registryPath := filepath.Join(tmpDir, "registry.json")
+
+	// Create a registry with both servers and worktrees (legacy format)
+	legacyData := map[string]interface{}{
+		"servers": map[string]interface{}{
+			"my-server": map[string]interface{}{
+				"name":   "my-server",
+				"port":   3000,
+				"status": "running",
+				"path":   "/server/path",
+			},
+		},
+		"worktrees": map[string]interface{}{
+			"my-server": map[string]interface{}{
+				"name":      "my-server",
+				"path":      "/server/path",
+				"branch":    "main",
+				"main_repo": "/main/repo",
+				"git_dirty": true,
+			},
+			"worktree-only": map[string]interface{}{
+				"name":   "worktree-only",
+				"path":   "/worktree/path",
+				"branch": "feature",
+			},
+		},
+		"proxy": map[string]interface{}{},
+	}
+
+	jsonData, err := json.MarshalIndent(legacyData, "", "  ")
+	if err != nil {
+		t.Fatalf("Failed to marshal test data: %v", err)
+	}
+
+	if err := os.WriteFile(registryPath, jsonData, 0644); err != nil {
+		t.Fatalf("Failed to write test file: %v", err)
+	}
+
+	// Load and verify migration
+	r := &Registry{
+		path:       registryPath,
+		Workspaces: make(map[string]*Workspace),
+		Servers:    make(map[string]*Server),
+		Worktrees:  make(map[string]*discovery.Worktree),
+		Proxy:      &ProxyInfo{},
+	}
+
+	if err := r.load(); err != nil {
+		t.Fatalf("load() failed: %v", err)
+	}
+
+	// Should have 2 workspaces
+	if len(r.Workspaces) != 2 {
+		t.Errorf("Expected 2 workspaces after migration, got %d", len(r.Workspaces))
+	}
+
+	// Check merged workspace (server + worktree)
+	mergedWs, ok := r.Workspaces["my-server"]
+	if !ok {
+		t.Fatal("Expected my-server workspace")
+	}
+	if mergedWs.Server == nil {
+		t.Error("Expected server state from server data")
+	} else if mergedWs.Server.Port != 3000 {
+		t.Errorf("Expected port 3000, got %d", mergedWs.Server.Port)
+	}
+	if mergedWs.Branch != "main" {
+		t.Errorf("Expected branch main from worktree data, got %s", mergedWs.Branch)
+	}
+	if !mergedWs.GitDirty {
+		t.Error("Expected GitDirty from worktree data")
+	}
+	if mergedWs.MainRepo != "/main/repo" {
+		t.Errorf("Expected MainRepo /main/repo, got %s", mergedWs.MainRepo)
+	}
+
+	// Check worktree-only workspace
+	wtOnlyWs, ok := r.Workspaces["worktree-only"]
+	if !ok {
+		t.Fatal("Expected worktree-only workspace")
+	}
+	if wtOnlyWs.Server != nil {
+		t.Error("Expected no server state for worktree-only workspace")
+	}
+	if wtOnlyWs.Branch != "feature" {
+		t.Errorf("Expected branch feature, got %s", wtOnlyWs.Branch)
+	}
 }
