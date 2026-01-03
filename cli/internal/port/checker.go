@@ -6,14 +6,26 @@ import (
 	"time"
 )
 
-// IsAvailable checks if a port is available for binding
+// IsAvailable checks if a port is available for binding.
+// Checks both IPv4 and IPv6 since servers may bind to either.
+// Returns true only if BOTH are available (conservative check).
 func IsAvailable(port int) bool {
+	// Check IPv4
 	addr := fmt.Sprintf("127.0.0.1:%d", port)
 	listener, err := net.Listen("tcp", addr)
 	if err != nil {
 		return false
 	}
 	listener.Close()
+
+	// Check IPv6
+	addr = fmt.Sprintf("[::1]:%d", port)
+	listener, err = net.Listen("tcp", addr)
+	if err != nil {
+		return false
+	}
+	listener.Close()
+
 	return true
 }
 
