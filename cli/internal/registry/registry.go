@@ -10,6 +10,7 @@ import (
 
 	"github.com/iheanyi/grove/internal/config"
 	"github.com/iheanyi/grove/internal/discovery"
+	"github.com/iheanyi/grove/internal/port"
 )
 
 // Registry manages the server registry
@@ -204,6 +205,15 @@ func (r *Registry) Cleanup() (*CleanupResult, error) {
 			server.Status = StatusStopped
 			server.PID = 0
 			result.Stopped = append(result.Stopped, name)
+			continue
+		}
+
+		// For "running" servers with no PID, check if port is actually in use
+		if server.Status == StatusRunning && server.PID == 0 && server.Port > 0 {
+			if !port.IsListening(server.Port) {
+				server.Status = StatusStopped
+				result.Stopped = append(result.Stopped, name)
+			}
 		}
 	}
 
