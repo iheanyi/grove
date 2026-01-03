@@ -187,6 +187,7 @@ final class ServerComputedPropertiesTests: XCTestCase {
             health: health,
             path: "/test/path",
             branch: "main",
+            mainRepo: nil,
             uptime: uptime,
             pid: nil,
             logFile: nil,
