@@ -40,6 +40,23 @@ struct ServerGroupView: View {
                 .background(Color(NSColor.windowBackgroundColor).opacity(0.5))
             }
             .buttonStyle(.plain)
+            .contextMenu {
+                if group.runningCount > 0 {
+                    Button {
+                        serverManager.stopAllServersInGroup(group)
+                    } label: {
+                        Label("Stop All in \(group.name)", systemImage: "stop.fill")
+                    }
+
+                    Divider()
+                }
+
+                Button(role: .destructive) {
+                    serverManager.removeAllServersInGroup(group)
+                } label: {
+                    Label("Remove All from Grove", systemImage: "xmark.circle")
+                }
+            }
 
             // Group servers
             if !isCollapsed {

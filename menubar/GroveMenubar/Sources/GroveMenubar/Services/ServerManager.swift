@@ -395,6 +395,55 @@ class ServerManager: ObservableObject {
         }
     }
 
+    /// Remove all servers in a group from Grove (detach them)
+    func removeAllServersInGroup(_ serverGroup: ServerGroup) {
+        guard !serverGroup.servers.isEmpty else { return }
+
+        // Pause auto-refresh during batch operation
+        refreshTimer?.invalidate()
+        refreshTimer = nil
+
+        let group = DispatchGroup()
+
+        for server in serverGroup.servers {
+            group.enter()
+            runGrove(["detach", server.name]) { _ in
+                group.leave()
+            }
+        }
+
+        // Refresh once all detaches complete, then restart auto-refresh
+        group.notify(queue: .main) { [weak self] in
+            self?.refresh()
+            self?.startAutoRefresh()
+        }
+    }
+
+    /// Stop all running servers in a group
+    func stopAllServersInGroup(_ serverGroup: ServerGroup) {
+        let runningServers = serverGroup.servers.filter { $0.isRunning }
+        guard !runningServers.isEmpty else { return }
+
+        // Pause auto-refresh during batch operation
+        refreshTimer?.invalidate()
+        refreshTimer = nil
+
+        let group = DispatchGroup()
+
+        for server in runningServers {
+            group.enter()
+            runGrove(["stop", server.name]) { _ in
+                group.leave()
+            }
+        }
+
+        // Refresh once all stops complete, then restart auto-refresh
+        group.notify(queue: .main) { [weak self] in
+            self?.refresh()
+            self?.startAutoRefresh()
+        }
+    }
+
     func startProxy() {
         runGrove(["proxy", "start"]) { [weak self] _ in
             DispatchQueue.main.async {
