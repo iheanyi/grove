@@ -31,8 +31,10 @@ Examples:
   grove new bugfix-123 v1.0.0         # Create worktree from v1.0.0 tag
   grove new feature-auth --dir ~/worktrees  # Override worktree location
   grove new feature-auth --track      # Force tracking existing remote branch
-  grove new feature-auth --no-track   # Force creating new branch (ignore remote)`,
-	Args: cobra.RangeArgs(1, 2),
+  grove new feature-auth --no-track   # Force creating new branch (ignore remote)
+  grove new --pick                    # Pick from available remote branches
+  grove new --pick --filter feat      # Pick from remote branches matching 'feat'`,
+	Args: cobra.RangeArgs(0, 2),
 	RunE: runNew,
 }
 
@@ -40,19 +42,73 @@ func init() {
 	newCmd.Flags().String("dir", "", "Override worktree parent directory")
 	newCmd.Flags().Bool("track", false, "Force tracking existing remote branch without prompt")
 	newCmd.Flags().Bool("no-track", false, "Force creating new branch even if remote exists")
+	newCmd.Flags().Bool("pick", false, "Interactively pick from remote branches")
+	newCmd.Flags().String("filter", "", "Filter remote branches by pattern (used with --pick)")
 }
 
 func runNew(cmd *cobra.Command, args []string) error {
-	branchName := args[0]
+	// Get flags
+	pickMode, _ := cmd.Flags().GetBool("pick")
+	filterPattern, _ := cmd.Flags().GetString("filter")
+	forceTrack, _ := cmd.Flags().GetBool("track")
+	forceNoTrack, _ := cmd.Flags().GetBool("no-track")
+
+	var branchName string
+
+	// Handle --pick mode
+	if pickMode {
+		if len(args) > 0 {
+			return fmt.Errorf("cannot specify branch name with --pick flag")
+		}
+
+		// Detect current repo first
+		wt, err := worktree.Detect()
+		if err != nil {
+			return fmt.Errorf("failed to detect git repository: %w", err)
+		}
+		mainRepoPath := wt.Path
+		if wt.IsWorktree && wt.MainWorktreePath != "" {
+			mainRepoPath = wt.MainWorktreePath
+		}
+
+		// Fetch latest remote branches
+		fmt.Println("Fetching remote branches...")
+		if err := fetchRemote(mainRepoPath); err != nil {
+			fmt.Printf("Warning: could not fetch remote: %v\n", err)
+		}
+
+		// Get available remote branches
+		branches, err := listRemoteBranches(mainRepoPath, filterPattern)
+		if err != nil {
+			return fmt.Errorf("failed to list remote branches: %w", err)
+		}
+
+		if len(branches) == 0 {
+			if filterPattern != "" {
+				return fmt.Errorf("no remote branches matching '%s'", filterPattern)
+			}
+			return fmt.Errorf("no remote branches found")
+		}
+
+		// Present picker
+		selected, err := pickBranch(branches)
+		if err != nil {
+			return err
+		}
+
+		branchName = selected
+		forceTrack = true // When picking a remote branch, always track it
+	} else {
+		if len(args) < 1 {
+			return fmt.Errorf("branch name required (or use --pick to select from remote branches)")
+		}
+		branchName = args[0]
+	}
 
 	// Validate branch name
 	if strings.TrimSpace(branchName) == "" {
 		return fmt.Errorf("branch name cannot be empty")
 	}
-
-	// Get flags
-	forceTrack, _ := cmd.Flags().GetBool("track")
-	forceNoTrack, _ := cmd.Flags().GetBool("no-track")
 
 	// Validate conflicting flags
 	if forceTrack && forceNoTrack {
@@ -253,4 +309,134 @@ func promptYesNo(question string, defaultYes bool) bool {
 	}
 
 	return input == "y" || input == "yes"
+}
+
+// fetchRemote fetches the latest from origin
+func fetchRemote(repoPath string) error {
+	cmd := exec.Command("git", "fetch", "origin", "--prune")
+	cmd.Dir = repoPath
+	return cmd.Run()
+}
+
+// listRemoteBranches returns a list of remote branches, optionally filtered
+func listRemoteBranches(repoPath, filter string) ([]string, error) {
+	cmd := exec.Command("git", "branch", "-r", "--format=%(refname:short)")
+	cmd.Dir = repoPath
+	output, err := cmd.Output()
+	if err != nil {
+		return nil, err
+	}
+
+	var branches []string
+	lines := strings.Split(strings.TrimSpace(string(output)), "\n")
+
+	// Get list of existing local worktree branches to exclude
+	existingBranches := getExistingWorktreeBranches(repoPath)
+
+	for _, line := range lines {
+		branch := strings.TrimSpace(line)
+		if branch == "" {
+			continue
+		}
+
+		// Skip HEAD pointer
+		if strings.Contains(branch, "HEAD") {
+			continue
+		}
+
+		// Remove origin/ prefix for display
+		shortName := strings.TrimPrefix(branch, "origin/")
+
+		// Skip if worktree already exists for this branch
+		if existingBranches[shortName] {
+			continue
+		}
+
+		// Apply filter if provided
+		if filter != "" && !strings.Contains(strings.ToLower(shortName), strings.ToLower(filter)) {
+			continue
+		}
+
+		branches = append(branches, shortName)
+	}
+
+	return branches, nil
+}
+
+// getExistingWorktreeBranches returns a map of branch names that already have worktrees
+func getExistingWorktreeBranches(repoPath string) map[string]bool {
+	result := make(map[string]bool)
+
+	cmd := exec.Command("git", "worktree", "list", "--porcelain")
+	cmd.Dir = repoPath
+	output, err := cmd.Output()
+	if err != nil {
+		return result
+	}
+
+	lines := strings.Split(string(output), "\n")
+	for _, line := range lines {
+		if strings.HasPrefix(line, "branch ") {
+			branchRef := strings.TrimPrefix(line, "branch ")
+			// Extract branch name from refs/heads/branch-name
+			parts := strings.Split(branchRef, "/")
+			if len(parts) >= 3 {
+				branchName := strings.Join(parts[2:], "/")
+				result[branchName] = true
+			}
+		}
+	}
+
+	return result
+}
+
+// pickBranch presents an interactive picker for selecting a branch
+func pickBranch(branches []string) (string, error) {
+	if len(branches) == 0 {
+		return "", fmt.Errorf("no branches to pick from")
+	}
+
+	// Show numbered list
+	fmt.Printf("\nAvailable remote branches (%d):\n", len(branches))
+	fmt.Println(strings.Repeat("-", 40))
+
+	// Limit display for very long lists
+	displayLimit := 25
+	for i, branch := range branches {
+		if i >= displayLimit {
+			fmt.Printf("  ... and %d more (use --filter to narrow down)\n", len(branches)-displayLimit)
+			break
+		}
+		fmt.Printf("  %2d) %s\n", i+1, branch)
+	}
+	fmt.Println()
+
+	// Prompt for selection
+	reader := bufio.NewReader(os.Stdin)
+	for {
+		fmt.Print("Select branch number (or 'q' to quit): ")
+		input, err := reader.ReadString('\n')
+		if err != nil {
+			return "", fmt.Errorf("failed to read input: %w", err)
+		}
+
+		input = strings.TrimSpace(input)
+		if input == "q" || input == "quit" {
+			return "", fmt.Errorf("selection cancelled")
+		}
+
+		// Parse number
+		var num int
+		if _, err := fmt.Sscanf(input, "%d", &num); err != nil {
+			fmt.Println("Please enter a valid number")
+			continue
+		}
+
+		if num < 1 || num > len(branches) {
+			fmt.Printf("Please enter a number between 1 and %d\n", len(branches))
+			continue
+		}
+
+		return branches[num-1], nil
+	}
 }
