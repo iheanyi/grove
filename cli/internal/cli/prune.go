@@ -8,28 +8,48 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/iheanyi/grove/internal/registry"
 	"github.com/iheanyi/grove/internal/worktree"
 	"github.com/spf13/cobra"
 )
 
 var pruneCmd = &cobra.Command{
 	Use:   "prune",
-	Short: "List and remove stale worktrees",
-	Long: `List and remove stale worktrees.
+	Short: "Remove stale worktrees and stopped servers",
+	Long: `Remove stale worktrees and stopped servers from grove.
 
-This command identifies worktrees whose branches have been merged into the main branch
-and prompts for confirmation before deletion.
+By default, shows all prunable items and prompts for confirmation.
+Use flags to control what gets pruned.
+
+What can be pruned:
+  - Stopped servers: Registry entries for servers that aren't running
+  - Merged worktrees: Git worktrees whose branches have been merged
+  - Orphaned entries: Registry entries for paths that no longer exist
 
 Examples:
-  grove prune              # Interactive prune with confirmation
-  grove prune --dry-run    # Show what would be deleted
-  grove prune --force      # Delete without confirmation`,
+  grove prune                # Interactive - show all and prompt
+  grove prune --stopped      # Only prune stopped servers
+  grove prune --merged       # Only prune merged git worktrees
+  grove prune --orphaned     # Only prune orphaned registry entries
+  grove prune --all          # Prune everything without prompting per-category
+  grove prune --dry-run      # Show what would be pruned`,
 	RunE: runPrune,
 }
 
 func init() {
-	pruneCmd.Flags().Bool("dry-run", false, "Show what would be deleted without actually deleting")
-	pruneCmd.Flags().Bool("force", false, "Skip confirmation and delete immediately")
+	pruneCmd.Flags().Bool("dry-run", false, "Show what would be pruned without making changes")
+	pruneCmd.Flags().Bool("force", false, "Skip confirmation prompts")
+	pruneCmd.Flags().Bool("stopped", false, "Prune stopped servers from registry")
+	pruneCmd.Flags().Bool("merged", false, "Prune git worktrees with merged branches")
+	pruneCmd.Flags().Bool("orphaned", false, "Prune registry entries for non-existent paths")
+	pruneCmd.Flags().Bool("all", false, "Prune everything (stopped + merged + orphaned)")
+	rootCmd.AddCommand(pruneCmd)
+}
+
+type pruneResult struct {
+	stoppedServers   []string
+	mergedWorktrees  []worktreeEntry
+	orphanedEntries  []string
 }
 
 type worktreeEntry struct {
@@ -41,131 +61,226 @@ type worktreeEntry struct {
 func runPrune(cmd *cobra.Command, args []string) error {
 	dryRun, _ := cmd.Flags().GetBool("dry-run")
 	force, _ := cmd.Flags().GetBool("force")
+	pruneStopped, _ := cmd.Flags().GetBool("stopped")
+	pruneMerged, _ := cmd.Flags().GetBool("merged")
+	pruneOrphaned, _ := cmd.Flags().GetBool("orphaned")
+	pruneAll, _ := cmd.Flags().GetBool("all")
 
-	// Detect current worktree to find the main repo
-	currentWt, err := worktree.Detect()
+	// If --all, enable everything
+	if pruneAll {
+		pruneStopped = true
+		pruneMerged = true
+		pruneOrphaned = true
+	}
+
+	// If no specific flags, show everything (interactive mode)
+	interactive := !pruneStopped && !pruneMerged && !pruneOrphaned
+
+	// Load registry
+	reg, err := registry.Load()
 	if err != nil {
-		return fmt.Errorf("failed to detect git repository: %w", err)
+		return fmt.Errorf("failed to load registry: %w", err)
 	}
 
-	// Determine the main repository path
-	mainRepoPath := currentWt.Path
-	if currentWt.IsWorktree && currentWt.MainWorktreePath != "" {
-		mainRepoPath = currentWt.MainWorktreePath
+	result := pruneResult{}
+
+	// Find stopped servers
+	if pruneStopped || interactive {
+		for _, server := range reg.List() {
+			if !server.IsRunning() {
+				result.stoppedServers = append(result.stoppedServers, server.Name)
+			}
+		}
 	}
 
-	// Detect default branch
-	defaultBranch, err := detectDefaultBranch(mainRepoPath)
-	if err != nil {
-		return fmt.Errorf("failed to detect default branch: %w", err)
+	// Find orphaned entries (paths that don't exist)
+	if pruneOrphaned || interactive {
+		for _, server := range reg.List() {
+			if _, err := os.Stat(server.Path); os.IsNotExist(err) {
+				// Don't double-count if already in stopped list
+				found := false
+				for _, s := range result.stoppedServers {
+					if s == server.Name {
+						found = true
+						break
+					}
+				}
+				if !found {
+					result.orphanedEntries = append(result.orphanedEntries, server.Name)
+				}
+			}
+		}
+		for _, wt := range reg.ListWorktrees() {
+			if _, err := os.Stat(wt.Path); os.IsNotExist(err) {
+				result.orphanedEntries = append(result.orphanedEntries, wt.Name)
+			}
+		}
 	}
 
-	fmt.Printf("Scanning worktrees (base branch: %s)...\n\n", defaultBranch)
+	// Find merged worktrees (only if we're in a git repo)
+	if pruneMerged || interactive {
+		currentWt, err := worktree.Detect()
+		if err == nil {
+			mainRepoPath := currentWt.Path
+			if currentWt.IsWorktree && currentWt.MainWorktreePath != "" {
+				mainRepoPath = currentWt.MainWorktreePath
+			}
 
-	// List all worktrees
-	worktrees, err := listWorktrees(mainRepoPath)
-	if err != nil {
-		return fmt.Errorf("failed to list worktrees: %w", err)
+			defaultBranch, err := detectDefaultBranch(mainRepoPath)
+			if err == nil {
+				worktrees, err := listWorktrees(mainRepoPath)
+				if err == nil {
+					for _, wt := range worktrees {
+						if wt.Path == mainRepoPath || wt.Branch == defaultBranch {
+							continue
+						}
+						isMerged, err := isBranchMerged(mainRepoPath, wt.Branch, defaultBranch)
+						if err == nil && isMerged {
+							result.mergedWorktrees = append(result.mergedWorktrees, wt)
+						}
+					}
+				}
+			}
+		}
 	}
 
-	if len(worktrees) == 0 {
-		fmt.Println("No worktrees found")
+	// Check if anything to prune
+	totalItems := len(result.stoppedServers) + len(result.mergedWorktrees) + len(result.orphanedEntries)
+	if totalItems == 0 {
+		fmt.Println("Nothing to prune - everything is clean!")
 		return nil
 	}
 
-	// Find stale worktrees (merged branches)
-	staleWorktrees := []worktreeEntry{}
-	for _, wt := range worktrees {
-		// Skip the main worktree
-		if wt.Path == mainRepoPath {
-			continue
-		}
+	// Display what can be pruned
+	fmt.Println("=== Prunable Items ===")
+	fmt.Println()
 
-		// Skip if branch is the default branch
-		if wt.Branch == defaultBranch {
-			continue
+	if len(result.stoppedServers) > 0 {
+		fmt.Printf("Stopped servers (%d):\n", len(result.stoppedServers))
+		for _, name := range result.stoppedServers {
+			server, _ := reg.Get(name)
+			path := ""
+			if server != nil {
+				path = server.Path
+			}
+			fmt.Printf("  • %s\n    %s\n", name, shortenPath(path))
 		}
-
-		// Check if branch is merged
-		isMerged, err := isBranchMerged(mainRepoPath, wt.Branch, defaultBranch)
-		if err != nil {
-			fmt.Printf("Warning: could not check merge status for %s: %v\n", wt.Branch, err)
-			continue
-		}
-
-		if isMerged {
-			staleWorktrees = append(staleWorktrees, wt)
-		}
+		fmt.Println()
 	}
 
-	if len(staleWorktrees) == 0 {
-		fmt.Println("No stale worktrees found (all branches are unmerged or active)")
-		return nil
+	if len(result.orphanedEntries) > 0 {
+		fmt.Printf("Orphaned entries (%d) - paths no longer exist:\n", len(result.orphanedEntries))
+		for _, name := range result.orphanedEntries {
+			fmt.Printf("  • %s\n", name)
+		}
+		fmt.Println()
 	}
 
-	// Display stale worktrees
-	fmt.Printf("Found %d stale worktree(s):\n\n", len(staleWorktrees))
-	for i, wt := range staleWorktrees {
-		fmt.Printf("%d. %s\n", i+1, wt.Name)
-		fmt.Printf("   Branch: %s (merged)\n", wt.Branch)
-		fmt.Printf("   Path:   %s\n", wt.Path)
+	if len(result.mergedWorktrees) > 0 {
+		fmt.Printf("Merged worktrees (%d):\n", len(result.mergedWorktrees))
+		for _, wt := range result.mergedWorktrees {
+			fmt.Printf("  • %s (branch: %s)\n    %s\n", wt.Name, wt.Branch, shortenPath(wt.Path))
+		}
 		fmt.Println()
 	}
 
 	if dryRun {
-		fmt.Println("(Dry run - no changes made)")
+		fmt.Println("--dry-run specified, no changes made.")
 		return nil
 	}
 
-	// Confirm deletion
-	if !force {
-		fmt.Printf("Delete these %d worktree(s)? [y/N]: ", len(staleWorktrees))
-		reader := bufio.NewReader(os.Stdin)
-		response, err := reader.ReadString('\n')
-		if err != nil {
-			return fmt.Errorf("failed to read input: %w", err)
+	// In interactive mode, prompt for each category
+	if interactive && !force {
+		if len(result.stoppedServers) > 0 {
+			if confirm(fmt.Sprintf("Remove %d stopped server(s) from registry?", len(result.stoppedServers))) {
+				pruneStopped = true
+			}
 		}
-
-		response = strings.ToLower(strings.TrimSpace(response))
-		if response != "y" && response != "yes" {
+		if len(result.orphanedEntries) > 0 {
+			if confirm(fmt.Sprintf("Remove %d orphaned entry/entries?", len(result.orphanedEntries))) {
+				pruneOrphaned = true
+			}
+		}
+		if len(result.mergedWorktrees) > 0 {
+			if confirm(fmt.Sprintf("Remove %d merged worktree(s)?", len(result.mergedWorktrees))) {
+				pruneMerged = true
+			}
+		}
+	} else if !force {
+		// Non-interactive mode with specific flags - single confirmation
+		if !confirm(fmt.Sprintf("Prune %d item(s)?", totalItems)) {
 			fmt.Println("Canceled")
 			return nil
 		}
 	}
 
-	// Delete worktrees
-	fmt.Println("\nDeleting worktrees...")
-	for _, wt := range staleWorktrees {
-		fmt.Printf("Removing %s... ", wt.Name)
+	// Execute pruning
+	pruned := 0
 
-		// Remove worktree using git worktree remove
-		gitCmd := exec.Command("git", "worktree", "remove", wt.Path, "--force")
-		gitCmd.Dir = mainRepoPath
-		if err := gitCmd.Run(); err != nil {
-			fmt.Printf("FAILED: %v\n", err)
-			continue
+	// Prune stopped servers
+	if pruneStopped && len(result.stoppedServers) > 0 {
+		fmt.Println("Removing stopped servers...")
+		for _, name := range result.stoppedServers {
+			if err := reg.Remove(name); err != nil {
+				fmt.Printf("  ✗ %s: %v\n", name, err)
+			} else {
+				fmt.Printf("  ✓ %s\n", name)
+				pruned++
+			}
+		}
+	}
+
+	// Prune orphaned entries
+	if pruneOrphaned && len(result.orphanedEntries) > 0 {
+		fmt.Println("Removing orphaned entries...")
+		for _, name := range result.orphanedEntries {
+			reg.Remove(name)
+			reg.RemoveWorktree(name)
+			fmt.Printf("  ✓ %s\n", name)
+			pruned++
+		}
+	}
+
+	// Prune merged worktrees
+	if pruneMerged && len(result.mergedWorktrees) > 0 {
+		fmt.Println("Removing merged worktrees...")
+		currentWt, _ := worktree.Detect()
+		mainRepoPath := currentWt.Path
+		if currentWt.IsWorktree && currentWt.MainWorktreePath != "" {
+			mainRepoPath = currentWt.MainWorktreePath
 		}
 
-		// Delete the local branch
-		branchCmd := exec.Command("git", "branch", "-D", wt.Branch)
-		branchCmd.Dir = mainRepoPath
-		if err := branchCmd.Run(); err != nil {
-			fmt.Printf("OK (worktree removed, branch deletion failed: %v)\n", err)
-		} else {
+		for _, wt := range result.mergedWorktrees {
+			fmt.Printf("  Removing %s... ", wt.Name)
+
+			// Remove git worktree
+			gitCmd := exec.Command("git", "worktree", "remove", wt.Path, "--force")
+			gitCmd.Dir = mainRepoPath
+			if err := gitCmd.Run(); err != nil {
+				fmt.Printf("FAILED: %v\n", err)
+				continue
+			}
+
+			// Delete the local branch
+			branchCmd := exec.Command("git", "branch", "-D", wt.Branch)
+			branchCmd.Dir = mainRepoPath
+			branchCmd.Run() // Ignore error, branch might already be deleted
+
+			// Remove from registry
+			reg.Remove(wt.Name)
+			reg.RemoveWorktree(wt.Name)
+
 			fmt.Println("OK")
+			pruned++
 		}
+
+		// Clean up git worktree metadata
+		pruneMetadataCmd := exec.Command("git", "worktree", "prune")
+		pruneMetadataCmd.Dir = mainRepoPath
+		pruneMetadataCmd.Run()
 	}
 
-	// Clean up any stale worktree metadata
-	fmt.Println("\nCleaning up worktree metadata...")
-	pruneMetadataCmd := exec.Command("git", "worktree", "prune")
-	pruneMetadataCmd.Dir = mainRepoPath
-	if err := pruneMetadataCmd.Run(); err != nil {
-		fmt.Printf("Warning: failed to prune metadata: %v\n", err)
-	}
-
-	fmt.Printf("\nSuccessfully pruned %d worktree(s)\n", len(staleWorktrees))
-
+	fmt.Printf("\nPruned %d item(s)\n", pruned)
 	return nil
 }
 
@@ -186,7 +301,6 @@ func listWorktrees(mainRepoPath string) ([]worktreeEntry, error) {
 		line = strings.TrimSpace(line)
 
 		if strings.HasPrefix(line, "worktree ") {
-			// New worktree entry
 			if current.Path != "" {
 				current.Name = filepath.Base(current.Path)
 				worktrees = append(worktrees, current)
@@ -196,7 +310,6 @@ func listWorktrees(mainRepoPath string) ([]worktreeEntry, error) {
 			}
 		} else if strings.HasPrefix(line, "branch ") {
 			branchRef := strings.TrimPrefix(line, "branch ")
-			// Extract branch name from refs/heads/branch-name
 			parts := strings.Split(branchRef, "/")
 			if len(parts) >= 3 {
 				current.Branch = strings.Join(parts[2:], "/")
@@ -204,7 +317,6 @@ func listWorktrees(mainRepoPath string) ([]worktreeEntry, error) {
 		}
 	}
 
-	// Add the last entry
 	if current.Path != "" {
 		current.Name = filepath.Base(current.Path)
 		worktrees = append(worktrees, current)
@@ -215,7 +327,6 @@ func listWorktrees(mainRepoPath string) ([]worktreeEntry, error) {
 
 // isBranchMerged checks if a branch has been merged into the base branch
 func isBranchMerged(repoPath, branch, baseBranch string) (bool, error) {
-	// Use git branch --merged to check if the branch is merged
 	cmd := exec.Command("git", "branch", "--merged", baseBranch)
 	cmd.Dir = repoPath
 	output, err := cmd.Output()
@@ -223,10 +334,8 @@ func isBranchMerged(repoPath, branch, baseBranch string) (bool, error) {
 		return false, err
 	}
 
-	// Parse the output to see if our branch is in the list
 	lines := strings.Split(string(output), "\n")
 	for _, line := range lines {
-		// Remove leading * and whitespace
 		branchName := strings.TrimSpace(strings.TrimPrefix(line, "*"))
 		if branchName == branch {
 			return true, nil
@@ -234,4 +343,26 @@ func isBranchMerged(repoPath, branch, baseBranch string) (bool, error) {
 	}
 
 	return false, nil
+}
+
+// confirm prompts the user for yes/no confirmation
+func confirm(prompt string) bool {
+	fmt.Printf("%s [y/N]: ", prompt)
+	reader := bufio.NewReader(os.Stdin)
+	response, err := reader.ReadString('\n')
+	if err != nil {
+		return false
+	}
+	response = strings.ToLower(strings.TrimSpace(response))
+	return response == "y" || response == "yes"
+}
+
+// shortenPath replaces home directory with ~
+func shortenPath(path string) string {
+	if home, err := os.UserHomeDir(); err == nil {
+		if strings.HasPrefix(path, home) {
+			return "~" + strings.TrimPrefix(path, home)
+		}
+	}
+	return path
 }
