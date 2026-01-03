@@ -108,6 +108,13 @@ func (r *Registry) Remove(name string) error {
 	return r.Save()
 }
 
+// RemoveWithoutSave removes a server without saving (for batch operations)
+func (r *Registry) RemoveWithoutSave(name string) {
+	r.mu.Lock()
+	delete(r.Servers, name)
+	r.mu.Unlock()
+}
+
 // List returns all servers
 func (r *Registry) List() []*Server {
 	r.mu.RLock()
@@ -282,6 +289,13 @@ func (r *Registry) RemoveWorktree(name string) error {
 	r.mu.Unlock()
 
 	return r.Save()
+}
+
+// RemoveWorktreeWithoutSave removes a worktree without saving (for batch operations)
+func (r *Registry) RemoveWorktreeWithoutSave(name string) {
+	r.mu.Lock()
+	delete(r.Worktrees, name)
+	r.mu.Unlock()
 }
 
 // ListWorktrees returns all worktrees

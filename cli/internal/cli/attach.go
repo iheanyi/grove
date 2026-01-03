@@ -198,73 +198,113 @@ func findPIDOnPort(targetPort int) int {
 
 // DetachCmd removes a server from tracking without stopping it
 var detachCmd = &cobra.Command{
-	Use:   "detach [name]",
-	Short: "Detach a server from grove tracking",
-	Long: `Detach a server from grove tracking without stopping the process.
+	Use:   "detach [name...]",
+	Short: "Detach one or more servers from grove tracking",
+	Long: `Detach servers from grove tracking without stopping the processes.
 
-This removes the server from the registry and proxy but leaves
-the actual process running.
+This removes the servers from the registry and proxy but leaves
+the actual processes running.
 
 Examples:
   grove detach                  # Detach current worktree's server
-  grove detach my-server        # Detach named server`,
+  grove detach my-server        # Detach named server
+  grove detach server1 server2  # Detach multiple servers at once`,
 	RunE: runDetach,
 }
 
 func runDetach(cmd *cobra.Command, args []string) error {
-	// Determine server name
-	var name string
+	// Determine server names
+	var names []string
 	if len(args) > 0 {
-		name = args[0]
+		names = args
 	} else {
 		wt, err := worktree.Detect()
 		if err != nil {
 			return fmt.Errorf("failed to detect worktree: %w", err)
 		}
-		name = wt.Name
+		names = []string{wt.Name}
 	}
 
-	// Load registry
+	// Load registry once
 	reg, err := registry.Load()
 	if err != nil {
 		return fmt.Errorf("failed to load registry: %w", err)
 	}
 
-	// Check if registered as a server
-	server, isServer := reg.Get(name)
-	_, isWorktree := reg.GetWorktree(name)
-
-	if !isServer && !isWorktree {
-		return fmt.Errorf("'%s' is not registered as a server or worktree", name)
+	// Process all names
+	var detachedServers []string
+	var detachedWorktrees []string
+	var runningPIDs []struct {
+		name string
+		pid  int
 	}
+	var notFound []string
 
-	// Remove from servers if present
-	if isServer {
-		if err := reg.Remove(name); err != nil {
-			return fmt.Errorf("failed to remove server: %w", err)
+	for _, name := range names {
+		// Check if registered as a server
+		server, isServer := reg.Get(name)
+		_, isWorktree := reg.GetWorktree(name)
+
+		if !isServer && !isWorktree {
+			notFound = append(notFound, name)
+			continue
+		}
+
+		// Remove from servers if present (without saving yet)
+		if isServer {
+			reg.RemoveWithoutSave(name)
+			detachedServers = append(detachedServers, name)
+			if server.IsRunning() {
+				runningPIDs = append(runningPIDs, struct {
+					name string
+					pid  int
+				}{name, server.PID})
+			}
+		}
+
+		// Remove from worktrees if present (without saving yet)
+		if isWorktree {
+			reg.RemoveWorktreeWithoutSave(name)
+			detachedWorktrees = append(detachedWorktrees, name)
 		}
 	}
 
-	// Remove from worktrees if present
-	if isWorktree {
-		if err := reg.RemoveWorktree(name); err != nil {
-			return fmt.Errorf("failed to remove worktree: %w", err)
+	// Save once after all removals
+	if len(detachedServers) > 0 || len(detachedWorktrees) > 0 {
+		if err := reg.Save(); err != nil {
+			return fmt.Errorf("failed to save registry: %w", err)
 		}
 	}
 
-	if err := reg.Save(); err != nil {
-		return fmt.Errorf("failed to save registry: %w", err)
-	}
-
-	if isServer {
+	// Print results
+	for _, name := range detachedServers {
 		fmt.Printf("✓ Detached server '%s'\n", name)
-		if server.IsRunning() {
-			fmt.Printf("  The process (PID %d) is still running\n", server.PID)
-			fmt.Println("  Use 'kill' to stop it if needed")
+	}
+	for _, name := range detachedWorktrees {
+		if !contains(detachedServers, name) {
+			fmt.Printf("✓ Removed worktree '%s' from registry\n", name)
 		}
-	} else {
-		fmt.Printf("✓ Removed worktree '%s' from registry\n", name)
+	}
+	for _, rp := range runningPIDs {
+		fmt.Printf("  Note: Process for '%s' (PID %d) is still running\n", rp.name, rp.pid)
+	}
+	for _, name := range notFound {
+		fmt.Printf("⚠ '%s' is not registered as a server or worktree\n", name)
+	}
+
+	if len(runningPIDs) > 0 {
+		fmt.Println("  Use 'kill' to stop running processes if needed")
 	}
 
 	return nil
+}
+
+// contains checks if a string is in a slice
+func contains(slice []string, item string) bool {
+	for _, s := range slice {
+		if s == item {
+			return true
+		}
+	}
+	return false
 }

@@ -379,19 +379,15 @@ class ServerManager: ObservableObject {
         refreshTimer?.invalidate()
         refreshTimer = nil
 
-        let group = DispatchGroup()
+        // Pass all names to a single detach command to avoid race conditions
+        var args = ["detach"]
+        args.append(contentsOf: stoppedServers.map { $0.name })
 
-        for server in stoppedServers {
-            group.enter()
-            runGrove(["detach", server.name]) { _ in
-                group.leave()
+        runGrove(args) { [weak self] _ in
+            DispatchQueue.main.async {
+                self?.refresh()
+                self?.startAutoRefresh()
             }
-        }
-
-        // Refresh once all detaches complete, then restart auto-refresh
-        group.notify(queue: .main) { [weak self] in
-            self?.refresh()
-            self?.startAutoRefresh()
         }
     }
 
@@ -403,19 +399,15 @@ class ServerManager: ObservableObject {
         refreshTimer?.invalidate()
         refreshTimer = nil
 
-        let group = DispatchGroup()
+        // Pass all names to a single detach command to avoid race conditions
+        var args = ["detach"]
+        args.append(contentsOf: serverGroup.servers.map { $0.name })
 
-        for server in serverGroup.servers {
-            group.enter()
-            runGrove(["detach", server.name]) { _ in
-                group.leave()
+        runGrove(args) { [weak self] _ in
+            DispatchQueue.main.async {
+                self?.refresh()
+                self?.startAutoRefresh()
             }
-        }
-
-        // Refresh once all detaches complete, then restart auto-refresh
-        group.notify(queue: .main) { [weak self] in
-            self?.refresh()
-            self?.startAutoRefresh()
         }
     }
 
