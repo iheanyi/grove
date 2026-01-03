@@ -6,6 +6,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -111,16 +112,35 @@ func parseWorktreeList(output string) ([]*Worktree, error) {
 	return worktrees, nil
 }
 
-// DetectActivity checks for various activities in a worktree
+// DetectActivity checks for various activities in a worktree.
+// All checks run in parallel for performance.
 func DetectActivity(wt *Worktree) error {
-	// Check for Claude Code (look for ~/.claude/ide/*.sock or process)
-	wt.HasClaude = detectClaude(wt.Path)
+	var wg sync.WaitGroup
+	var hasClaude, hasVSCode, gitDirty bool
 
-	// Check for VS Code (look for .vscode-server or code process with this path)
-	wt.HasVSCode = detectVSCode(wt.Path)
+	// Run all detection checks in parallel
+	wg.Add(3)
 
-	// Check git status (git status --porcelain)
-	wt.GitDirty = detectGitDirty(wt.Path)
+	go func() {
+		defer wg.Done()
+		hasClaude = detectClaude(wt.Path)
+	}()
+
+	go func() {
+		defer wg.Done()
+		hasVSCode = detectVSCode(wt.Path)
+	}()
+
+	go func() {
+		defer wg.Done()
+		gitDirty = detectGitDirty(wt.Path)
+	}()
+
+	wg.Wait()
+
+	wt.HasClaude = hasClaude
+	wt.HasVSCode = hasVSCode
+	wt.GitDirty = gitDirty
 
 	// Update last activity time if any activity detected
 	if wt.HasClaude || wt.HasVSCode || wt.GitDirty {

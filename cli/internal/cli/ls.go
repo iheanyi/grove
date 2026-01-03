@@ -43,8 +43,9 @@ func init() {
 	lsCmd.Flags().Bool("active", false, "Only show worktrees with any activity")
 	lsCmd.Flags().Bool("all", false, "Show all discovered worktrees (default)")
 	lsCmd.Flags().Bool("running", false, "Only show running servers (deprecated, use --servers)")
-	lsCmd.Flags().Bool("fast", false, "Skip activity detection (Claude, VSCode, git status) for faster output")
-	lsCmd.Flags().Bool("full", false, "Show full info including GitHub PR/CI/review status")
+	lsCmd.Flags().Bool("fast", false, "Skip activity detection (deprecated, now default behavior)")
+	lsCmd.Flags().Bool("detect-activity", false, "Detect Claude, VS Code, and git status (slower)")
+	lsCmd.Flags().Bool("full", false, "Show full info including GitHub PR/CI/review status (implies --detect-activity)")
 	lsCmd.Flags().StringSlice("tag", nil, "Filter by tag (can be specified multiple times, uses OR logic)")
 	lsCmd.Flags().String("group", "mainRepo", "Group by: mainRepo (default), activity, status, none")
 }
@@ -55,11 +56,19 @@ func runLs(cmd *cobra.Command, args []string) error {
 	onlyServers, _ := cmd.Flags().GetBool("servers")
 	onlyActive, _ := cmd.Flags().GetBool("active")
 	showAll, _ := cmd.Flags().GetBool("all")
-	fastMode, _ := cmd.Flags().GetBool("fast")
+	detectActivity, _ := cmd.Flags().GetBool("detect-activity")
 	fullMode, _ := cmd.Flags().GetBool("full")
 	tagFilters, _ := cmd.Flags().GetStringSlice("tag")
 	groupBy, _ := cmd.Flags().GetString("group")
 	_ = showAll // Reserved for future use
+
+	// --full implies --detect-activity (need activity data for full output)
+	if fullMode {
+		detectActivity = true
+	}
+
+	// Fast mode is now the default - activity detection only when explicitly requested
+	fastMode := !detectActivity
 
 	// Backward compatibility: --running implies --servers
 	if onlyRunning {

@@ -740,26 +740,72 @@ func (r *Registry) ListWorktrees() []*discovery.Worktree {
 	return worktrees
 }
 
-// UpdateWorktreeActivities updates all workspaces with their current activity status
+// UpdateWorktreeActivities updates all workspaces with their current activity status.
+// Activity detection is parallelized across all workspaces for performance.
 func (r *Registry) UpdateWorktreeActivities() error {
-	r.mu.Lock()
+	r.mu.RLock()
+	workspaces := make([]*Workspace, 0, len(r.Workspaces))
 	for _, ws := range r.Workspaces {
-		// Create a temporary worktree to use with DetectActivity
-		wt := &discovery.Worktree{
-			Name:     ws.Name,
-			Path:     ws.Path,
-			Branch:   ws.Branch,
-			MainRepo: ws.MainRepo,
-		}
-		if err := discovery.DetectActivity(wt); err != nil {
-			// Continue on error
-			continue
-		}
-		// Update workspace with detected activity
-		ws.GitDirty = wt.GitDirty
-		ws.HasClaude = wt.HasClaude
-		ws.HasVSCode = wt.HasVSCode
-		ws.LastActivity = wt.LastActivity
+		workspaces = append(workspaces, ws)
+	}
+	r.mu.RUnlock()
+
+	if len(workspaces) == 0 {
+		return nil
+	}
+
+	// Create a channel to receive results
+	type activityResult struct {
+		ws       *Workspace
+		dirty    bool
+		claude   bool
+		vscode   bool
+		activity time.Time
+	}
+
+	results := make(chan activityResult, len(workspaces))
+	var wg sync.WaitGroup
+
+	// Launch goroutines for each workspace (parallelized for speed)
+	for _, ws := range workspaces {
+		wg.Add(1)
+		go func(ws *Workspace) {
+			defer wg.Done()
+
+			// Create a temporary worktree to use with DetectActivity
+			wt := &discovery.Worktree{
+				Name:     ws.Name,
+				Path:     ws.Path,
+				Branch:   ws.Branch,
+				MainRepo: ws.MainRepo,
+			}
+			if err := discovery.DetectActivity(wt); err != nil {
+				return
+			}
+
+			results <- activityResult{
+				ws:       ws,
+				dirty:    wt.GitDirty,
+				claude:   wt.HasClaude,
+				vscode:   wt.HasVSCode,
+				activity: wt.LastActivity,
+			}
+		}(ws)
+	}
+
+	// Close results channel when all goroutines complete
+	go func() {
+		wg.Wait()
+		close(results)
+	}()
+
+	// Collect results and update workspaces
+	r.mu.Lock()
+	for result := range results {
+		result.ws.GitDirty = result.dirty
+		result.ws.HasClaude = result.claude
+		result.ws.HasVSCode = result.vscode
+		result.ws.LastActivity = result.activity
 	}
 	r.mu.Unlock()
 
