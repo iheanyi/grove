@@ -371,6 +371,25 @@ class ServerManager: ObservableObject {
         }
     }
 
+    func removeAllStoppedServers() {
+        let stoppedServers = servers.filter { !$0.isRunning }
+        guard !stoppedServers.isEmpty else { return }
+
+        let group = DispatchGroup()
+
+        for server in stoppedServers {
+            group.enter()
+            runGrove(["detach", server.name]) { _ in
+                group.leave()
+            }
+        }
+
+        // Refresh once all detaches complete
+        group.notify(queue: .main) { [weak self] in
+            self?.refresh()
+        }
+    }
+
     func startProxy() {
         runGrove(["proxy", "start"]) { [weak self] _ in
             DispatchQueue.main.async {

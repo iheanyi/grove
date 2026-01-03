@@ -322,7 +322,14 @@ struct MenuView: View {
                             // Stopped servers (collapsible)
                             let stopped = filteredServers.filter { !$0.isRunning }
                             if !stopped.isEmpty {
-                                SectionHeader(title: "Stopped", count: stopped.count, isCollapsible: true, isCollapsed: $isStoppedCollapsed)
+                                SectionHeader(
+                                    title: "Stopped",
+                                    count: stopped.count,
+                                    isCollapsible: true,
+                                    isCollapsed: $isStoppedCollapsed,
+                                    actionLabel: "Remove All",
+                                    action: { serverManager.removeAllStoppedServers() }
+                                )
 
                                 if !isStoppedCollapsed {
                                     ForEach(Array(stopped.enumerated()), id: \.element.id) { index, server in
@@ -444,12 +451,16 @@ struct SectionHeader: View {
     let count: Int
     var isCollapsible: Bool = false
     @Binding var isCollapsed: Bool
+    var actionLabel: String? = nil
+    var action: (() -> Void)? = nil
 
-    init(title: String, count: Int, isCollapsible: Bool = false, isCollapsed: Binding<Bool> = .constant(false)) {
+    init(title: String, count: Int, isCollapsible: Bool = false, isCollapsed: Binding<Bool> = .constant(false), actionLabel: String? = nil, action: (() -> Void)? = nil) {
         self.title = title
         self.count = count
         self.isCollapsible = isCollapsible
         self._isCollapsed = isCollapsed
+        self.actionLabel = actionLabel
+        self.action = action
     }
 
     var body: some View {
@@ -463,6 +474,19 @@ struct SectionHeader: View {
                     .foregroundColor(.secondary)
             }
             Spacer()
+
+            if let actionLabel = actionLabel, let action = action, !isCollapsed {
+                Button {
+                    action()
+                } label: {
+                    Text(actionLabel)
+                        .font(.caption2)
+                        .foregroundColor(.red)
+                }
+                .buttonStyle(.plain)
+                .help("Remove all stopped servers from Grove")
+            }
+
             Text("\(count)")
                 .font(.caption.weight(.semibold))
                 .foregroundColor(.secondary)

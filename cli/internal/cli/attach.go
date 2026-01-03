@@ -230,25 +230,40 @@ func runDetach(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to load registry: %w", err)
 	}
 
-	// Check if registered
-	server, ok := reg.Get(name)
-	if !ok {
-		return fmt.Errorf("server '%s' is not registered", name)
+	// Check if registered as a server
+	server, isServer := reg.Get(name)
+	_, isWorktree := reg.GetWorktree(name)
+
+	if !isServer && !isWorktree {
+		return fmt.Errorf("'%s' is not registered as a server or worktree", name)
 	}
 
-	// Remove from registry
-	if err := reg.Remove(name); err != nil {
-		return fmt.Errorf("failed to remove server: %w", err)
+	// Remove from servers if present
+	if isServer {
+		if err := reg.Remove(name); err != nil {
+			return fmt.Errorf("failed to remove server: %w", err)
+		}
+	}
+
+	// Remove from worktrees if present
+	if isWorktree {
+		if err := reg.RemoveWorktree(name); err != nil {
+			return fmt.Errorf("failed to remove worktree: %w", err)
+		}
 	}
 
 	if err := reg.Save(); err != nil {
 		return fmt.Errorf("failed to save registry: %w", err)
 	}
 
-	fmt.Printf("✓ Detached server '%s'\n", name)
-	if server.IsRunning() {
-		fmt.Printf("  The process (PID %d) is still running\n", server.PID)
-		fmt.Println("  Use 'kill' to stop it if needed")
+	if isServer {
+		fmt.Printf("✓ Detached server '%s'\n", name)
+		if server.IsRunning() {
+			fmt.Printf("  The process (PID %d) is still running\n", server.PID)
+			fmt.Println("  Use 'kill' to stop it if needed")
+		}
+	} else {
+		fmt.Printf("✓ Removed worktree '%s' from registry\n", name)
 	}
 
 	return nil
