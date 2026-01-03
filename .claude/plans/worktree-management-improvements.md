@@ -571,6 +571,29 @@ ws.send(JSON.stringify({ type: 'subscribe', topics: ['workspaces', 'agents'] }))
 
 ---
 
+## Agent-Tracking Hooks (Phase 4 Prerequisite)
+
+The current `grove hooks install` provides basic hooks. For the multi-agent dashboard, we need enhanced hooks:
+
+| Hook | Current | Enhanced (Phase 4) |
+|------|---------|-------------------|
+| **SessionStart** | Shows grove status | + Register agent started, update `AgentInfo.status = "working"` |
+| **Stop** | Reminds about docs | + Update agent status to `"idle"` or `"ready_for_review"` |
+| **PostToolUse (git commit)** | N/A | Mark workspace as potentially ready for review |
+| **PostToolUse (git push)** | N/A | Mark workspace as `"pushed"` |
+
+**New internal command**: `grove agent-status`
+```bash
+# Called by hooks to update registry
+grove agent-status --worktree "$cwd" --status working --task "Implement OAuth"
+grove agent-status --worktree "$cwd" --status idle
+grove agent-status --worktree "$cwd" --status ready_for_review
+```
+
+**Implementation**: Add to hooks.go when building Phase 4 dashboard.
+
+---
+
 ## Open Questions
 
 1. **Beads integration depth**: Should grove automatically update beads issues when changes are committed? Or keep it read-only?
@@ -585,5 +608,14 @@ ws.send(JSON.stringify({ type: 'subscribe', topics: ['workspaces', 'agents'] }))
 
 ## Related Issues
 
+### Completed
+- `claude-helper-1mt`: Add grove hooks install command for Claude Code integration ✓
+
+### Open - Documentation
 - `claude-helper-p1z`: Update MCP and README with recent features
-- `claude-helper-1mt`: Add grove hooks install command for Claude Code integration
+
+### Open - Worktree Management Phases
+- `claude-helper-dat`: Phase 1: Unified Workspace Model (P2)
+- `claude-helper-yks`: Phase 2: Discovery and Cleanup (P2)
+- `claude-helper-1fk`: Phase 3: Remote Branch and GitHub Integration (P3)
+- `claude-helper-d89`: Phase 4: Multi-Agent Dashboard (P3)
