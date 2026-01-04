@@ -71,8 +71,20 @@ func DetectAt(path string) (*Info, error) {
 	// Check if this is a linked worktree
 	isWorktree, mainPath := detectLinkedWorktree(wtPath)
 
+	// Determine the name:
+	// - For linked worktrees: use the sanitized branch name
+	// - For main working tree: use the directory name (more intuitive for standalone repos)
+	var name string
+	if isWorktree {
+		// Linked worktree: use branch name (e.g., "feature-auth")
+		name = Sanitize(branch)
+	} else {
+		// Main working tree: use directory name (e.g., "fade-pics", "myapp")
+		name = Sanitize(filepath.Base(wtPath))
+	}
+
 	info := &Info{
-		Name:             Sanitize(branch),
+		Name:             name,
 		Branch:           branch,
 		Path:             wtPath,
 		IsWorktree:       isWorktree,
