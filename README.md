@@ -32,10 +32,17 @@ Grove is a **worktree-first development workflow tool** that combines:
 
 ### Interfaces
 - **Interactive TUI**: Beautiful terminal dashboard with real-time updates
+- **Web Dashboard**: Browser-based visual management with real-time WebSocket updates
 - **fzf-style selector**: Quick fuzzy-find picker for server selection
 - **macOS Menubar App**: Native menubar app with search, notifications, and quick actions
 - **GitHub integration**: View CI status and PR links for each worktree
 - **MCP Integration**: Claude Code can manage your dev servers directly
+
+### AI Agent Discovery
+- **Agent detection**: Automatically find Claude Code sessions across worktrees
+- **Activity tracking**: See which worktrees have active AI agents
+- **Process info**: View agent type, duration, and working directory
+- **Review queue**: Find workspaces with changes ready for review
 
 ### Power User Features
 - **Shell completion**: Tab completion for bash, zsh, fish, and PowerShell
@@ -242,6 +249,24 @@ grove proxy status  # Check status
 grove proxy routes  # List all registered routes
 ```
 
+### Review and Workflow Commands
+
+```bash
+# Review queue - see workspaces with uncommitted changes
+grove review              # Interactive review queue
+grove review --json       # Output as JSON (for tooling)
+
+# Cycle through running servers in browser
+grove cycle               # Open next running server in browser
+grove cycle --reset       # Reset to first server
+grove cycle --list        # Show all servers in cycle order
+
+# List active AI agents (Claude Code, etc.)
+grove agents              # List all active agents
+grove agents --json       # Output in JSON format
+grove agents --watch      # Continuously update (every 2s)
+```
+
 ### Diagnostics
 
 ```bash
@@ -291,6 +316,25 @@ Features:
 - Fuzzy search for quick server selection
 - Spinner animations during operations
 - Toast notifications for actions
+
+## Web Dashboard
+
+Launch a browser-based dashboard for visual management:
+
+```bash
+grove dashboard              # Start on default port (3099)
+grove dashboard --port 8080  # Use custom port
+grove dashboard --no-browser # Don't open browser automatically
+```
+
+**Features:**
+- **Workspaces view**: See all registered workspaces with git status, server state, and activity indicators
+- **Agents view**: Monitor active AI agents (Claude Code, etc.) working across your worktrees
+- **Real-time updates**: WebSocket-powered live updates as servers start/stop
+- **Start/stop servers**: Click to start or stop dev servers
+- **Quick actions**: Open in browser, view logs, copy URLs
+
+The dashboard provides a visual overview of your entire development environment, making it easy to see what's running, which worktrees have changes, and where AI agents are active.
 
 ## Shell Integration
 

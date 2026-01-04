@@ -76,11 +76,13 @@ export function connectWebSocket() {
 					case 'workspaces_updated':
 						if (Array.isArray(message.payload)) {
 							workspaces.set(message.payload as WorkspaceResponse[]);
+							workspacesLoading.set(false);
 						}
 						break;
 					case 'agents_updated':
 						if (Array.isArray(message.payload)) {
 							agents.set(message.payload as AgentResponse[]);
+							agentsLoading.set(false);
 						}
 						break;
 					case 'ping':
