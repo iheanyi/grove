@@ -101,7 +101,13 @@ func parseWorktreeList(output string) ([]*Worktree, error) {
 			branch := strings.TrimPrefix(line, "branch ")
 			branch = strings.TrimPrefix(branch, "refs/heads/")
 			current.Branch = branch
-			current.Name = sanitizeBranchName(branch)
+			// For main repo (first worktree), use directory name instead of branch
+			// This makes standalone repos show as "myapp" instead of "main"
+			if current.Path == mainRepoPath {
+				current.Name = sanitizeBranchName(filepath.Base(current.Path))
+			} else {
+				current.Name = sanitizeBranchName(branch)
+			}
 
 		} else if strings.HasPrefix(line, "HEAD ") && current != nil && current.Branch == "" {
 			// Detached HEAD state
