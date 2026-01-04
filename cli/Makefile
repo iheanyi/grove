@@ -1,4 +1,7 @@
-.PHONY: build install clean test lint run help
+.PHONY: build build-web install clean clean-web test lint run help
+
+# Web dashboard directory
+WEB_DIR=internal/dashboard/web
 
 # Build variables
 BINARY_NAME=grove
@@ -18,7 +21,13 @@ GOFMT=$(GO) fmt
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-20s\033[0m %s\n", $$1, $$2}'
 
-build: ## Build the grove binary
+build-web: ## Build the web dashboard
+	cd $(WEB_DIR) && npm install && npm run build
+
+build: build-web ## Build the grove binary (includes web dashboard)
+	$(GOBUILD) $(LDFLAGS) -o $(BINARY_NAME) ./cmd/grove
+
+build-go: ## Build only the Go binary (skip web build)
 	$(GOBUILD) $(LDFLAGS) -o $(BINARY_NAME) ./cmd/grove
 
 install: build ## Install grove to $GOPATH/bin
@@ -27,9 +36,12 @@ install: build ## Install grove to $GOPATH/bin
 install-local: build ## Install grove to /usr/local/bin
 	sudo cp $(BINARY_NAME) /usr/local/bin/
 
-clean: ## Remove build artifacts
+clean: clean-web ## Remove build artifacts
 	rm -f $(BINARY_NAME)
 	rm -rf dist/
+
+clean-web: ## Remove web build artifacts
+	rm -rf $(WEB_DIR)/build $(WEB_DIR)/node_modules $(WEB_DIR)/.svelte-kit
 
 test: ## Run tests
 	$(GOTEST) -v ./...
@@ -60,6 +72,12 @@ dev-ls: build ## List servers
 
 dev-doctor: build ## Run doctor
 	./$(BINARY_NAME) doctor
+
+dev-dashboard: build-go ## Run dashboard with web dev server
+	./$(BINARY_NAME) dashboard --dev
+
+dev-web: ## Run web dev server (for frontend development)
+	cd $(WEB_DIR) && npm run dev
 
 # Release targets (requires goreleaser)
 release-dry: ## Dry run release locally

@@ -1,0 +1,101 @@
+@import "tailwindcss";
+
+/* Custom theme colors for Grove */
+:root {
+	--grove-green: #22c55e;
+	--grove-green-dark: #16a34a;
+	--grove-bg: #0f172a;
+	--grove-surface: #1e293b;
+	--grove-border: #334155;
+}
+
+/* Global styles */
+body {
+	@apply bg-slate-900 text-slate-100 font-sans antialiased;
+}
+
+/* Status colors */
+.status-running {
+	@apply text-green-400;
+}
+
+.status-stopped {
+	@apply text-slate-500;
+}
+
+.status-starting {
+	@apply text-yellow-400;
+}
+
+.status-error {
+	@apply text-red-400;
+}
+
+/* Cards */
+.card {
+	@apply bg-slate-800 rounded-lg border border-slate-700 p-4;
+}
+
+.card-header {
+	@apply text-lg font-semibold mb-2;
+}
+
+/* Buttons */
+.btn {
+	@apply px-4 py-2 rounded-md font-medium transition-colors duration-150;
+}
+
+.btn-primary {
+	@apply bg-green-600 text-white hover:bg-green-700;
+}
+
+.btn-secondary {
+	@apply bg-slate-700 text-slate-200 hover:bg-slate-600;
+}
+
+.btn-danger {
+	@apply bg-red-600 text-white hover:bg-red-700;
+}
+
+/* Links */
+a {
+	@apply text-green-400 hover:text-green-300 transition-colors;
+}
+
+/* Tables */
+.table {
+	@apply w-full text-left;
+}
+
+.table th {
+	@apply px-4 py-2 text-slate-400 font-medium text-sm uppercase tracking-wider border-b border-slate-700;
+}
+
+.table td {
+	@apply px-4 py-3 border-b border-slate-700/50;
+}
+
+.table tr:hover {
+	@apply bg-slate-800/50;
+}
+
+/* Badges */
+.badge {
+	@apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium;
+}
+
+.badge-green {
+	@apply bg-green-900/50 text-green-400;
+}
+
+.badge-yellow {
+	@apply bg-yellow-900/50 text-yellow-400;
+}
+
+.badge-red {
+	@apply bg-red-900/50 text-red-400;
+}
+
+.badge-slate {
+	@apply bg-slate-700 text-slate-300;
+}
