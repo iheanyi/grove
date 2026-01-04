@@ -88,6 +88,18 @@ struct GeneralSettingsTab: View {
                     .frame(width: 180)
                 }
             }
+
+            Section {
+                LabeledContent("Show in menubar") {
+                    Picker("", selection: $preferences.menubarScope) {
+                        ForEach(MenubarScope.allCases, id: \.self) { scope in
+                            Text(scope.displayName).tag(scope)
+                        }
+                    }
+                    .frame(width: 180)
+                }
+                .help(preferences.menubarScope.description)
+            }
         }
         .formStyle(.grouped)
         .padding()

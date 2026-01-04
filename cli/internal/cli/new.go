@@ -25,11 +25,14 @@ in a centralized location: <worktrees_dir>/<project>/<branch>
 
 If base-branch is not specified, it defaults to 'main' or 'master' (auto-detected).
 
+When a directory conflict occurs, you'll be prompted with options to resolve it.
+
 Examples:
   grove new feature-auth              # Create worktree from main/master
   grove new feature-auth develop      # Create worktree from develop branch
   grove new bugfix-123 v1.0.0         # Create worktree from v1.0.0 tag
   grove new feature-auth --dir ~/worktrees  # Override worktree location
+  grove new feature-auth --name myapp-auth  # Custom worktree name
   grove new feature-auth --track      # Force tracking existing remote branch
   grove new feature-auth --no-track   # Force creating new branch (ignore remote)
   grove new --pick                    # Pick from available remote branches
@@ -40,6 +43,7 @@ Examples:
 
 func init() {
 	newCmd.Flags().String("dir", "", "Override worktree parent directory")
+	newCmd.Flags().String("name", "", "Override worktree name (for resolving conflicts)")
 	newCmd.Flags().Bool("track", false, "Force tracking existing remote branch without prompt")
 	newCmd.Flags().Bool("no-track", false, "Force creating new branch even if remote exists")
 	newCmd.Flags().Bool("pick", false, "Interactively pick from remote branches")
@@ -171,27 +175,39 @@ func runNew(cmd *cobra.Command, args []string) error {
 	var worktreeName string
 
 	dirOverride, _ := cmd.Flags().GetString("dir")
+	nameOverride, _ := cmd.Flags().GetString("name")
+
+	// Allow custom name override
+	effectiveBranchName := branchName
+	if nameOverride != "" {
+		effectiveBranchName = nameOverride
+	}
 
 	if dirOverride != "" {
 		// Flag override: use <dir>/<project>/<branch>
 		expandedDir := expandPath(dirOverride)
-		worktreePath = filepath.Join(expandedDir, repoName, branchName)
-		worktreeName = fmt.Sprintf("%s-%s", repoName, branchName)
+		worktreePath = filepath.Join(expandedDir, repoName, effectiveBranchName)
+		worktreeName = fmt.Sprintf("%s-%s", repoName, effectiveBranchName)
 	} else if cfg.WorktreesDir != "" {
 		// Centralized worktrees: use <worktrees_dir>/<project>/<branch>
 		expandedDir := expandPath(cfg.WorktreesDir)
-		worktreePath = filepath.Join(expandedDir, repoName, branchName)
-		worktreeName = fmt.Sprintf("%s-%s", repoName, branchName)
+		worktreePath = filepath.Join(expandedDir, repoName, effectiveBranchName)
+		worktreeName = fmt.Sprintf("%s-%s", repoName, effectiveBranchName)
 	} else {
 		// Default: sibling directory to main repo
-		worktreeName = fmt.Sprintf("%s-%s", repoName, branchName)
+		worktreeName = fmt.Sprintf("%s-%s", repoName, effectiveBranchName)
 		parentDir := filepath.Dir(mainRepoPath)
 		worktreePath = filepath.Join(parentDir, worktreeName)
 	}
 
-	// Check if worktree path already exists
+	// Check if worktree path already exists and prompt for resolution
 	if _, err := os.Stat(worktreePath); err == nil {
-		return fmt.Errorf("worktree directory already exists: %s", worktreePath)
+		newPath, newName, err := handleCollision(branchName, worktreePath, worktreeName, repoName, mainRepoPath)
+		if err != nil {
+			return err
+		}
+		worktreePath = newPath
+		worktreeName = newName
 	}
 
 	// Ensure parent directory exists for centralized worktrees
@@ -388,6 +404,86 @@ func getExistingWorktreeBranches(repoPath string) map[string]bool {
 	}
 
 	return result
+}
+
+// handleCollision prompts the user to resolve a worktree path collision
+func handleCollision(branchName, existingPath, existingName, repoName, mainRepoPath string) (string, string, error) {
+	fmt.Printf("\n⚠️  Directory conflict: %s already exists\n\n", existingPath)
+	fmt.Println("Options:")
+	fmt.Printf("  1. Use different name (e.g., grove new %s --name %s-v2)\n", branchName, branchName)
+	fmt.Printf("  2. Use different directory (e.g., grove new %s --dir ~/worktrees-alt)\n", branchName)
+	fmt.Println("  3. Cancel")
+	fmt.Println()
+
+	reader := bufio.NewReader(os.Stdin)
+	for {
+		fmt.Print("Choose option [1-3]: ")
+		input, err := reader.ReadString('\n')
+		if err != nil {
+			return "", "", fmt.Errorf("failed to read input: %w", err)
+		}
+
+		input = strings.TrimSpace(input)
+		switch input {
+		case "1":
+			// Prompt for new name
+			fmt.Print("Enter new name: ")
+			newName, err := reader.ReadString('\n')
+			if err != nil {
+				return "", "", fmt.Errorf("failed to read input: %w", err)
+			}
+			newName = strings.TrimSpace(newName)
+			if newName == "" {
+				fmt.Println("Name cannot be empty")
+				continue
+			}
+
+			// Calculate new path with the new name
+			worktreeName := fmt.Sprintf("%s-%s", repoName, newName)
+			parentDir := filepath.Dir(mainRepoPath)
+			worktreePath := filepath.Join(parentDir, worktreeName)
+
+			// Check if this new path also exists
+			if _, err := os.Stat(worktreePath); err == nil {
+				fmt.Printf("Directory %s also exists. Try a different name.\n", worktreePath)
+				continue
+			}
+
+			return worktreePath, worktreeName, nil
+
+		case "2":
+			// Prompt for new directory
+			fmt.Print("Enter new directory path: ")
+			newDir, err := reader.ReadString('\n')
+			if err != nil {
+				return "", "", fmt.Errorf("failed to read input: %w", err)
+			}
+			newDir = strings.TrimSpace(newDir)
+			if newDir == "" {
+				fmt.Println("Directory cannot be empty")
+				continue
+			}
+
+			// Calculate new path with the new directory
+			expandedDir := expandPath(newDir)
+			worktreePath := filepath.Join(expandedDir, repoName, branchName)
+			worktreeName := fmt.Sprintf("%s-%s", repoName, branchName)
+
+			// Check if this new path also exists
+			if _, err := os.Stat(worktreePath); err == nil {
+				fmt.Printf("Directory %s also exists. Try a different location.\n", worktreePath)
+				continue
+			}
+
+			return worktreePath, worktreeName, nil
+
+		case "3", "q", "quit", "":
+			return "", "", fmt.Errorf("cancelled")
+
+		default:
+			fmt.Println("Please enter 1, 2, or 3")
+		}
+	}
 }
 
 // pickBranch presents an interactive picker for selecting a branch

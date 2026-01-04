@@ -21,6 +21,7 @@ class PreferencesManager: ObservableObject {
         static let showGitHubInfo = "showGitHubInfo"
         static let showUptime = "showUptime"
         static let showPort = "showPort"
+        static let menubarScope = "menubarScope"
     }
 
     // Launch at login
@@ -96,6 +97,13 @@ class PreferencesManager: ObservableObject {
         }
     }
 
+    // Menubar scope - controls what appears in the list
+    @Published var menubarScope: MenubarScope {
+        didSet {
+            defaults.set(menubarScope.rawValue, forKey: Keys.menubarScope)
+        }
+    }
+
     private init() {
         // Load from defaults
         self.launchAtLogin = defaults.bool(forKey: Keys.launchAtLogin)
@@ -114,6 +122,10 @@ class PreferencesManager: ObservableObject {
         // Default to ON for uptime and port
         self.showUptime = defaults.object(forKey: Keys.showUptime) as? Bool ?? true
         self.showPort = defaults.object(forKey: Keys.showPort) as? Bool ?? true
+
+        // Menubar scope - default to servers only (current behavior)
+        let scopeString = defaults.string(forKey: Keys.menubarScope) ?? MenubarScope.serversOnly.rawValue
+        self.menubarScope = MenubarScope(rawValue: scopeString) ?? .serversOnly
 
         applyTheme()
         updateDockIcon()
@@ -355,6 +367,35 @@ enum AppTheme: String, CaseIterable {
 
     var displayName: String {
         rawValue
+    }
+}
+
+/// Controls what appears in the menubar server list
+enum MenubarScope: String, CaseIterable {
+    case serversOnly = "servers_only"
+    case activeWorktrees = "active_worktrees"
+    case allWorktrees = "all_worktrees"
+
+    var displayName: String {
+        switch self {
+        case .serversOnly:
+            return "Servers Only"
+        case .activeWorktrees:
+            return "Active Worktrees"
+        case .allWorktrees:
+            return "All Worktrees"
+        }
+    }
+
+    var description: String {
+        switch self {
+        case .serversOnly:
+            return "Show only worktrees with registered servers"
+        case .activeWorktrees:
+            return "Show worktrees with servers or recent activity"
+        case .allWorktrees:
+            return "Show all discovered worktrees"
+        }
     }
 }
 
