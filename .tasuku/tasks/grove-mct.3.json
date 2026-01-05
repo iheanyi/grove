@@ -1,0 +1,10 @@
+{
+  "id": "grove-mct.3",
+  "status": "done",
+  "description": "Add Remove All button to grouped view stopped section",
+  "priority": 3,
+  "blocked_by": null,
+  "owner": null,
+  "created_at": "2026-01-02T19:32:32.678736-06:00",
+  "updated_at": "2026-01-03T17:15:43.586266-06:00"
+}

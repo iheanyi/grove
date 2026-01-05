@@ -1,0 +1,10 @@
+{
+  "id": "grove-1fk.2",
+  "status": "done",
+  "description": "Add GitHub PR/CI status to grove ls --full",
+  "priority": 2,
+  "blocked_by": null,
+  "owner": null,
+  "created_at": "2026-01-03T17:17:10.090782-06:00",
+  "updated_at": "2026-01-03T17:20:41.401529-06:00"
+}

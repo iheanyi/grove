@@ -1,0 +1,12 @@
+{
+  "id": "grove-t3j",
+  "status": "done",
+  "description": "Phase 5: Polish and Documentation",
+  "priority": 3,
+  "blocked_by": [
+    ""
+  ],
+  "owner": null,
+  "created_at": "2026-01-03T18:05:17.95483-06:00",
+  "updated_at": "2026-01-03T18:39:04.898616-06:00"
+}

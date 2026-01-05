@@ -1,0 +1,7 @@
+[
+  {
+    "id": "485ff0",
+    "text": "Description: Show project name (from main_repo) as group header instead of directory path. Make it clear which project each group of worktrees belongs to.",
+    "created_at": "2026-01-05T19:20:37.080023Z"
+  }
+]

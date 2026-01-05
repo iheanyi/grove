@@ -1,0 +1,10 @@
+{
+  "id": "grove-ri3.2",
+  "status": "done",
+  "description": "Implement grove dashboard with SvelteKit web UI",
+  "priority": 2,
+  "blocked_by": null,
+  "owner": null,
+  "created_at": "2026-01-03T18:05:00.339686-06:00",
+  "updated_at": "2026-01-03T18:18:58.241622-06:00"
+}

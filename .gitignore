@@ -170,5 +170,3 @@ htmlcov/
 *.local
 .local/
 
-# Task tracking (Tasuku)
-.tasuku/

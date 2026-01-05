@@ -1,0 +1,10 @@
+{
+  "id": "grove-1mt",
+  "status": "done",
+  "description": "Add grove hooks install command for Claude Code integration",
+  "priority": 2,
+  "blocked_by": null,
+  "owner": null,
+  "created_at": "2026-01-03T10:27:57.819746-06:00",
+  "updated_at": "2026-01-03T17:15:43.579321-06:00"
+}

@@ -1,0 +1,10 @@
+{
+  "id": "grove-d89.1",
+  "status": "done",
+  "description": "Add AgentInfo tracking to registry",
+  "priority": 2,
+  "blocked_by": null,
+  "owner": null,
+  "created_at": "2026-01-03T17:36:44.830294-06:00",
+  "updated_at": "2026-01-03T17:40:25.454473-06:00"
+}

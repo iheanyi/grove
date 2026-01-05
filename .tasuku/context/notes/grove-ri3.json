@@ -1,0 +1,12 @@
+[
+  {
+    "id": "88be25",
+    "text": "Description: Remaining Phase 4 items from worktree-management-improvements.md spec.\n\nSee .claude/plans/worktree-management-improvements.md for full spec.\n\nIncludes:\n- grove review command for review queue\n- grove dashboard with SvelteKit web UI\n- grove cycle for quick browser switching",
+    "created_at": "2026-01-05T19:20:37.078238Z"
+  },
+  {
+    "id": "2f7e09",
+    "text": "Close reason: Phase 4b complete: Added grove review, grove cycle, and grove dashboard commands with full SvelteKit web UI",
+    "created_at": "2026-01-05T19:20:37.078315Z"
+  }
+]

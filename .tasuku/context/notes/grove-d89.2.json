@@ -1,0 +1,12 @@
+[
+  {
+    "id": "be887e",
+    "text": "Description: TUI command to list active agent sessions across worktrees. Show agent type, duration, worktree.",
+    "created_at": "2026-01-05T19:20:37.079521Z"
+  },
+  {
+    "id": "b1aca3",
+    "text": "Close reason: AgentInfo tracking and grove agents command implemented",
+    "created_at": "2026-01-05T19:20:37.079587Z"
+  }
+]

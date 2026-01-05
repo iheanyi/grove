@@ -1,0 +1,12 @@
+[
+  {
+    "id": "b1249c",
+    "text": "Description: Update README and docs for all new features.\n\nIncludes:\n- grove agents command\n- grove review command\n- grove dashboard command\n- grove cycle command\n- Menubar Agents section\n- Shell integration (grovecd function)\n- All new flags and options",
+    "created_at": "2026-01-05T19:20:37.079276Z"
+  },
+  {
+    "id": "4ec04c",
+    "text": "Close reason: Documentation updated in README.md",
+    "created_at": "2026-01-05T19:20:37.079338Z"
+  }
+]

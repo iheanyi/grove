@@ -1,0 +1,10 @@
+{
+  "id": "grove-t3j.1",
+  "status": "done",
+  "description": "Add configurable menubar scope preference",
+  "priority": 3,
+  "blocked_by": null,
+  "owner": null,
+  "created_at": "2026-01-03T18:05:33.280184-06:00",
+  "updated_at": "2026-01-03T18:39:04.815369-06:00"
+}

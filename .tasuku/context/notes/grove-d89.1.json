@@ -1,0 +1,12 @@
+[
+  {
+    "id": "b51a5a",
+    "text": "Description: Track Claude Code and other agent sessions in the registry. Store PID, socket path, worktree, start time.",
+    "created_at": "2026-01-05T19:20:37.078779Z"
+  },
+  {
+    "id": "459e18",
+    "text": "Close reason: AgentInfo tracking and grove agents command implemented",
+    "created_at": "2026-01-05T19:20:37.078845Z"
+  }
+]

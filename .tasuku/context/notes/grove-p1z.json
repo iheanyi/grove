@@ -1,0 +1,12 @@
+[
+  {
+    "id": "12e603",
+    "text": "Description: MCP server missing: grove_new, grove_restart, grove_attach/detach. README missing: worktrees_dir config, --dir flag for grove new, multi-name detach support.",
+    "created_at": "2026-01-05T19:20:37.080601Z"
+  },
+  {
+    "id": "109ff6",
+    "text": "Close reason: Updated README and added MCP tools",
+    "created_at": "2026-01-05T19:20:37.080662Z"
+  }
+]

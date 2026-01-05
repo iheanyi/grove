@@ -1,0 +1,12 @@
+[
+  {
+    "id": "b16f2d",
+    "text": "Description: Improve handling when worktree names collide.\n\nFrom spec section 9:\n\nWhen centralized worktrees_dir has collision, prompt:\n```\nDirectory conflict: ~/worktrees/api/feature-auth already exists\n\nOptions:\n  1. Use different name: grove new feature-auth --name myorg-api-auth\n  2. Use different directory: grove new feature-auth --dir ~/worktrees/myorg-api\n  3. Cancel\n```",
+    "created_at": "2026-01-05T19:20:37.080942Z"
+  },
+  {
+    "id": "75890f",
+    "text": "Close reason: Implemented in commit d37d7bc",
+    "created_at": "2026-01-05T19:20:37.081134Z"
+  }
+]

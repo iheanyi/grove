@@ -1,0 +1,10 @@
+{
+  "id": "grove-mct.2",
+  "status": "done",
+  "description": "Auto-register worktrees with main_repo on server start",
+  "priority": 2,
+  "blocked_by": null,
+  "owner": null,
+  "created_at": "2026-01-02T19:32:31.484934-06:00",
+  "updated_at": "2026-01-03T17:15:43.58052-06:00"
+}

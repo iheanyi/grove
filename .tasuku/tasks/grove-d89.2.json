@@ -1,0 +1,10 @@
+{
+  "id": "grove-d89.2",
+  "status": "done",
+  "description": "Add grove agents command",
+  "priority": 2,
+  "blocked_by": null,
+  "owner": null,
+  "created_at": "2026-01-03T17:36:46.06823-06:00",
+  "updated_at": "2026-01-03T17:40:25.457011-06:00"
+}

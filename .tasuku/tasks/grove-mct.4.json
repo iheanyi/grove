@@ -1,0 +1,10 @@
+{
+  "id": "grove-mct.4",
+  "status": "done",
+  "description": "Improve group names in menubar",
+  "priority": 3,
+  "blocked_by": null,
+  "owner": null,
+  "created_at": "2026-01-02T19:32:34.26652-06:00",
+  "updated_at": "2026-01-03T17:15:43.58544-06:00"
+}

@@ -1,0 +1,12 @@
+[
+  {
+    "id": "ab2ee6",
+    "text": "Description: Enhance prune to offer directory deletion. Add tag system (grove tag). Add smart grouping to grove ls. Add fuzzy picker for worktrees.",
+    "created_at": "2026-01-05T19:20:37.081241Z"
+  },
+  {
+    "id": "2ac93b",
+    "text": "Close reason: Unified Workspace model implemented, adopt and prune commands added",
+    "created_at": "2026-01-05T19:20:37.081302Z"
+  }
+]

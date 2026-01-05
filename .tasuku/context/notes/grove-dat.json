@@ -1,0 +1,12 @@
+[
+  {
+    "id": "c733d9",
+    "text": "Description: Unify Server and Worktree into single Workspace entity. Add grove cd command. Add --name flag to grove new. Add grove delete with safety checks.",
+    "created_at": "2026-01-05T19:20:37.078039Z"
+  },
+  {
+    "id": "2ae4db",
+    "text": "Close reason: Unified Workspace model implemented, adopt and prune commands added",
+    "created_at": "2026-01-05T19:20:37.078119Z"
+  }
+]

@@ -1,0 +1,12 @@
+[
+  {
+    "id": "af1c04",
+    "text": "Description: Interactive prompt for remote branches in grove new. Extend --full flag to show GitHub info for worktrees (PR status, CI status).",
+    "created_at": "2026-01-05T19:20:37.078607Z"
+  },
+  {
+    "id": "b53c06",
+    "text": "Close reason: Branch picker and GitHub integration complete",
+    "created_at": "2026-01-05T19:20:37.078675Z"
+  }
+]

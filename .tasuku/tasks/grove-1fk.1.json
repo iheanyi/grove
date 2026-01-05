@@ -1,0 +1,10 @@
+{
+  "id": "grove-1fk.1",
+  "status": "done",
+  "description": "Add remote branch picker to grove new",
+  "priority": 2,
+  "blocked_by": null,
+  "owner": null,
+  "created_at": "2026-01-03T17:17:09.242959-06:00",
+  "updated_at": "2026-01-03T17:19:11.540725-06:00"
+}

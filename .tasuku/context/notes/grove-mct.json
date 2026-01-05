@@ -1,0 +1,12 @@
+[
+  {
+    "id": "3cebf5",
+    "text": "Description: Improve how Grove discovers, stores, and displays git worktrees.\n\n## Goals\n1. Consistent worktree directory structure (e.g., ~/.grove/worktrees/\u003cproject\u003e/\u003cbranch\u003e)\n2. Better project grouping in menubar UI using main_repo\n3. Centralized worktree storage option\n4. Ensure all servers have corresponding worktree entries with main_repo populated\n\n## Background\nCurrently worktrees are scattered across the filesystem. The menubar groups them by parent directory which isn't always meaningful. This epic tracks improvements to make worktree management more intuitive.",
+    "created_at": "2026-01-05T19:20:37.079681Z"
+  },
+  {
+    "id": "8a9a6a",
+    "text": "Close reason: All 4 child tasks completed: worktree create command, auto-register main_repo, Remove All button, improved group names",
+    "created_at": "2026-01-05T19:20:37.07975Z"
+  }
+]

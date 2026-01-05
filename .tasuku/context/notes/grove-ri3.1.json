@@ -1,0 +1,12 @@
+[
+  {
+    "id": "fcc5af",
+    "text": "Description: Implement `grove review` command to show workspaces ready for review.\n\nFrom spec section 12.5:\n- List workspaces with changes (git dirty or recent commits)\n- Show task summary, file changes, server URL\n- Interactive menu: [1-n] open in browser, [a] open all, [d] show diff\n\nExample output:\n```\nReady for Review:\n\n1. myapp-feature-api\n   Task: Add rate limiting\n   Changes: +89 -12 (3 files)\n   URL: http://localhost:3043\n```",
+    "created_at": "2026-01-05T19:20:37.07843Z"
+  },
+  {
+    "id": "51609a",
+    "text": "Close reason: Implemented all Phase 4b features: grove review, grove cycle, and grove dashboard with SvelteKit web UI",
+    "created_at": "2026-01-05T19:20:37.078499Z"
+  }
+]

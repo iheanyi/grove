@@ -1,0 +1,12 @@
+[
+  {
+    "id": "2ac90b",
+    "text": "Description: Add preference to control what appears in menubar.\n\nFrom spec section 6:\n\nOptions:\n- Servers only (current behavior)\n- Active worktrees (has server OR recent activity)  \n- All worktrees\n\nImplementation in PreferencesManager.swift:\n```swift\nenum MenubarScope: String {\n    case serversOnly = \"servers_only\"\n    case activeWorktrees = \"active_worktrees\"\n    case allWorktrees = \"all_worktrees\"\n}\n\n@AppStorage(\"menubarScope\") var menubarScope: MenubarScope = .serversOnly\n```",
+    "created_at": "2026-01-05T19:20:37.080282Z"
+  },
+  {
+    "id": "b5f4e5",
+    "text": "Close reason: Implemented in commit d37d7bc",
+    "created_at": "2026-01-05T19:20:37.080351Z"
+  }
+]

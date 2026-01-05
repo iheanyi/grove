@@ -1,0 +1,12 @@
+[
+  {
+    "id": "04eaa4",
+    "text": "Description: Create a command that installs Claude Code hooks to remind agents about Grove. Hooks: 1) SessionStart - show grove status, 2) PreToolUse - intercept direct dev server commands and suggest grove start, 3) PreToolUse - intercept git worktree add and suggest grove new, 4) Stop - remind about updating docs when code changed.",
+    "created_at": "2026-01-05T19:20:37.081494Z"
+  },
+  {
+    "id": "decef9",
+    "text": "Close reason: Implemented grove hooks install/uninstall commands",
+    "created_at": "2026-01-05T19:20:37.081558Z"
+  }
+]

@@ -1,0 +1,12 @@
+[
+  {
+    "id": "3a40bc",
+    "text": "Description: Final polish items from worktree-management-improvements.md spec.\n\nSee .claude/plans/worktree-management-improvements.md for full spec.\n\nIncludes:\n- Configurable menubar scope\n- Enhanced name collision handling\n- Documentation updates",
+    "created_at": "2026-01-05T19:20:37.080754Z"
+  },
+  {
+    "id": "60b514",
+    "text": "Close reason: Phase 5 complete: documentation, menubar scope, collision handling",
+    "created_at": "2026-01-05T19:20:37.080824Z"
+  }
+]

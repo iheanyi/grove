@@ -1,0 +1,12 @@
+[
+  {
+    "id": "68453d",
+    "text": "Description: Implement `grove dashboard` command with embedded SvelteKit frontend.\n\nFrom spec section 12.4 and Web Dashboard Tech Stack:\n\n**Go Backend** (cli/internal/dashboard/):\n- server.go: HTTP server serving embedded static files\n- websocket.go: Real-time workspace/agent updates\n- api.go: REST endpoints (/api/workspaces, /api/agents)\n- embed.go: //go:embed web/build/*\n\n**SvelteKit Frontend** (cli/web/):\n- +page.svelte: Main dashboard\n- agents/+page.svelte: Agent monitoring\n- review/+page.svelte: Review queue\n- WebSocket store for real-time reactivity\n- Tailwind CSS for styling\n\n**Features**:\n- Real-time status updates via WebSocket\n- Side-by-side browser frames for comparing branches\n- Diff viewer with syntax highlighting\n- Activity timeline per workspace\n\n**Build**:\n- `npm run build` in web/ produces static files\n- Go embeds files with //go:embed\n- Single binary output",
+    "created_at": "2026-01-05T19:20:37.080105Z"
+  },
+  {
+    "id": "c3062f",
+    "text": "Close reason: Implemented all Phase 4b features: grove review, grove cycle, and grove dashboard with SvelteKit web UI",
+    "created_at": "2026-01-05T19:20:37.080177Z"
+  }
+]

@@ -1,0 +1,12 @@
+[
+  {
+    "id": "ae952f",
+    "text": "Description: Extend menubar to show active Claude Code sessions. Allow clicking to open terminal at that worktree.",
+    "created_at": "2026-01-05T19:20:37.080449Z"
+  },
+  {
+    "id": "d7fa51",
+    "text": "Close reason: Menubar already shows Claude icons next to active worktrees. grove agents command provides detailed view.",
+    "created_at": "2026-01-05T19:20:37.080508Z"
+  }
+]

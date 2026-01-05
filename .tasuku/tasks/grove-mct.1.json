@@ -1,0 +1,10 @@
+{
+  "id": "grove-mct.1",
+  "status": "done",
+  "description": "Add grove worktree create command",
+  "priority": 2,
+  "blocked_by": null,
+  "owner": null,
+  "created_at": "2026-01-02T19:32:20.957039-06:00",
+  "updated_at": "2026-01-03T17:15:43.581208-06:00"
+}

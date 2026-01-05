@@ -1,0 +1,10 @@
+{
+  "id": "grove-ri3.1",
+  "status": "done",
+  "description": "Add grove review command for review queue",
+  "priority": 2,
+  "blocked_by": null,
+  "owner": null,
+  "created_at": "2026-01-03T18:04:48.098753-06:00",
+  "updated_at": "2026-01-03T18:18:58.200257-06:00"
+}

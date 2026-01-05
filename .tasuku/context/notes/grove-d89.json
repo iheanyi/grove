@@ -1,0 +1,12 @@
+[
+  {
+    "id": "cb0f1a",
+    "text": "Description: Add AgentInfo tracking. TUI dashboard (grove agents). Expand menubar with Agents section. Review queue (grove review). Web dashboard with SvelteKit (grove dashboard). Quick switch cycling.",
+    "created_at": "2026-01-05T19:20:37.077629Z"
+  },
+  {
+    "id": "57e9ce",
+    "text": "Close reason: Core agent tracking implemented: AgentInfo in discovery, grove agents command, menubar Claude indicators",
+    "created_at": "2026-01-05T19:20:37.0779Z"
+  }
+]

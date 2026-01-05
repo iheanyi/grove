@@ -1,0 +1,12 @@
+[
+  {
+    "id": "ddafdd",
+    "text": "Description: Add a command to create worktrees in a consistent directory structure like ~/.grove/worktrees/\u003cproject\u003e/\u003cbranch-name\u003e. This ensures all worktrees are organized by project.",
+    "created_at": "2026-01-05T19:20:37.078946Z"
+  },
+  {
+    "id": "23cc80",
+    "text": "Close reason: Implemented via grove new command with --dir flag and worktrees_dir config option",
+    "created_at": "2026-01-05T19:20:37.079012Z"
+  }
+]
