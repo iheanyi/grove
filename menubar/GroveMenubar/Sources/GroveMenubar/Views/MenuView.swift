@@ -1250,15 +1250,28 @@ struct AgentRowView: View {
                     }
                 }
 
-                HStack(spacing: 4) {
-                    Text(agent.worktree)
-                        .font(.system(.caption, design: .monospaced))
-                        .foregroundColor(.secondary)
-                    Text("•")
-                        .foregroundColor(.secondary.opacity(0.5))
-                    Text(agent.branch)
-                        .font(.caption)
-                        .foregroundColor(.secondary)
+                // Show task if present, otherwise show worktree/branch
+                if let task = agent.shortTaskDisplay {
+                    HStack(spacing: 4) {
+                        Image(systemName: "checklist")
+                            .font(.system(size: 9))
+                            .foregroundColor(.orange)
+                        Text(task)
+                            .font(.system(.caption, design: .monospaced))
+                            .foregroundColor(.orange)
+                            .lineLimit(1)
+                    }
+                } else {
+                    HStack(spacing: 4) {
+                        Text(agent.worktree)
+                            .font(.system(.caption, design: .monospaced))
+                            .foregroundColor(.secondary)
+                        Text("•")
+                            .foregroundColor(.secondary.opacity(0.5))
+                        Text(agent.branch)
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
                 }
             }
 
@@ -1305,6 +1318,7 @@ struct AgentRowView: View {
                 Label("Copy Path", systemImage: "doc.on.doc")
             }
         }
+        .help(agent.taskSummary ?? "Working in \(agent.worktree)")
     }
 }
 

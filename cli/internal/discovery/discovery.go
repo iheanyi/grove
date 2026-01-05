@@ -17,6 +17,10 @@ type AgentInfo struct {
 	Path      string    `json:"path"`       // Working directory
 	StartTime time.Time `json:"start_time"` // When the process started
 	Command   string    `json:"command"`    // Full command line
+
+	// Tasuku integration
+	ActiveTask  string `json:"active_task,omitempty"`  // Current Tasuku task ID (if any)
+	TaskSummary string `json:"task_summary,omitempty"` // Task description for display
 }
 
 // Worktree represents a discovered git worktree
@@ -161,6 +165,15 @@ func DetectActivity(wt *Worktree) error {
 	wt.HasClaude = agent != nil
 	wt.HasVSCode = hasVSCode
 	wt.GitDirty = gitDirty
+
+	// If agent detected, check for active Tasuku task
+	if agent != nil {
+		taskID, taskDesc := GetActiveTask(wt.Path)
+		if taskID != "" {
+			agent.ActiveTask = taskID
+			agent.TaskSummary = taskDesc
+		}
+	}
 
 	// Update last activity time if any activity detected
 	if wt.HasClaude || wt.HasVSCode || wt.GitDirty {

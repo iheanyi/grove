@@ -1,11 +1,11 @@
 {
   "id": "update-grove-hooks-to-sync-with",
-  "status": "ready",
+  "status": "done",
   "description": "Update grove hooks to sync with Tasuku on session start/stop",
   "priority": 2,
   "parent_id": "phase-tasuku-integration-replace",
   "blocked_by": [],
   "owner": null,
   "created_at": "2026-01-05T19:26:33.67552Z",
-  "updated_at": "2026-01-05T19:26:33.675764Z"
+  "updated_at": "2026-01-05T19:31:24.484099Z"
 }

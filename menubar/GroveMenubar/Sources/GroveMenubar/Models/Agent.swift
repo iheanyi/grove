@@ -9,6 +9,8 @@ struct Agent: Codable, Identifiable, Equatable {
     let pid: Int
     let startTime: String?
     let duration: String?
+    let activeTask: String?
+    let taskSummary: String?
 
     var id: String { "\(type)-\(pid)" }
 
@@ -16,6 +18,8 @@ struct Agent: Codable, Identifiable, Equatable {
         case worktree, path, branch, type, pid
         case startTime = "start_time"
         case duration
+        case activeTask = "active_task"
+        case taskSummary = "task_summary"
     }
 
     /// Display name for the agent type
@@ -53,5 +57,20 @@ struct Agent: Codable, Identifiable, Equatable {
             return "~" + path.dropFirst(home.count)
         }
         return path
+    }
+
+    /// Short task display (task ID or nil)
+    var shortTaskDisplay: String? {
+        guard let task = activeTask, !task.isEmpty else { return nil }
+        // Truncate if too long
+        if task.count > 20 {
+            return String(task.prefix(17)) + "..."
+        }
+        return task
+    }
+
+    /// Whether this agent has an active task
+    var hasActiveTask: Bool {
+        activeTask != nil && !activeTask!.isEmpty
     }
 }

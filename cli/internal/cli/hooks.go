@@ -51,7 +51,7 @@ func init() {
 
 // Hook script content
 const groveSessionStartHook = `#!/bin/bash
-# Grove SessionStart hook - shows grove status to AI agents
+# Grove SessionStart hook - shows grove status and active Tasuku task
 set -e
 
 input=$(cat)
@@ -62,6 +62,20 @@ if [ -z "$cwd" ]; then
 fi
 
 cd "$cwd" 2>/dev/null || exit 0
+
+# Check for active Tasuku task first
+if command -v tk &> /dev/null; then
+  active_task=$(tk task list --status in_progress --format json 2>/dev/null | jq -r '.[0] // empty')
+  if [ -n "$active_task" ]; then
+    task_id=$(echo "$active_task" | jq -r '.id // ""')
+    task_desc=$(echo "$active_task" | jq -r '.description // ""')
+    if [ -n "$task_id" ]; then
+      echo "📋 Active task: $task_id"
+      echo "   $task_desc"
+      echo ""
+    fi
+  fi
+fi
 
 # Check if grove is available
 if ! command -v grove &> /dev/null; then
@@ -145,7 +159,7 @@ exit 0
 `
 
 const groveDocReminderHook = `#!/bin/bash
-# Grove Stop hook - reminds about documentation updates
+# Grove Stop hook - reminds about documentation and task status updates
 set -e
 
 input=$(cat)
@@ -156,6 +170,17 @@ if [ -z "$cwd" ]; then
 fi
 
 cd "$cwd" 2>/dev/null || exit 0
+
+# Check for active Tasuku task and remind about status
+if command -v tk &> /dev/null; then
+  active_task=$(tk task list --status in_progress --format json 2>/dev/null | jq -r '.[0].id // empty')
+  if [ -n "$active_task" ]; then
+    echo ""
+    echo "📋 Task '$active_task' is still in progress."
+    echo "   If work is complete, run: tk task done $active_task"
+    echo "   If pausing, task will resume next session."
+  fi
+fi
 
 # Check if we're in a git repo
 if ! git rev-parse --git-dir &> /dev/null; then

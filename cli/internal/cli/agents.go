@@ -111,23 +111,27 @@ type agentView struct {
 
 func outputAgentsJSON(agents []*agentView) error {
 	type jsonAgent struct {
-		Worktree  string `json:"worktree"`
-		Path      string `json:"path"`
-		Branch    string `json:"branch"`
-		Type      string `json:"type"`
-		PID       int    `json:"pid"`
-		StartTime string `json:"start_time,omitempty"`
-		Duration  string `json:"duration,omitempty"`
+		Worktree    string `json:"worktree"`
+		Path        string `json:"path"`
+		Branch      string `json:"branch"`
+		Type        string `json:"type"`
+		PID         int    `json:"pid"`
+		StartTime   string `json:"start_time,omitempty"`
+		Duration    string `json:"duration,omitempty"`
+		ActiveTask  string `json:"active_task,omitempty"`
+		TaskSummary string `json:"task_summary,omitempty"`
 	}
 
 	var out []jsonAgent
 	for _, a := range agents {
 		ja := jsonAgent{
-			Worktree: a.Worktree,
-			Path:     a.Path,
-			Branch:   a.Branch,
-			Type:     a.Agent.Type,
-			PID:      a.Agent.PID,
+			Worktree:    a.Worktree,
+			Path:        a.Path,
+			Branch:      a.Branch,
+			Type:        a.Agent.Type,
+			PID:         a.Agent.PID,
+			ActiveTask:  a.Agent.ActiveTask,
+			TaskSummary: a.Agent.TaskSummary,
 		}
 		if !a.Agent.StartTime.IsZero() {
 			ja.StartTime = a.Agent.StartTime.Format(time.RFC3339)
@@ -166,10 +170,19 @@ func outputAgentsTable(agents []*agentView) error {
 			}
 		}
 
+		// Get task display (truncate if needed)
+		taskDisplay := "-"
+		if a.Agent.ActiveTask != "" {
+			taskDisplay = a.Agent.ActiveTask
+			if len(taskDisplay) > 25 {
+				taskDisplay = taskDisplay[:22] + "..."
+			}
+		}
+
 		rows = append(rows, []string{
 			a.Agent.Type,
 			a.Worktree,
-			a.Branch,
+			taskDisplay,
 			duration,
 			fmt.Sprintf("%d", a.Agent.PID),
 		})
@@ -187,7 +200,7 @@ func outputAgentsTable(agents []*agentView) error {
 			}
 			return lipgloss.NewStyle()
 		}).
-		Headers("TYPE", "WORKTREE", "BRANCH", "DURATION", "PID").
+		Headers("TYPE", "WORKTREE", "TASK", "DURATION", "PID").
 		Rows(rows...)
 
 	fmt.Println(t)

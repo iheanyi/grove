@@ -1,11 +1,11 @@
 {
   "id": "add-grove-task-command-to-viewma",
-  "status": "ready",
+  "status": "done",
   "description": "Add grove task command to view/manage Tasuku tasks from Grove CLI",
   "priority": 3,
   "parent_id": "phase-tasuku-integration-replace",
   "blocked_by": [],
   "owner": null,
   "created_at": "2026-01-05T19:26:34.880132Z",
-  "updated_at": "2026-01-05T19:26:34.880387Z"
+  "updated_at": "2026-01-05T19:35:21.695801Z"
 }
