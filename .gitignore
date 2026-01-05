@@ -169,3 +169,6 @@ htmlcov/
 # Local development files
 *.local
 .local/
+
+# Task tracking (Tasuku)
+.tasuku.json
