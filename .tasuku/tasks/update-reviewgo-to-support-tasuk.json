@@ -1,0 +1,11 @@
+{
+  "id": "update-reviewgo-to-support-tasuk",
+  "status": "done",
+  "description": "Update review.go to support Tasuku with Beads fallback",
+  "priority": 1,
+  "parent_id": "phase-clean-up-grovetasuku-separ",
+  "blocked_by": [],
+  "owner": null,
+  "created_at": "2026-01-05T19:42:58.497287Z",
+  "updated_at": "2026-01-05T19:45:02.803418Z"
+}

@@ -1,0 +1,11 @@
+{
+  "id": "remove-duplicate-task-mcp-tools",
+  "status": "done",
+  "description": "Remove duplicate task MCP tools from Grove MCP",
+  "priority": 1,
+  "parent_id": "phase-clean-up-grovetasuku-separ",
+  "blocked_by": [],
+  "owner": null,
+  "created_at": "2026-01-05T19:42:57.591043Z",
+  "updated_at": "2026-01-05T19:44:18.13075Z"
+}

@@ -13,6 +13,7 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
+	"github.com/iheanyi/grove/internal/discovery"
 	"github.com/iheanyi/grove/internal/registry"
 	"github.com/iheanyi/grove/pkg/browser"
 	"github.com/spf13/cobra"
@@ -25,7 +26,7 @@ var reviewCmd = &cobra.Command{
 
 Displays a review queue with:
 - Workspace name
-- Task summary (from beads if available)
+- Task summary (from Tasuku, Beads, or last commit)
 - File changes (+/- lines, file count)
 - Server URL (if running)
 
@@ -235,9 +236,21 @@ func parseDiffStats(output string) (added, removed, files int) {
 	return added, removed, files
 }
 
-// getTaskSummary tries to get a task summary from beads or recent commit
+// getTaskSummary tries to get a task summary from Tasuku, Beads, or recent commit
 func getTaskSummary(path string) string {
-	// Try to get from beads first (in_progress issue)
+	// Try Tasuku first (.tasuku/tasks/)
+	if taskID, taskDesc := discovery.GetActiveTask(path); taskID != "" {
+		summary := taskID
+		if taskDesc != "" {
+			summary = taskDesc
+		}
+		if len(summary) > 60 {
+			summary = summary[:57] + "..."
+		}
+		return summary
+	}
+
+	// Fall back to Beads (.beads/issues/) for backwards compatibility
 	beadsPath := filepath.Join(path, ".beads", "issues")
 	if info, err := os.Stat(beadsPath); err == nil && info.IsDir() {
 		if summary := findBeadsTask(beadsPath); summary != "" {

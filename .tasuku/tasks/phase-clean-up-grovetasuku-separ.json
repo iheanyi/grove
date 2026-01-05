@@ -1,0 +1,10 @@
+{
+  "id": "phase-clean-up-grovetasuku-separ",
+  "status": "done",
+  "description": "Phase 7: Clean up Grove/Tasuku separation of concerns",
+  "priority": 1,
+  "blocked_by": [],
+  "owner": null,
+  "created_at": "2026-01-05T19:42:51.121553Z",
+  "updated_at": "2026-01-05T19:46:16.89805Z"
+}

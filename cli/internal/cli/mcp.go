@@ -337,17 +337,16 @@ args = ["mcp"]
 
 func printMCPTools() {
 	fmt.Println("\nAvailable tools:")
-	fmt.Println("  - grove_list:         List all registered dev servers")
-	fmt.Println("  - grove_start:        Start a dev server for a git worktree")
-	fmt.Println("  - grove_stop:         Stop a running dev server")
-	fmt.Println("  - grove_url:          Get the URL for a worktree's dev server")
-	fmt.Println("  - grove_status:       Get detailed status of a dev server")
-	fmt.Println("  - grove_restart:      Restart a running dev server")
-	fmt.Println("  - grove_new:          Create a new git worktree")
-	fmt.Println("  - grove_task_list:    List tasks from .tasuku")
-	fmt.Println("  - grove_task_current: Get current in-progress task")
-	fmt.Println("  - grove_task_start:   Start working on a task")
-	fmt.Println("  - grove_task_done:    Mark a task as complete")
+	fmt.Println("  - grove_list:    List all registered dev servers")
+	fmt.Println("  - grove_start:   Start a dev server for a git worktree")
+	fmt.Println("  - grove_stop:    Stop a running dev server")
+	fmt.Println("  - grove_url:     Get the URL for a worktree's dev server")
+	fmt.Println("  - grove_status:  Get detailed status of a dev server")
+	fmt.Println("  - grove_restart: Restart a running dev server")
+	fmt.Println("  - grove_new:     Create a new git worktree")
+	fmt.Println("\nNote: For task management, use a dedicated task MCP server:")
+	fmt.Println("  - Tasuku: tk_list, tk_start, tk_done, tk_learn, etc.")
+	fmt.Println("  - Beads:  bd_list, bd_start, bd_done, etc.")
 }
 
 // JSON-RPC types
@@ -586,73 +585,6 @@ func (s *mcpServer) handleToolsList(req *jsonRPCRequest) {
 				Required: []string{"branch"},
 			},
 		},
-		// Task management tools (Tasuku integration)
-		{
-			Name:        "grove_task_list",
-			Description: "List all tasks from the .tasuku directory. Returns task IDs, status, and descriptions.",
-			InputSchema: inputSchema{
-				Type: "object",
-				Properties: map[string]property{
-					"status": {
-						Type:        "string",
-						Description: "Filter by status (ready, in_progress, done, blocked). Optional.",
-					},
-					"path": {
-						Type:        "string",
-						Description: "Path to search for .tasuku directory (optional, defaults to current directory)",
-					},
-				},
-			},
-		},
-		{
-			Name:        "grove_task_current",
-			Description: "Get the current in-progress task. Returns the task ID and description if one is active.",
-			InputSchema: inputSchema{
-				Type: "object",
-				Properties: map[string]property{
-					"path": {
-						Type:        "string",
-						Description: "Path to search for .tasuku directory (optional, defaults to current directory)",
-					},
-				},
-			},
-		},
-		{
-			Name:        "grove_task_start",
-			Description: "Start working on a task by marking it as in_progress.",
-			InputSchema: inputSchema{
-				Type: "object",
-				Properties: map[string]property{
-					"task_id": {
-						Type:        "string",
-						Description: "The task ID to start",
-					},
-					"path": {
-						Type:        "string",
-						Description: "Path to search for .tasuku directory (optional, defaults to current directory)",
-					},
-				},
-				Required: []string{"task_id"},
-			},
-		},
-		{
-			Name:        "grove_task_done",
-			Description: "Mark a task as complete (done status).",
-			InputSchema: inputSchema{
-				Type: "object",
-				Properties: map[string]property{
-					"task_id": {
-						Type:        "string",
-						Description: "The task ID to complete",
-					},
-					"path": {
-						Type:        "string",
-						Description: "Path to search for .tasuku directory (optional, defaults to current directory)",
-					},
-				},
-				Required: []string{"task_id"},
-			},
-		},
 	}
 
 	s.sendResult(req.ID, toolsListResult{Tools: tools})
@@ -682,14 +614,6 @@ func (s *mcpServer) handleToolsCall(req *jsonRPCRequest) {
 		result = s.toolRestart(params.Arguments)
 	case "grove_new":
 		result = s.toolNew(params.Arguments)
-	case "grove_task_list":
-		result = s.toolTaskList(params.Arguments)
-	case "grove_task_current":
-		result = s.toolTaskCurrent(params.Arguments)
-	case "grove_task_start":
-		result = s.toolTaskStart(params.Arguments)
-	case "grove_task_done":
-		result = s.toolTaskDone(params.Arguments)
 	default:
 		result = callToolResult{
 			Content: []toolContent{{Type: "text", Text: fmt.Sprintf("Unknown tool: %s", params.Name)}},
@@ -1154,160 +1078,6 @@ func (s *mcpServer) toolNew(args map[string]interface{}) callToolResult {
 	sb.WriteString("  grove start <command>\n")
 
 	return mcpTextResult(sb.String())
-}
-
-// Task tool implementations
-
-func (s *mcpServer) toolTaskList(args map[string]interface{}) callToolResult {
-	path := "."
-	if p, ok := args["path"].(string); ok && p != "" {
-		path = p
-	}
-
-	absPath, err := filepath.Abs(path)
-	if err != nil {
-		return mcpErrorResult(fmt.Sprintf("Invalid path: %v", err))
-	}
-
-	tasukuDir := discovery.FindTasukuDir(absPath)
-	if tasukuDir == "" {
-		return mcpTextResult("No .tasuku directory found. Initialize with `tk init` to start tracking tasks.")
-	}
-
-	tasks, err := discovery.ListTasks(tasukuDir)
-	if err != nil {
-		return mcpErrorResult(fmt.Sprintf("Failed to list tasks: %v", err))
-	}
-
-	// Filter by status if specified
-	statusFilter := ""
-	if sf, ok := args["status"].(string); ok {
-		statusFilter = sf
-	}
-
-	if statusFilter != "" {
-		var filtered []*discovery.TasukuTask
-		for _, t := range tasks {
-			if t.Status == statusFilter {
-				filtered = append(filtered, t)
-			}
-		}
-		tasks = filtered
-	}
-
-	if len(tasks) == 0 {
-		if statusFilter != "" {
-			return mcpTextResult(fmt.Sprintf("No tasks with status '%s' found.", statusFilter))
-		}
-		return mcpTextResult("No tasks found.")
-	}
-
-	var sb strings.Builder
-	sb.WriteString(fmt.Sprintf("Tasks (%d):\n\n", len(tasks)))
-
-	for _, t := range tasks {
-		statusIcon := "○"
-		switch t.Status {
-		case "done":
-			statusIcon = "✓"
-		case "in_progress":
-			statusIcon = "●"
-		case "blocked":
-			statusIcon = "⊘"
-		}
-
-		sb.WriteString(fmt.Sprintf("%s **%s** [%s]\n", statusIcon, t.ID, t.Status))
-		if t.Description != "" {
-			desc := t.Description
-			if len(desc) > 80 {
-				desc = desc[:77] + "..."
-			}
-			sb.WriteString(fmt.Sprintf("  %s\n", desc))
-		}
-		sb.WriteString("\n")
-	}
-
-	return mcpTextResult(sb.String())
-}
-
-func (s *mcpServer) toolTaskCurrent(args map[string]interface{}) callToolResult {
-	path := "."
-	if p, ok := args["path"].(string); ok && p != "" {
-		path = p
-	}
-
-	absPath, err := filepath.Abs(path)
-	if err != nil {
-		return mcpErrorResult(fmt.Sprintf("Invalid path: %v", err))
-	}
-
-	taskID, taskDesc := discovery.GetActiveTask(absPath)
-	if taskID == "" {
-		return mcpTextResult("No task currently in progress.\n\nUse grove_task_start to begin working on a task.")
-	}
-
-	var sb strings.Builder
-	sb.WriteString("Current Task:\n\n")
-	sb.WriteString(fmt.Sprintf("- ID: %s\n", taskID))
-	sb.WriteString(fmt.Sprintf("- Description: %s\n", taskDesc))
-
-	return mcpTextResult(sb.String())
-}
-
-func (s *mcpServer) toolTaskStart(args map[string]interface{}) callToolResult {
-	taskID, ok := args["task_id"].(string)
-	if !ok || taskID == "" {
-		return mcpErrorResult("task_id is required")
-	}
-
-	path := "."
-	if p, ok := args["path"].(string); ok && p != "" {
-		path = p
-	}
-
-	absPath, err := filepath.Abs(path)
-	if err != nil {
-		return mcpErrorResult(fmt.Sprintf("Invalid path: %v", err))
-	}
-
-	tasukuDir := discovery.FindTasukuDir(absPath)
-	if tasukuDir == "" {
-		return mcpErrorResult("No .tasuku directory found")
-	}
-
-	if err := discovery.UpdateTaskStatus(tasukuDir, taskID, "in_progress"); err != nil {
-		return mcpErrorResult(fmt.Sprintf("Failed to start task: %v", err))
-	}
-
-	return mcpTextResult(fmt.Sprintf("Started task: %s\n\nStatus is now 'in_progress'.", taskID))
-}
-
-func (s *mcpServer) toolTaskDone(args map[string]interface{}) callToolResult {
-	taskID, ok := args["task_id"].(string)
-	if !ok || taskID == "" {
-		return mcpErrorResult("task_id is required")
-	}
-
-	path := "."
-	if p, ok := args["path"].(string); ok && p != "" {
-		path = p
-	}
-
-	absPath, err := filepath.Abs(path)
-	if err != nil {
-		return mcpErrorResult(fmt.Sprintf("Invalid path: %v", err))
-	}
-
-	tasukuDir := discovery.FindTasukuDir(absPath)
-	if tasukuDir == "" {
-		return mcpErrorResult("No .tasuku directory found")
-	}
-
-	if err := discovery.UpdateTaskStatus(tasukuDir, taskID, "done"); err != nil {
-		return mcpErrorResult(fmt.Sprintf("Failed to complete task: %v", err))
-	}
-
-	return mcpTextResult(fmt.Sprintf("Completed task: %s\n\nStatus is now 'done'.", taskID))
 }
 
 // Helpers

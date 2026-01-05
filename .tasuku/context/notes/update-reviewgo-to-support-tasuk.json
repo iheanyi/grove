@@ -1,0 +1,7 @@
+[
+  {
+    "id": "23c76e",
+    "text": "Update getTaskSummary() to check .tasuku/tasks/ first using discovery.GetActiveTask(), fall back to Beads .beads/issues/ for backwards compat",
+    "created_at": "2026-01-05T19:43:09.796424Z"
+  }
+]

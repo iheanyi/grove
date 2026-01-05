@@ -1,0 +1,7 @@
+[
+  {
+    "id": "63dd15",
+    "text": "Remove grove_task_list, grove_task_current, grove_task_start, grove_task_done from mcp.go - Tasuku has its own MCP with tk_list, tk_start, tk_done, etc.",
+    "created_at": "2026-01-05T19:43:08.968063Z"
+  }
+]
