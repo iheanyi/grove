@@ -1,0 +1,10 @@
+{
+  "id": "phase-tasuku-integration-replace",
+  "status": "ready",
+  "description": "Phase 6: Tasuku Integration - Replace Beads with Tasuku for task tracking in Grove's multi-agent dashboard",
+  "priority": 2,
+  "blocked_by": [],
+  "owner": null,
+  "created_at": "2026-01-05T19:26:20.553708Z",
+  "updated_at": "2026-01-05T19:26:20.553708Z"
+}

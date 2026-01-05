@@ -1,0 +1,11 @@
+{
+  "id": "add-tasuku-parser-to-read-tasuku",
+  "status": "ready",
+  "description": "Add Tasuku parser to read .tasuku/tasks/ for in_progress tasks in agent tracking",
+  "priority": 2,
+  "parent_id": "phase-tasuku-integration-replace",
+  "blocked_by": [],
+  "owner": null,
+  "created_at": "2026-01-05T19:26:30.623144Z",
+  "updated_at": "2026-01-05T19:26:30.623783Z"
+}
