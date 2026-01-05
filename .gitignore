@@ -171,4 +171,4 @@ htmlcov/
 .local/
 
 # Task tracking (Tasuku)
-.tasuku.json
+.tasuku/
