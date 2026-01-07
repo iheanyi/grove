@@ -3,7 +3,6 @@ package cli
 import (
 	"fmt"
 	"os/exec"
-	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
@@ -441,13 +440,4 @@ func isExcluded(command string) bool {
 		}
 	}
 	return false
-}
-
-// resolveSymlinks resolves any symlinks in the path for proper matching
-func resolveSymlinks(path string) string {
-	resolved, err := filepath.EvalSymlinks(path)
-	if err != nil {
-		return path
-	}
-	return resolved
 }

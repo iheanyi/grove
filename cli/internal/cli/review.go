@@ -113,10 +113,10 @@ func collectReviewItems(reg *registry.Registry) []*ReviewItem {
 		}
 
 		item := &ReviewItem{
-			Name:      ws.Name,
-			Path:      ws.Path,
-			Branch:    ws.Branch,
-			IsDirty:   isDirty,
+			Name:        ws.Name,
+			Path:        ws.Path,
+			Branch:      ws.Branch,
+			IsDirty:     isDirty,
 			HasUnpushed: hasUnpushed,
 		}
 
@@ -396,7 +396,7 @@ func runReviewInteractive(items []*ReviewItem) error {
 		fmt.Print("Choice: ")
 		input, err := reader.ReadString('\n')
 		if err != nil {
-			return nil
+			return err
 		}
 		input = strings.TrimSpace(strings.ToLower(input))
 

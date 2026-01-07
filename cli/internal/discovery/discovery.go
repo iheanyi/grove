@@ -215,7 +215,7 @@ func detectClaudeAgent(path string) *AgentInfo {
 		cwd := getProcessCwd(pidStr)
 		if cwd != "" && cwd == path {
 			pid := 0
-			fmt.Sscanf(pidStr, "%d", &pid)
+			_, _ = fmt.Sscanf(pidStr, "%d", &pid)
 
 			// Get process start time and command
 			startTime := getProcessStartTime(pidStr)

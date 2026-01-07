@@ -478,7 +478,7 @@ func handleCollision(branchName, existingPath, existingName, repoName, mainRepoP
 			return worktreePath, worktreeName, nil
 
 		case "3", "q", "quit", "":
-			return "", "", fmt.Errorf("cancelled")
+			return "", "", fmt.Errorf("canceled")
 
 		default:
 			fmt.Println("Please enter 1, 2, or 3")
@@ -518,7 +518,7 @@ func pickBranch(branches []string) (string, error) {
 
 		input = strings.TrimSpace(input)
 		if input == "q" || input == "quit" {
-			return "", fmt.Errorf("selection cancelled")
+			return "", fmt.Errorf("selection canceled")
 		}
 
 		// Parse number

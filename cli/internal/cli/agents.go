@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"strings"
 	"time"
 
 	"github.com/charmbracelet/lipgloss"
@@ -160,14 +159,6 @@ func outputAgentsTable(agents []*agentView) error {
 		duration := "-"
 		if !a.Agent.StartTime.IsZero() {
 			duration = formatDuration(time.Since(a.Agent.StartTime))
-		}
-
-		// Shorten path
-		displayPath := a.Path
-		if home, err := os.UserHomeDir(); err == nil {
-			if strings.HasPrefix(displayPath, home) {
-				displayPath = "~" + strings.TrimPrefix(displayPath, home)
-			}
 		}
 
 		// Get task display (truncate if needed)

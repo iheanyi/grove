@@ -47,9 +47,9 @@ func init() {
 }
 
 type pruneResult struct {
-	stoppedServers   []string
-	mergedWorktrees  []worktreeEntry
-	orphanedEntries  []string
+	stoppedServers  []string
+	mergedWorktrees []worktreeEntry
+	orphanedEntries []string
 }
 
 type worktreeEntry struct {
@@ -234,8 +234,8 @@ func runPrune(cmd *cobra.Command, args []string) error {
 	if pruneOrphaned && len(result.orphanedEntries) > 0 {
 		fmt.Println("Removing orphaned entries...")
 		for _, name := range result.orphanedEntries {
-			reg.Remove(name)
-			reg.RemoveWorktree(name)
+			_ = reg.Remove(name)
+			_ = reg.RemoveWorktree(name)
 			fmt.Printf("  ✓ %s\n", name)
 			pruned++
 		}
@@ -264,11 +264,11 @@ func runPrune(cmd *cobra.Command, args []string) error {
 			// Delete the local branch
 			branchCmd := exec.Command("git", "branch", "-D", wt.Branch)
 			branchCmd.Dir = mainRepoPath
-			branchCmd.Run() // Ignore error, branch might already be deleted
+			_ = branchCmd.Run() // Ignore error, branch might already be deleted
 
 			// Remove from registry
-			reg.Remove(wt.Name)
-			reg.RemoveWorktree(wt.Name)
+			_ = reg.Remove(wt.Name)
+			_ = reg.RemoveWorktree(wt.Name)
 
 			fmt.Println("OK")
 			pruned++
@@ -277,7 +277,7 @@ func runPrune(cmd *cobra.Command, args []string) error {
 		// Clean up git worktree metadata
 		pruneMetadataCmd := exec.Command("git", "worktree", "prune")
 		pruneMetadataCmd.Dir = mainRepoPath
-		pruneMetadataCmd.Run()
+		_ = pruneMetadataCmd.Run()
 	}
 
 	fmt.Printf("\nPruned %d item(s)\n", pruned)

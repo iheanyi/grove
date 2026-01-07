@@ -115,7 +115,7 @@ func (s *Server) proxyToDev(w http.ResponseWriter, r *http.Request) {
 		targetURL += "?" + r.URL.RawQuery
 	}
 
-	resp, err := http.Get(targetURL)
+	resp, err := http.Get(targetURL) //nolint:gosec // G107: URL is constructed from trusted devURL config
 	if err != nil {
 		http.Error(w, fmt.Sprintf("Failed to proxy to dev server: %v", err), http.StatusBadGateway)
 		return
@@ -154,8 +154,9 @@ func (s *Server) Start() error {
 
 	addr := fmt.Sprintf(":%d", s.port)
 	s.server = &http.Server{
-		Addr:    addr,
-		Handler: s.mux,
+		Addr:              addr,
+		Handler:           s.mux,
+		ReadHeaderTimeout: 10 * time.Second,
 	}
 
 	listener, err := net.Listen("tcp", addr)
