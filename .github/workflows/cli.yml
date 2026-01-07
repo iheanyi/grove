@@ -24,6 +24,19 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: cli/internal/dashboard/web/package-lock.json
+
+      - name: Build web assets
+        working-directory: cli/internal/dashboard/web
+        run: |
+          npm ci
+          npm run build
+
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
@@ -51,6 +64,19 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: cli/internal/dashboard/web/package-lock.json
+
+      - name: Build web assets
+        working-directory: cli/internal/dashboard/web
+        run: |
+          npm ci
+          npm run build
+
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
@@ -72,6 +98,19 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: cli/internal/dashboard/web/package-lock.json
+
+      - name: Build web assets
+        working-directory: cli/internal/dashboard/web
+        run: |
+          npm ci
+          npm run build
 
       - name: Set up Go
         uses: actions/setup-go@v5
