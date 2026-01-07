@@ -1,1 +1,8 @@
-[]
+[
+  {
+    "id": "809dff",
+    "text": "Never use `_ = err` to silence linter errors - always handle errors properly by reporting them to the user. Even for non-fatal errors, show warnings so users understand what happened. Silent failures make debugging impossible.",
+    "is_rule": true,
+    "created_at": "2026-01-07T17:28:03.807932Z"
+  }
+]
