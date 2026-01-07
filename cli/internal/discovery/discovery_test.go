@@ -53,14 +53,15 @@ branch refs/heads/bugfix/123
 	}
 
 	// Check first worktree (main repo)
+	// Name should be directory name, not branch name for main repo
 	if worktrees[0].Path != "/Users/test/myproject" {
 		t.Errorf("worktrees[0].Path = %q; want %q", worktrees[0].Path, "/Users/test/myproject")
 	}
 	if worktrees[0].Branch != "main" {
 		t.Errorf("worktrees[0].Branch = %q; want %q", worktrees[0].Branch, "main")
 	}
-	if worktrees[0].Name != "main" {
-		t.Errorf("worktrees[0].Name = %q; want %q", worktrees[0].Name, "main")
+	if worktrees[0].Name != "myproject" {
+		t.Errorf("worktrees[0].Name = %q; want %q", worktrees[0].Name, "myproject")
 	}
 
 	// Check second worktree
