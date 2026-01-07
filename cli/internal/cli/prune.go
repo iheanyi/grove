@@ -234,10 +234,19 @@ func runPrune(cmd *cobra.Command, args []string) error {
 	if pruneOrphaned && len(result.orphanedEntries) > 0 {
 		fmt.Println("Removing orphaned entries...")
 		for _, name := range result.orphanedEntries {
-			_ = reg.Remove(name)
-			_ = reg.RemoveWorktree(name)
-			fmt.Printf("  ✓ %s\n", name)
-			pruned++
+			var errs []string
+			if err := reg.Remove(name); err != nil {
+				errs = append(errs, fmt.Sprintf("server: %v", err))
+			}
+			if err := reg.RemoveWorktree(name); err != nil {
+				errs = append(errs, fmt.Sprintf("worktree: %v", err))
+			}
+			if len(errs) > 0 {
+				fmt.Printf("  ✗ %s: %s\n", name, strings.Join(errs, ", "))
+			} else {
+				fmt.Printf("  ✓ %s\n", name)
+				pruned++
+			}
 		}
 	}
 
@@ -261,14 +270,21 @@ func runPrune(cmd *cobra.Command, args []string) error {
 				continue
 			}
 
-			// Delete the local branch
+			// Delete the local branch (ignore error - branch might already be deleted)
 			branchCmd := exec.Command("git", "branch", "-D", wt.Branch)
 			branchCmd.Dir = mainRepoPath
-			_ = branchCmd.Run() // Ignore error, branch might already be deleted
+			if err := branchCmd.Run(); err != nil {
+				// Not fatal - branch may have been deleted already
+				fmt.Printf("(branch already deleted) ")
+			}
 
 			// Remove from registry
-			_ = reg.Remove(wt.Name)
-			_ = reg.RemoveWorktree(wt.Name)
+			if err := reg.Remove(wt.Name); err != nil {
+				fmt.Printf("warning: failed to remove server entry: %v\n", err)
+			}
+			if err := reg.RemoveWorktree(wt.Name); err != nil {
+				fmt.Printf("warning: failed to remove worktree entry: %v\n", err)
+			}
 
 			fmt.Println("OK")
 			pruned++
@@ -277,7 +293,9 @@ func runPrune(cmd *cobra.Command, args []string) error {
 		// Clean up git worktree metadata
 		pruneMetadataCmd := exec.Command("git", "worktree", "prune")
 		pruneMetadataCmd.Dir = mainRepoPath
-		_ = pruneMetadataCmd.Run()
+		if err := pruneMetadataCmd.Run(); err != nil {
+			fmt.Printf("Warning: failed to prune git worktree metadata: %v\n", err)
+		}
 	}
 
 	fmt.Printf("\nPruned %d item(s)\n", pruned)
