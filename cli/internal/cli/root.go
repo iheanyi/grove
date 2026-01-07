@@ -70,6 +70,9 @@ func init() {
 
 	// Tagging commands
 	rootCmd.AddCommand(tagCmd)
+
+	// Menubar app management (macOS only)
+	rootCmd.AddCommand(menubarCmd)
 }
 
 func initConfig() {
