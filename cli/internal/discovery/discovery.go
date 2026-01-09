@@ -205,8 +205,8 @@ func detectAgent(path string) *AgentInfo {
 // detectGeminiAgent checks for Gemini CLI activity
 func detectGeminiAgent(path string) *AgentInfo {
 	// Find Gemini CLI processes using ps aux
-	// Pattern matches "gemini" or "gemini-cli"
-	cmd := exec.Command("bash", "-c", "ps aux | grep -E '[g]emini(-cli)?\\s*(--|-|$)' | awk '{print $2}'")
+	// The [g] trick prevents grep from matching itself
+	cmd := exec.Command("bash", "-c", "ps aux | grep -E '[g]emini(-cli)?' | awk '{print $2}'")
 	output, err := cmd.Output()
 	if err != nil {
 		return nil
@@ -244,8 +244,8 @@ func detectGeminiAgent(path string) *AgentInfo {
 // detectClaudeAgent checks for Claude Code activity
 func detectClaudeAgent(path string) *AgentInfo {
 	// Find Claude Code processes using ps aux
-	// Claude processes have "claude" in the command (with optional flags)
-	cmd := exec.Command("bash", "-c", "ps aux | grep -E '[c]laude\\s*(--|-|$)' | awk '{print $2}'")
+	// The [c] trick prevents grep from matching itself
+	cmd := exec.Command("bash", "-c", "ps aux | grep '[c]laude' | awk '{print $2}'")
 	output, err := cmd.Output()
 	if err != nil {
 		return nil
