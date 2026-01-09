@@ -5,43 +5,8 @@ import (
 	"strings"
 	"time"
 
-	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 )
-
-// Spinner represents a loading spinner
-type Spinner struct {
-	frames []string
-	index  int
-}
-
-// NewSpinner creates a new spinner
-func NewSpinner() *Spinner {
-	return &Spinner{
-		frames: []string{"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"},
-		index:  0,
-	}
-}
-
-// Tick advances the spinner
-func (s *Spinner) Tick() {
-	s.index = (s.index + 1) % len(s.frames)
-}
-
-// View renders the spinner
-func (s *Spinner) View() string {
-	return spinnerStyle.Render(s.frames[s.index])
-}
-
-// SpinnerTickMsg is sent to advance the spinner
-type SpinnerTickMsg time.Time
-
-// SpinnerTickCmd returns a command that sends spinner tick messages
-func SpinnerTickCmd() tea.Cmd {
-	return tea.Tick(100*time.Millisecond, func(t time.Time) tea.Msg {
-		return SpinnerTickMsg(t)
-	})
-}
 
 // Notification represents a temporary notification message
 type Notification struct {
@@ -109,53 +74,6 @@ type NotificationMsg struct {
 	Type    NotificationType
 }
 
-// ProgressBar represents a progress bar
-type ProgressBar struct {
-	Width    int
-	Progress float64 // 0.0 to 1.0
-	Label    string
-}
-
-// NewProgressBar creates a new progress bar
-func NewProgressBar(width int, label string) *ProgressBar {
-	return &ProgressBar{
-		Width:    width,
-		Progress: 0,
-		Label:    label,
-	}
-}
-
-// SetProgress sets the progress (0.0 to 1.0)
-func (p *ProgressBar) SetProgress(progress float64) {
-	if progress < 0 {
-		progress = 0
-	}
-	if progress > 1 {
-		progress = 1
-	}
-	p.Progress = progress
-}
-
-// View renders the progress bar
-func (p *ProgressBar) View() string {
-	filled := int(float64(p.Width) * p.Progress)
-	empty := p.Width - filled
-
-	bar := strings.Repeat("█", filled) + strings.Repeat("░", empty)
-	percentage := int(p.Progress * 100)
-
-	return fmt.Sprintf("%s [%s] %d%%",
-		p.Label,
-		progressBarStyle.Render(bar),
-		percentage,
-	)
-}
-
-// ProgressMsg is sent to update progress
-type ProgressMsg struct {
-	Progress float64
-}
-
 // ActionPanel represents the quick actions panel
 type ActionPanel struct {
 	Actions []Action
@@ -220,85 +138,4 @@ func (a *ActionPanel) UpdateActionAvailability(serverRunning bool) {
 			a.Actions[i].Enabled = serverRunning
 		}
 	}
-}
-
-// SearchBar represents a search/filter input
-type SearchBar struct {
-	Value    string
-	Active   bool
-	Cursor   int
-	MaxWidth int
-}
-
-// NewSearchBar creates a new search bar
-func NewSearchBar(maxWidth int) *SearchBar {
-	return &SearchBar{
-		Value:    "",
-		Active:   false,
-		Cursor:   0,
-		MaxWidth: maxWidth,
-	}
-}
-
-// Activate activates the search bar
-func (s *SearchBar) Activate() {
-	s.Active = true
-}
-
-// Deactivate deactivates the search bar
-func (s *SearchBar) Deactivate() {
-	s.Active = false
-	s.Value = ""
-	s.Cursor = 0
-}
-
-// InsertChar inserts a character at the cursor position
-func (s *SearchBar) InsertChar(ch rune) {
-	if s.Cursor >= len(s.Value) {
-		s.Value += string(ch)
-	} else {
-		s.Value = s.Value[:s.Cursor] + string(ch) + s.Value[s.Cursor:]
-	}
-	s.Cursor++
-}
-
-// DeleteChar deletes the character before the cursor
-func (s *SearchBar) DeleteChar() {
-	if s.Cursor > 0 {
-		s.Value = s.Value[:s.Cursor-1] + s.Value[s.Cursor:]
-		s.Cursor--
-	}
-}
-
-// MoveCursorLeft moves the cursor left
-func (s *SearchBar) MoveCursorLeft() {
-	if s.Cursor > 0 {
-		s.Cursor--
-	}
-}
-
-// MoveCursorRight moves the cursor right
-func (s *SearchBar) MoveCursorRight() {
-	if s.Cursor < len(s.Value) {
-		s.Cursor++
-	}
-}
-
-// View renders the search bar
-func (s *SearchBar) View() string {
-	if !s.Active {
-		return ""
-	}
-
-	prompt := "Search: "
-	cursor := "█"
-
-	var displayValue string
-	if s.Cursor < len(s.Value) {
-		displayValue = s.Value[:s.Cursor] + cursor + s.Value[s.Cursor:]
-	} else {
-		displayValue = s.Value + cursor
-	}
-
-	return searchBarStyle.Render(prompt) + displayValue
 }
