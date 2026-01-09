@@ -7,7 +7,9 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/charmbracelet/x/ansi"
 	"github.com/iheanyi/grove/internal/registry"
+	"github.com/iheanyi/grove/internal/styles"
 	"github.com/spf13/cobra"
 )
 
@@ -180,8 +182,10 @@ func runAdopt(cmd *cobra.Command, args []string) error {
 	// Display results
 	if len(matched) > 0 {
 		fmt.Printf("Found %d running dev servers matching registered worktrees:\n\n", len(matched))
-		fmt.Printf("%-30s %-8s %-8s %-10s %s\n", "WORKTREE", "PORT", "OLD", "TYPE", "STATUS")
-		fmt.Println(strings.Repeat("-", 80))
+		fmt.Printf("%-*s %-8s %-8s %-*s %s\n",
+			styles.ColWidthWorktree, "WORKTREE", "PORT", "OLD",
+			styles.ColWidthType, "TYPE", "STATUS")
+		fmt.Println(strings.Repeat("-", styles.SeparatorMedium))
 
 		for _, m := range matched {
 			status := "new"
@@ -196,11 +200,11 @@ func runAdopt(cmd *cobra.Command, args []string) error {
 				oldPortStr = fmt.Sprintf("%d", m.oldPort)
 			}
 
-			fmt.Printf("%-30s %-8d %-8s %-10s %s\n",
-				truncate(m.worktree, 30),
+			fmt.Printf("%-*s %-8d %-8s %-*s %s\n",
+				styles.ColWidthWorktree, ansi.Truncate(m.worktree, styles.ColWidthWorktree, styles.TruncateTail),
 				m.server.Port,
 				oldPortStr,
-				m.server.Type,
+				styles.ColWidthType, m.server.Type,
 				status,
 			)
 		}
@@ -208,14 +212,14 @@ func runAdopt(cmd *cobra.Command, args []string) error {
 
 	if showAll && len(unmatched) > 0 {
 		fmt.Printf("\n\nFound %d running servers without matching worktrees:\n\n", len(unmatched))
-		fmt.Printf("%-8s %-10s %-50s\n", "PORT", "TYPE", "WORKING DIRECTORY")
-		fmt.Println(strings.Repeat("-", 70))
+		fmt.Printf("%-8s %-*s %-*s\n", "PORT", styles.ColWidthType, "TYPE", styles.ColWidthWorkDir, "WORKING DIRECTORY")
+		fmt.Println(strings.Repeat("-", styles.SeparatorShort))
 
 		for _, u := range unmatched {
-			fmt.Printf("%-8d %-10s %-50s\n",
+			fmt.Printf("%-8d %-*s %-*s\n",
 				u.server.Port,
-				u.server.Type,
-				truncate(u.server.WorkDir, 50),
+				styles.ColWidthType, u.server.Type,
+				styles.ColWidthWorkDir, ansi.Truncate(u.server.WorkDir, styles.ColWidthWorkDir, styles.TruncateTail),
 			)
 		}
 		fmt.Println("\nTip: Run 'grove discover <path> --register' to register these directories first.")

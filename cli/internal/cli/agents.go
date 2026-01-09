@@ -8,8 +8,10 @@ import (
 
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/lipgloss/table"
+	"github.com/charmbracelet/x/ansi"
 	"github.com/iheanyi/grove/internal/discovery"
 	"github.com/iheanyi/grove/internal/registry"
+	"github.com/iheanyi/grove/internal/styles"
 	"github.com/spf13/cobra"
 )
 
@@ -164,10 +166,7 @@ func outputAgentsTable(agents []*agentView) error {
 		// Get task display (truncate if needed)
 		taskDisplay := "-"
 		if a.Agent.ActiveTask != "" {
-			taskDisplay = a.Agent.ActiveTask
-			if len(taskDisplay) > 25 {
-				taskDisplay = taskDisplay[:22] + "..."
-			}
+			taskDisplay = ansi.Truncate(a.Agent.ActiveTask, styles.TruncateShort, styles.TruncateTail)
 		}
 
 		rows = append(rows, []string{
@@ -180,14 +179,12 @@ func outputAgentsTable(agents []*agentView) error {
 	}
 
 	// Create styled table
-	headerStyle := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("12"))
-
 	t := table.New().
 		Border(lipgloss.NormalBorder()).
-		BorderStyle(lipgloss.NewStyle().Foreground(lipgloss.Color("240"))).
+		BorderStyle(styles.BorderStyle).
 		StyleFunc(func(row, col int) lipgloss.Style {
 			if row == table.HeaderRow {
-				return headerStyle
+				return styles.LinkHeader
 			}
 			return lipgloss.NewStyle()
 		}).

@@ -11,9 +11,11 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/charmbracelet/x/ansi"
 	"github.com/iheanyi/grove/internal/discovery"
 	"github.com/iheanyi/grove/internal/port"
 	"github.com/iheanyi/grove/internal/registry"
+	"github.com/iheanyi/grove/internal/styles"
 	"github.com/iheanyi/grove/internal/worktree"
 	"github.com/spf13/cobra"
 )
@@ -723,10 +725,7 @@ func (s *mcpServer) toolList() callToolResult {
 	if taskID, taskDesc := discovery.GetActiveTask(cwd); taskID != "" {
 		sb.WriteString(fmt.Sprintf("📋 **Current Task:** %s\n", taskID))
 		if taskDesc != "" {
-			desc := taskDesc
-			if len(desc) > 60 {
-				desc = desc[:57] + "..."
-			}
+			desc := ansi.Truncate(taskDesc, styles.TruncateDefault, styles.TruncateTail)
 			sb.WriteString(fmt.Sprintf("   %s\n", desc))
 		}
 		sb.WriteString("\n")

@@ -12,9 +12,10 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/x/ansi"
 	"github.com/iheanyi/grove/internal/discovery"
 	"github.com/iheanyi/grove/internal/registry"
+	"github.com/iheanyi/grove/internal/styles"
 	"github.com/iheanyi/grove/pkg/browser"
 	"github.com/spf13/cobra"
 )
@@ -244,10 +245,7 @@ func getTaskSummary(path string) string {
 		if taskDesc != "" {
 			summary = taskDesc
 		}
-		if len(summary) > 60 {
-			summary = summary[:57] + "..."
-		}
-		return summary
+		return ansi.Truncate(summary, styles.TruncateDefault, styles.TruncateTail)
 	}
 
 	// Fall back to Beads (.beads/issues/) for backwards compatibility
@@ -266,11 +264,7 @@ func getTaskSummary(path string) string {
 	}
 
 	msg := strings.TrimSpace(string(output))
-	// Truncate if too long
-	if len(msg) > 60 {
-		msg = msg[:57] + "..."
-	}
-	return msg
+	return ansi.Truncate(msg, styles.TruncateDefault, styles.TruncateTail)
 }
 
 // findBeadsTask looks for an in_progress issue in beads
@@ -301,19 +295,13 @@ func findBeadsTask(beadsPath string) string {
 			line = strings.TrimSpace(line)
 			if strings.HasPrefix(line, "# ") {
 				title := strings.TrimPrefix(line, "# ")
-				if len(title) > 50 {
-					title = title[:47] + "..."
-				}
-				return title
+				return ansi.Truncate(title, styles.TruncateTitle, styles.TruncateTail)
 			}
 			// Also try title from frontmatter
 			if strings.HasPrefix(line, "title:") {
 				title := strings.TrimSpace(strings.TrimPrefix(line, "title:"))
 				title = strings.Trim(title, "\"'")
-				if len(title) > 50 {
-					title = title[:47] + "..."
-				}
-				return title
+				return ansi.Truncate(title, styles.TruncateTitle, styles.TruncateTail)
 			}
 		}
 	}
@@ -328,12 +316,12 @@ func outputReviewJSON(items []*ReviewItem) error {
 }
 
 func runReviewInteractive(items []*ReviewItem) error {
-	// Styles
-	headerStyle := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("12"))
-	nameStyle := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("14"))
-	urlStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("10"))
-	statsStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("11"))
-	dimStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("240"))
+	// Use shared styles
+	headerStyle := styles.LinkHeader
+	nameStyle := styles.NameStyle
+	urlStyle := styles.URLStyle
+	statsStyle := styles.StatsStyle
+	dimStyle := styles.DimStyle
 
 	// Print header
 	fmt.Println()

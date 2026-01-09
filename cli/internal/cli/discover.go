@@ -7,8 +7,10 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/charmbracelet/x/ansi"
 	"github.com/iheanyi/grove/internal/port"
 	"github.com/iheanyi/grove/internal/registry"
+	"github.com/iheanyi/grove/internal/styles"
 	"github.com/iheanyi/grove/internal/worktree"
 	"github.com/spf13/cobra"
 )
@@ -93,8 +95,13 @@ func runDiscover(cmd *cobra.Command, args []string) error {
 
 	// Display results
 	fmt.Printf("Found %d git repositories:\n\n", len(discovered))
-	fmt.Printf("%-35s %-25s %-10s %-6s %s\n", "NAME", "BRANCH", "STATUS", "PORT", "PATH")
-	fmt.Println(strings.Repeat("-", 120))
+	fmt.Printf("%-*s %-*s %-*s %-*s %s\n",
+		styles.ColWidthName, "NAME",
+		styles.ColWidthBranch, "BRANCH",
+		styles.ColWidthStatus, "STATUS",
+		styles.ColWidthPort, "PORT",
+		"PATH")
+	fmt.Println(strings.Repeat("-", styles.SeparatorFull))
 
 	for _, wt := range discovered {
 		status := "new"
@@ -120,12 +127,12 @@ func runDiscover(cmd *cobra.Command, args []string) error {
 			relPath = rel
 		}
 
-		fmt.Printf("%-35s %-25s %-10s %-6s %s\n",
-			truncate(wt.Name, 35),
-			truncate(wt.Branch+configMarker, 25),
-			status,
-			portStr,
-			truncate(relPath, 40),
+		fmt.Printf("%-*s %-*s %-*s %-*s %s\n",
+			styles.ColWidthName, ansi.Truncate(wt.Name, styles.ColWidthName, styles.TruncateTail),
+			styles.ColWidthBranch, ansi.Truncate(wt.Branch+configMarker, styles.ColWidthBranch, styles.TruncateTail),
+			styles.ColWidthStatus, status,
+			styles.ColWidthPort, portStr,
+			ansi.Truncate(relPath, styles.ColWidthPath, styles.TruncateTail),
 		)
 	}
 
@@ -358,11 +365,4 @@ func findLinkedWorktrees(mainRepoPath string) []discoveredWorktree {
 func fileExists(path string) bool {
 	_, err := os.Stat(path)
 	return err == nil
-}
-
-func truncate(s string, maxLen int) string {
-	if len(s) <= maxLen {
-		return s
-	}
-	return s[:maxLen-3] + "..."
 }

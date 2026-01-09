@@ -13,6 +13,7 @@ import (
 	"github.com/iheanyi/grove/internal/discovery"
 	"github.com/iheanyi/grove/internal/github"
 	"github.com/iheanyi/grove/internal/registry"
+	"github.com/iheanyi/grove/internal/styles"
 	"github.com/iheanyi/grove/internal/worktree"
 	"github.com/spf13/cobra"
 )
@@ -480,8 +481,8 @@ func printViewsTable(views []*WorktreeView, fullMode bool, githubInfoMap map[str
 	}
 
 	// Style definitions
-	headerStyle := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("252")).PaddingRight(2)
-	cellStyle := lipgloss.NewStyle().PaddingRight(2)
+	headerStyle := styles.HeaderStyle
+	cellStyle := styles.CellStyle
 
 	var t *table.Table
 	if fullMode {
