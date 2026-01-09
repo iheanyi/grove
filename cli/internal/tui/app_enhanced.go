@@ -3,7 +3,6 @@ package tui
 import (
 	"fmt"
 	"os"
-	"os/exec"
 	"strings"
 	"syscall"
 	"time"
@@ -11,10 +10,12 @@ import (
 	"github.com/atotto/clipboard"
 	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/list"
+	"github.com/charmbracelet/bubbles/spinner"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/iheanyi/grove/internal/config"
 	"github.com/iheanyi/grove/internal/registry"
+	"github.com/iheanyi/grove/internal/styles"
 	"github.com/iheanyi/grove/pkg/browser"
 )
 
@@ -28,11 +29,11 @@ type EnhancedKeyMap struct {
 	Open          key.Binding
 	CopyURL       key.Binding
 	Logs          key.Binding
+	AllLogs       key.Binding
 	Refresh       key.Binding
 	Up            key.Binding
 	Down          key.Binding
 	StartProxy    key.Binding
-	Search        key.Binding
 	ToggleActions key.Binding
 }
 
@@ -69,6 +70,10 @@ var enhancedKeys = EnhancedKeyMap{
 		key.WithKeys("l"),
 		key.WithHelp("l", "logs"),
 	),
+	AllLogs: key.NewBinding(
+		key.WithKeys("L"),
+		key.WithHelp("L", "all logs"),
+	),
 	Refresh: key.NewBinding(
 		key.WithKeys("F5"),
 		key.WithHelp("F5", "refresh"),
@@ -85,10 +90,6 @@ var enhancedKeys = EnhancedKeyMap{
 		key.WithKeys("p"),
 		key.WithHelp("p", "proxy"),
 	),
-	Search: key.NewBinding(
-		key.WithKeys("/"),
-		key.WithHelp("/", "search"),
-	),
 	ToggleActions: key.NewBinding(
 		key.WithKeys("a"),
 		key.WithHelp("a", "toggle actions"),
@@ -100,34 +101,18 @@ type EnhancedServerItem struct {
 	server *registry.Server
 }
 
+// Title returns plain text with status icon prefix
 func (i EnhancedServerItem) Title() string {
-	// Status icon
 	statusIcon := "○"
-	statusStyle := statusStoppedStyle
 	if i.server.IsRunning() {
 		statusIcon = "●"
-		statusStyle = statusRunningStyle
 	} else if i.server.Status == registry.StatusCrashed {
 		statusIcon = "✗"
-		statusStyle = statusCrashedStyle
 	}
-
-	// Health indicator
-	healthIndicator := ""
-	if i.server.IsRunning() {
-		switch i.server.Health {
-		case registry.HealthHealthy:
-			healthIndicator = " " + healthyStyle.Render("✓")
-		case registry.HealthUnhealthy:
-			healthIndicator = " " + unhealthyStyle.Render("✗")
-		case registry.HealthUnknown:
-			healthIndicator = " " + unknownStyle.Render("?")
-		}
-	}
-
-	return statusStyle.Render(statusIcon) + " " + i.server.Name + healthIndicator
+	return statusIcon + " " + i.server.Name
 }
 
+// Description returns plain text - styling is handled by the custom delegate
 func (i EnhancedServerItem) Description() string {
 	parts := []string{
 		fmt.Sprintf("%s  :%d", i.server.URL, i.server.Port),
@@ -154,6 +139,63 @@ func (i EnhancedServerItem) FilterValue() string {
 	return i.server.Name
 }
 
+// StatusIcon returns the status icon for display
+func (i EnhancedServerItem) StatusIcon() string {
+	if i.server.IsRunning() {
+		return "●"
+	} else if i.server.Status == registry.StatusCrashed {
+		return "✗"
+	}
+	return "○"
+}
+
+// StatusStyle returns the lipgloss style for the status
+func (i EnhancedServerItem) StatusStyle() lipgloss.Style {
+	if i.server.IsRunning() {
+		return statusRunningStyle
+	} else if i.server.Status == registry.StatusCrashed {
+		return statusCrashedStyle
+	}
+	return statusStoppedStyle
+}
+
+// HealthIndicator returns the health indicator string
+func (i EnhancedServerItem) HealthIndicator() string {
+	if !i.server.IsRunning() {
+		return ""
+	}
+	switch i.server.Health {
+	case registry.HealthHealthy:
+		return " ✓"
+	case registry.HealthUnhealthy:
+		return " ✗"
+	case registry.HealthUnknown:
+		return " ?"
+	}
+	return ""
+}
+
+// HealthStyle returns the style for the health indicator
+func (i EnhancedServerItem) HealthStyle() lipgloss.Style {
+	switch i.server.Health {
+	case registry.HealthHealthy:
+		return healthyStyle
+	case registry.HealthUnhealthy:
+		return unhealthyStyle
+	default:
+		return unknownStyle
+	}
+}
+
+// ViewMode represents which view is currently active
+type ViewMode int
+
+const (
+	ViewModeList ViewMode = iota
+	ViewModeLogs
+	ViewModeAllLogs
+)
+
 // EnhancedModel is the enhanced TUI model
 type EnhancedModel struct {
 	list         list.Model
@@ -163,12 +205,15 @@ type EnhancedModel struct {
 	height       int
 	showHelp     bool
 	notification *Notification
-	spinner      *Spinner
+	spinner      spinner.Model
 	actionPanel  *ActionPanel
-	searchBar    *SearchBar
-	searchMode   bool
 	serverHealth map[string]registry.HealthStatus
 	starting     map[string]bool // Track servers currently starting
+
+	// View switching
+	viewMode       ViewMode
+	logViewer      *LogViewerModel
+	multiLogViewer *MultiLogViewerModel
 }
 
 // NewEnhanced creates a new enhanced TUI model
@@ -181,25 +226,30 @@ func NewEnhanced(cfg *config.Config) (*EnhancedModel, error) {
 	// Create list items from servers
 	items := makeEnhancedItems(reg)
 
-	// Create list
+	// Create default delegate - Title() includes status icon as plain text
 	delegate := list.NewDefaultDelegate()
-	delegate.Styles.SelectedTitle = selectedStyle
-	delegate.Styles.SelectedDesc = lipgloss.NewStyle().Foreground(lipgloss.Color("#A78BFA"))
+	delegate.Styles.SelectedTitle = lipgloss.NewStyle().
+		Bold(true).
+		Foreground(styles.Accent)
+	delegate.Styles.SelectedDesc = lipgloss.NewStyle().Foreground(styles.Muted)
 
 	l := list.New(items, delegate, 0, 0)
 	l.Title = "grove - Worktree Server Manager"
 	l.SetShowStatusBar(false)
 	l.SetFilteringEnabled(true)
 	l.Styles.Title = titleStyle
-	l.SetShowHelp(false)
+
+	// Initialize spinner with dot style
+	s := spinner.New()
+	s.Spinner = spinner.Dot
+	s.Style = lipgloss.NewStyle().Foreground(styles.Primary)
 
 	return &EnhancedModel{
 		list:         l,
 		reg:          reg,
 		cfg:          cfg,
-		spinner:      NewSpinner(),
+		spinner:      s,
 		actionPanel:  NewActionPanel(),
-		searchBar:    NewSearchBar(50),
 		serverHealth: make(map[string]registry.HealthStatus),
 		starting:     make(map[string]bool),
 	}, nil
@@ -217,8 +267,8 @@ func makeEnhancedItems(reg *registry.Registry) []list.Item {
 // Init initializes the enhanced model
 func (m EnhancedModel) Init() tea.Cmd {
 	return tea.Batch(
-		tickCmd(),
-		SpinnerTickCmd(),
+		WatchRegistry(), // Watch for registry file changes instead of polling
+		m.spinner.Tick,
 		HealthCheckTicker(10*time.Second),
 	)
 }
@@ -227,6 +277,58 @@ func (m EnhancedModel) Init() tea.Cmd {
 func (m EnhancedModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmds []tea.Cmd
 
+	// If in log viewer mode, route messages there
+	if m.viewMode == ViewModeLogs && m.logViewer != nil {
+		switch msg := msg.(type) {
+		case tea.WindowSizeMsg:
+			m.width = msg.Width
+			m.height = msg.Height
+			// Forward to log viewer
+			newLogViewer, cmd := m.logViewer.Update(msg)
+			m.logViewer = newLogViewer.(*LogViewerModel)
+			return m, cmd
+
+		case tea.KeyMsg:
+			// Check for quit keys to return to list view
+			if key.Matches(msg, logViewerKeys.Quit) {
+				m.viewMode = ViewModeList
+				m.logViewer = nil
+				return m, nil
+			}
+		}
+
+		// Forward all other messages to log viewer
+		newLogViewer, cmd := m.logViewer.Update(msg)
+		m.logViewer = newLogViewer.(*LogViewerModel)
+		return m, cmd
+	}
+
+	// If in multi-log viewer mode, route messages there
+	if m.viewMode == ViewModeAllLogs && m.multiLogViewer != nil {
+		switch msg := msg.(type) {
+		case tea.WindowSizeMsg:
+			m.width = msg.Width
+			m.height = msg.Height
+			// Forward to multi-log viewer
+			newViewer, cmd := m.multiLogViewer.Update(msg)
+			m.multiLogViewer = newViewer.(*MultiLogViewerModel)
+			return m, cmd
+
+		case tea.KeyMsg:
+			// Check for quit keys to return to list view
+			if key.Matches(msg, logViewerKeys.Quit) {
+				m.viewMode = ViewModeList
+				m.multiLogViewer = nil
+				return m, nil
+			}
+		}
+
+		// Forward all other messages to multi-log viewer
+		newViewer, cmd := m.multiLogViewer.Update(msg)
+		m.multiLogViewer = newViewer.(*MultiLogViewerModel)
+		return m, cmd
+	}
+
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
@@ -234,18 +336,22 @@ func (m EnhancedModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.list.SetSize(msg.Width-4, msg.Height-12) // More space for action panel
 		return m, nil
 
-	case tickMsg:
-		// Refresh registry
+	case RegistryChangedMsg:
+		// Registry file changed - refresh if not filtering
 		if reg, err := registry.Load(); err == nil {
 			m.reg = reg
 			m.reg.Cleanup() //nolint:errcheck // Best effort cleanup during refresh
-			m.list.SetItems(makeEnhancedItems(m.reg))
+			if m.list.FilterState() == list.Unfiltered {
+				m.list.SetItems(makeEnhancedItems(m.reg))
+			}
 		}
-		return m, tickCmd()
+		// Continue watching for more changes
+		return m, WatchRegistry()
 
-	case SpinnerTickMsg:
-		m.spinner.Tick()
-		return m, SpinnerTickCmd()
+	case spinner.TickMsg:
+		var cmd tea.Cmd
+		m.spinner, cmd = m.spinner.Update(msg)
+		return m, cmd
 
 	case healthCheckTickMsg:
 		// Trigger health checks for running servers
@@ -261,7 +367,10 @@ func (m EnhancedModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			server.LastHealthCheck = msg.CheckTime
 			m.reg.Set(server) //nolint:errcheck // Best effort health update
 			m.serverHealth[msg.ServerName] = msg.Health
-			m.list.SetItems(makeEnhancedItems(m.reg))
+			// Don't update items while filtering as it disrupts the filter state
+			if m.list.FilterState() == list.Unfiltered {
+				m.list.SetItems(makeEnhancedItems(m.reg))
+			}
 		}
 		return m, nil
 
@@ -270,18 +379,15 @@ func (m EnhancedModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case tea.KeyMsg:
-		// Handle search mode
-		if m.searchMode {
-			return m.handleSearchInput(msg)
-		}
-
-		// Don't process keys if filtering
-		if m.list.FilterState() == list.Filtering {
+		// When filtering (or filter applied), let the list handle all keys
+		// This allows typing characters like 'q', 's', etc. in the filter
+		if m.list.FilterState() != list.Unfiltered {
 			var cmd tea.Cmd
 			m.list, cmd = m.list.Update(msg)
 			return m, cmd
 		}
 
+		// Only handle our custom keys when NOT filtering
 		switch {
 		case key.Matches(msg, enhancedKeys.Quit):
 			return m, tea.Quit
@@ -308,21 +414,22 @@ func (m EnhancedModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case key.Matches(msg, enhancedKeys.Logs):
 			return m, m.viewLogs()
 
+		case key.Matches(msg, enhancedKeys.AllLogs):
+			return m, m.viewAllLogs()
+
 		case key.Matches(msg, enhancedKeys.Refresh):
 			if reg, err := registry.Load(); err == nil {
 				m.reg = reg
 				m.reg.Cleanup() //nolint:errcheck // Best effort cleanup during refresh
-				m.list.SetItems(makeEnhancedItems(m.reg))
+				// Only update items if not filtering
+				if m.list.FilterState() == list.Unfiltered {
+					m.list.SetItems(makeEnhancedItems(m.reg))
+				}
 			}
 			return m, nil
 
 		case key.Matches(msg, enhancedKeys.StartProxy):
 			return m, m.toggleProxy()
-
-		case key.Matches(msg, enhancedKeys.Search):
-			m.searchMode = true
-			m.searchBar.Activate()
-			return m, nil
 
 		case key.Matches(msg, enhancedKeys.ToggleActions):
 			m.actionPanel.Visible = !m.actionPanel.Visible
@@ -335,56 +442,23 @@ func (m EnhancedModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, cmd
 }
 
-// handleSearchInput handles keyboard input in search mode
-func (m EnhancedModel) handleSearchInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	switch msg.String() {
-	case "esc":
-		m.searchMode = false
-		m.searchBar.Deactivate()
-		m.list.ResetFilter()
-		return m, nil
-
-	case "enter":
-		m.searchMode = false
-		m.searchBar.Active = false
-		// The list handles filtering internally when user types
-		return m, nil
-
-	case "backspace":
-		m.searchBar.DeleteChar()
-		return m, nil
-
-	case "left":
-		m.searchBar.MoveCursorLeft()
-		return m, nil
-
-	case "right":
-		m.searchBar.MoveCursorRight()
-		return m, nil
-
-	default:
-		// Insert character
-		if len(msg.String()) == 1 {
-			m.searchBar.InsertChar(rune(msg.String()[0]))
-		}
-		return m, nil
-	}
-}
-
 // View renders the enhanced TUI
 func (m EnhancedModel) View() string {
 	if m.width == 0 {
 		return "Loading..."
 	}
 
-	var b strings.Builder
-
-	// Search bar (if active)
-	if m.searchMode {
-		b.WriteString("\n")
-		b.WriteString(m.searchBar.View())
-		b.WriteString("\n\n")
+	// If in log viewer mode, render that instead
+	if m.viewMode == ViewModeLogs && m.logViewer != nil {
+		return m.logViewer.View()
 	}
+
+	// If in multi-log viewer mode, render that instead
+	if m.viewMode == ViewModeAllLogs && m.multiLogViewer != nil {
+		return m.multiLogViewer.View()
+	}
+
+	var b strings.Builder
 
 	// Main list
 	b.WriteString(m.list.View())
@@ -435,7 +509,7 @@ func (m EnhancedModel) View() string {
 		b.WriteString(m.renderHelp())
 	} else {
 		b.WriteString("\n")
-		b.WriteString(helpStyle.Render("  Quick: [s]start [x]stop [r]restart [b]browser [c]copy [l]logs [/]search [?]help [q]quit"))
+		b.WriteString(helpStyle.Render("  [s]start [x]stop [r]restart [b]browser [c]copy [l]logs [L]all-logs [/]search [?]help [q]quit"))
 	}
 
 	return b.String()
@@ -451,6 +525,7 @@ func (m EnhancedModel) renderHelp() string {
 	b.WriteString("  b             Open server in browser\n")
 	b.WriteString("  c             Copy URL to clipboard\n")
 	b.WriteString("  l             View server logs\n")
+	b.WriteString("  L             View all server logs\n")
 	b.WriteString("  p             Start/stop proxy\n")
 	b.WriteString("  F5            Refresh server list\n")
 	b.WriteString("  /             Search/filter servers\n")
@@ -622,24 +697,76 @@ func (m *EnhancedModel) viewLogs() tea.Cmd {
 	if server.LogFile == "" {
 		return func() tea.Msg {
 			return NotificationMsg{
-				Message: "No log file",
+				Message: "No log file configured for this server",
 				Type:    NotificationWarning,
 			}
 		}
 	}
 
-	// Use grove logs command which has syntax highlighting
-	grovePath, _ := exec.LookPath("grove")
-	if grovePath == "" {
-		// Fall back to less if grove not found
-		return tea.ExecProcess(exec.Command("less", "+F", server.LogFile), func(err error) tea.Msg {
-			return nil
-		})
+	// Check if log file exists
+	if _, err := os.Stat(server.LogFile); os.IsNotExist(err) {
+		return func() tea.Msg {
+			return NotificationMsg{
+				Message: "Log file does not exist yet",
+				Type:    NotificationWarning,
+			}
+		}
 	}
 
-	return tea.ExecProcess(exec.Command(grovePath, "logs", "-f", server.Name), func(err error) tea.Msg {
-		return nil
-	})
+	// Switch to embedded log viewer
+	m.logViewer = NewLogViewer(server.Name, server.LogFile)
+	m.viewMode = ViewModeLogs
+
+	// Initialize the log viewer and send window size
+	return tea.Batch(
+		m.logViewer.Init(),
+		func() tea.Msg {
+			return tea.WindowSizeMsg{Width: m.width, Height: m.height}
+		},
+	)
+}
+
+func (m *EnhancedModel) viewAllLogs() tea.Cmd {
+	// Get all running servers with log files
+	runningServers := m.reg.ListRunning()
+
+	if len(runningServers) == 0 {
+		return func() tea.Msg {
+			return NotificationMsg{
+				Message: "No running servers with logs",
+				Type:    NotificationWarning,
+			}
+		}
+	}
+
+	// Filter to only servers with log files
+	var serversWithLogs []*registry.Server
+	for _, s := range runningServers {
+		if s.LogFile != "" {
+			serversWithLogs = append(serversWithLogs, s)
+		}
+	}
+
+	if len(serversWithLogs) == 0 {
+		return func() tea.Msg {
+			return NotificationMsg{
+				Message: "No log files configured for running servers",
+				Type:    NotificationWarning,
+			}
+		}
+	}
+
+	// Switch to multi-log viewer
+	m.multiLogViewer = NewMultiLogViewer(serversWithLogs)
+	m.viewMode = ViewModeAllLogs
+
+	// Initialize the multi-log viewer and send window size
+	return tea.Batch(
+		m.multiLogViewer.Init(),
+		func() tea.Msg {
+			return tea.WindowSizeMsg{Width: m.width, Height: m.height}
+		},
+	)
 }
 
 func (m *EnhancedModel) toggleProxy() tea.Cmd {

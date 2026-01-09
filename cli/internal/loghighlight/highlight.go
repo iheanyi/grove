@@ -6,37 +6,38 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
+	"github.com/iheanyi/grove/internal/styles"
 )
 
-// Colors for different log elements
+// Colors for different log elements - using shared styles
 var (
 	// Log levels
-	ErrorStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("#EF4444")).Bold(true)
-	WarnStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color("#F59E0B")).Bold(true)
-	InfoStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color("#3B82F6"))
-	DebugStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("#6B7280"))
+	ErrorStyle = lipgloss.NewStyle().Foreground(styles.Error).Bold(true)
+	WarnStyle  = lipgloss.NewStyle().Foreground(styles.Warning).Bold(true)
+	InfoStyle  = lipgloss.NewStyle().Foreground(styles.Info)
+	DebugStyle = lipgloss.NewStyle().Foreground(styles.Muted)
 
 	// HTTP Methods
-	GetStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color("#10B981")).Bold(true)
-	PostStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("#3B82F6")).Bold(true)
-	PutStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color("#F59E0B")).Bold(true)
-	PatchStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color("#EAB308")).Bold(true)
-	DeleteStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("#EF4444")).Bold(true)
+	GetStyle    = lipgloss.NewStyle().Foreground(styles.Secondary).Bold(true)
+	PostStyle   = lipgloss.NewStyle().Foreground(styles.Info).Bold(true)
+	PutStyle    = lipgloss.NewStyle().Foreground(styles.Warning).Bold(true)
+	PatchStyle  = lipgloss.NewStyle().Foreground(styles.Yellow).Bold(true)
+	DeleteStyle = lipgloss.NewStyle().Foreground(styles.Error).Bold(true)
 
 	// Status codes
-	Status2xxStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("#10B981")).Bold(true)
-	Status3xxStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("#3B82F6"))
-	Status4xxStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("#F59E0B")).Bold(true)
-	Status5xxStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("#EF4444")).Bold(true)
+	Status2xxStyle = lipgloss.NewStyle().Foreground(styles.Secondary).Bold(true)
+	Status3xxStyle = lipgloss.NewStyle().Foreground(styles.Info)
+	Status4xxStyle = lipgloss.NewStyle().Foreground(styles.Warning).Bold(true)
+	Status5xxStyle = lipgloss.NewStyle().Foreground(styles.Error).Bold(true)
 
 	// Other elements
-	TimestampStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color("#6B7280"))
-	DurationStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("#A855F7"))
-	NumberStyle     = lipgloss.NewStyle().Foreground(lipgloss.Color("#06B6D4"))
-	StringStyle     = lipgloss.NewStyle().Foreground(lipgloss.Color("#10B981"))
-	KeyStyle        = lipgloss.NewStyle().Foreground(lipgloss.Color("#3B82F6"))
-	ControllerStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("#EAB308")).Bold(true)
-	PathStyle       = lipgloss.NewStyle().Foreground(lipgloss.Color("#8B5CF6"))
+	TimestampStyle  = lipgloss.NewStyle().Foreground(styles.Muted)
+	DurationStyle   = lipgloss.NewStyle().Foreground(styles.PurpleLight)
+	NumberStyle     = lipgloss.NewStyle().Foreground(styles.Cyan)
+	StringStyle     = lipgloss.NewStyle().Foreground(styles.Secondary)
+	KeyStyle        = lipgloss.NewStyle().Foreground(styles.Info)
+	ControllerStyle = lipgloss.NewStyle().Foreground(styles.Yellow).Bold(true)
+	PathStyle       = lipgloss.NewStyle().Foreground(styles.Purple)
 )
 
 // Compiled regex patterns

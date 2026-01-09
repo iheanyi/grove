@@ -5,7 +5,10 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strings"
+	"time"
 
+	"github.com/fsnotify/fsnotify"
 	"github.com/iheanyi/grove/internal/loghighlight"
 	"github.com/iheanyi/grove/internal/registry"
 	"github.com/iheanyi/grove/internal/worktree"
@@ -78,7 +81,7 @@ func runLogs(cmd *cobra.Command, args []string) error {
 	}
 
 	if follow {
-		return tailFollow(server.LogFile)
+		return tailFollow(server.LogFile, name)
 	}
 
 	return tailLines(server.LogFile, lines)
@@ -125,31 +128,105 @@ func tailLines(path string, n int) error {
 	return nil
 }
 
-// tailFollow follows the log file and prints new lines
-func tailFollow(path string) error {
+// tailFollow follows the log file and prints new lines using file watching
+func tailFollow(path string, serverName string) error {
 	file, err := os.Open(path)
 	if err != nil {
 		return err
 	}
 	defer file.Close()
 
-	// Seek to end
-	if _, err := file.Seek(0, io.SeekEnd); err != nil {
+	// Print header so user knows what's happening
+	fmt.Printf("\n  Streaming logs for \033[1m%s\033[0m\n", serverName)
+	fmt.Printf("  Press \033[1mCtrl+C\033[0m to exit\n")
+	fmt.Println("  " + strings.Repeat("─", 40))
+	fmt.Println()
+
+	// Seek to end to only show new content
+	offset, err := file.Seek(0, io.SeekEnd)
+	if err != nil {
 		return fmt.Errorf("failed to seek to end of file: %w", err)
 	}
 
+	// Set up file watcher
+	watcher, err := fsnotify.NewWatcher()
+	if err != nil {
+		// Fall back to polling if fsnotify fails
+		return tailFollowPoll(file, offset)
+	}
+	defer watcher.Close()
+
+	if err := watcher.Add(path); err != nil {
+		// Fall back to polling
+		return tailFollowPoll(file, offset)
+	}
+
 	reader := bufio.NewReader(file)
+
+	// Print any lines that appeared since we opened the file
+	readAndPrintLines(reader)
+
+	// Watch for changes
+	for {
+		select {
+		case event, ok := <-watcher.Events:
+			if !ok {
+				return nil
+			}
+			if event.Has(fsnotify.Write) {
+				readAndPrintLines(reader)
+			}
+		case err, ok := <-watcher.Errors:
+			if !ok {
+				return nil
+			}
+			return fmt.Errorf("watcher error: %w", err)
+		}
+	}
+}
+
+// readAndPrintLines reads and prints all available lines from the reader
+func readAndPrintLines(reader *bufio.Reader) {
 	for {
 		line, err := reader.ReadString('\n')
 		if err != nil {
 			if err == io.EOF {
-				// Wait for more data
+				// No more data available right now
+				// Print partial line if any
+				if len(line) > 0 {
+					printLine(line)
+				}
+				return
+			}
+			// Other error, just return
+			return
+		}
+		// Remove trailing newline
+		if len(line) > 0 && line[len(line)-1] == '\n' {
+			line = line[:len(line)-1]
+		}
+		printLine(line)
+	}
+}
+
+// tailFollowPoll is a fallback that uses polling instead of file watching
+func tailFollowPoll(file *os.File, offset int64) error {
+	reader := bufio.NewReader(file)
+
+	for {
+		line, err := reader.ReadString('\n')
+		if err != nil {
+			if err == io.EOF {
+				// Wait before checking again - don't spin!
+				time.Sleep(100 * time.Millisecond)
 				continue
 			}
 			return err
 		}
-		// Remove trailing newline since printLine adds one
-		line = line[:len(line)-1]
+		// Remove trailing newline
+		if len(line) > 0 && line[len(line)-1] == '\n' {
+			line = line[:len(line)-1]
+		}
 		printLine(line)
 	}
 }

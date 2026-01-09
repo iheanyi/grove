@@ -2,37 +2,32 @@ package tui
 
 import (
 	"github.com/charmbracelet/lipgloss"
+	"github.com/iheanyi/grove/internal/styles"
 )
 
 var (
-	// Colors
-	primaryColor   = lipgloss.Color("#7C3AED") // Purple
-	secondaryColor = lipgloss.Color("#10B981") // Green
-	warningColor   = lipgloss.Color("#F59E0B") // Yellow
-	errorColor     = lipgloss.Color("#EF4444") // Red
-	mutedColor     = lipgloss.Color("#6B7280") // Gray
+	// Colors - use shared styles package
+	primaryColor   = styles.Primary
+	secondaryColor = styles.Secondary
+	warningColor   = styles.Warning
+	errorColor     = styles.Error
+	mutedColor     = styles.Muted
 
 	// Status colors
-	runningColor = lipgloss.Color("#10B981") // Green
-	stoppedColor = lipgloss.Color("#6B7280") // Gray
-	crashedColor = lipgloss.Color("#EF4444") // Red
+	runningColor = styles.Secondary
+	stoppedColor = styles.Muted
+	crashedColor = styles.Error
 
 	// Health colors
-	healthyColor   = lipgloss.Color("#10B981") // Green
-	unhealthyColor = lipgloss.Color("#EF4444") // Red
-	unknownColor   = lipgloss.Color("#6B7280") // Gray
+	healthyColor   = styles.Secondary
+	unhealthyColor = styles.Error
+	unknownColor   = styles.Muted
 
 	// Styles
 	titleStyle = lipgloss.NewStyle().
 			Bold(true).
 			Foreground(primaryColor).
 			MarginBottom(1)
-
-	selectedStyle = lipgloss.NewStyle().
-			Bold(true).
-			Foreground(lipgloss.Color("#FFFFFF")).
-			Background(primaryColor).
-			Padding(0, 1)
 
 	statusRunningStyle = lipgloss.NewStyle().
 				Foreground(runningColor)
@@ -70,23 +65,10 @@ var (
 					Foreground(warningColor).
 					Bold(true)
 
-	// Spinner style
-	spinnerStyle = lipgloss.NewStyle().
-			Foreground(primaryColor)
-
-	// Progress bar style
-	progressBarStyle = lipgloss.NewStyle().
-				Foreground(primaryColor)
-
 	// Action panel style
 	actionPanelStyle = lipgloss.NewStyle().
 				Border(lipgloss.RoundedBorder()).
 				BorderForeground(primaryColor).
 				Padding(0, 1).
 				MarginTop(1)
-
-	// Search bar style
-	searchBarStyle = lipgloss.NewStyle().
-			Foreground(primaryColor).
-			Bold(true)
 )

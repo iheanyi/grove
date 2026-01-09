@@ -14,6 +14,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/iheanyi/grove/internal/config"
 	"github.com/iheanyi/grove/internal/registry"
+	"github.com/iheanyi/grove/internal/styles"
 	"github.com/iheanyi/grove/pkg/browser"
 )
 
@@ -74,25 +75,44 @@ type ServerItem struct {
 	server *registry.Server
 }
 
+// Title returns plain text with status icon prefix
 func (i ServerItem) Title() string {
-	status := "○"
-	style := statusStoppedStyle
+	statusIcon := "○"
 	if i.server.IsRunning() {
-		status = "●"
-		style = statusRunningStyle
+		statusIcon = "●"
 	} else if i.server.Status == registry.StatusCrashed {
-		status = "✗"
-		style = statusCrashedStyle
+		statusIcon = "✗"
 	}
-	return style.Render(status) + " " + i.server.Name
+	return statusIcon + " " + i.server.Name
 }
 
+// Description returns plain text
 func (i ServerItem) Description() string {
 	return fmt.Sprintf("%s  :%d", i.server.URL, i.server.Port)
 }
 
 func (i ServerItem) FilterValue() string {
 	return i.server.Name
+}
+
+// StatusIcon returns the status icon for display
+func (i ServerItem) StatusIcon() string {
+	if i.server.IsRunning() {
+		return "●"
+	} else if i.server.Status == registry.StatusCrashed {
+		return "✗"
+	}
+	return "○"
+}
+
+// StatusStyle returns the lipgloss style for the status
+func (i ServerItem) StatusStyle() lipgloss.Style {
+	if i.server.IsRunning() {
+		return statusRunningStyle
+	} else if i.server.Status == registry.StatusCrashed {
+		return statusCrashedStyle
+	}
+	return statusStoppedStyle
 }
 
 // Model is the main TUI model
@@ -107,9 +127,6 @@ type Model struct {
 	statusTime time.Time
 }
 
-// tickMsg is sent periodically to refresh the view
-type tickMsg time.Time
-
 // statusMsg is used to display temporary status messages
 type statusMsgCmd string
 
@@ -123,17 +140,18 @@ func New(cfg *config.Config) (*Model, error) {
 	// Create list items from servers
 	items := makeItems(reg)
 
-	// Create list
+	// Create default delegate - Title() includes status icon as plain text
 	delegate := list.NewDefaultDelegate()
-	delegate.Styles.SelectedTitle = selectedStyle
-	delegate.Styles.SelectedDesc = lipgloss.NewStyle().Foreground(lipgloss.Color("#A78BFA"))
+	delegate.Styles.SelectedTitle = lipgloss.NewStyle().
+		Bold(true).
+		Foreground(styles.Accent)
+	delegate.Styles.SelectedDesc = lipgloss.NewStyle().Foreground(styles.Muted)
 
 	l := list.New(items, delegate, 0, 0)
 	l.Title = "grove - Worktree Server Manager"
 	l.SetShowStatusBar(false)
 	l.SetFilteringEnabled(true)
 	l.Styles.Title = titleStyle
-	l.SetShowHelp(false)
 
 	return &Model{
 		list: l,
@@ -154,14 +172,8 @@ func makeItems(reg *registry.Registry) []list.Item {
 // Init initializes the model
 func (m Model) Init() tea.Cmd {
 	return tea.Batch(
-		tickCmd(),
+		WatchRegistry(), // Watch for registry file changes instead of polling
 	)
-}
-
-func tickCmd() tea.Cmd {
-	return tea.Tick(2*time.Second, func(t time.Time) tea.Msg {
-		return tickMsg(t)
-	})
 }
 
 // Update handles messages
@@ -173,15 +185,18 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.list.SetSize(msg.Width-4, msg.Height-8)
 		return m, nil
 
-	case tickMsg:
-		// Refresh registry
+	case RegistryChangedMsg:
+		// Registry file changed - refresh if not filtering
 		if reg, err := registry.Load(); err == nil {
 			m.reg = reg
 			// Cleanup stale entries (non-critical, ignore errors)
 			m.reg.Cleanup() //nolint:errcheck // Best effort cleanup during refresh
-			m.list.SetItems(makeItems(m.reg))
+			if m.list.FilterState() == list.Unfiltered {
+				m.list.SetItems(makeItems(m.reg))
+			}
 		}
-		return m, tickCmd()
+		// Continue watching for more changes
+		return m, WatchRegistry()
 
 	case statusMsgCmd:
 		m.statusMsg = string(msg)
@@ -189,13 +204,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case tea.KeyMsg:
-		// Don't process keys if filtering
-		if m.list.FilterState() == list.Filtering {
+		// When filtering (or filter applied), let the list handle all keys
+		if m.list.FilterState() != list.Unfiltered {
 			var cmd tea.Cmd
 			m.list, cmd = m.list.Update(msg)
 			return m, cmd
 		}
 
+		// Only handle our custom keys when NOT filtering
 		switch {
 		case key.Matches(msg, keys.Quit):
 			return m, tea.Quit
@@ -217,7 +233,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if reg, err := registry.Load(); err == nil {
 				m.reg = reg
 				m.reg.Cleanup() //nolint:errcheck // Best effort cleanup during refresh
-				m.list.SetItems(makeItems(m.reg))
+				// Only update items if not filtering
+				if m.list.FilterState() == list.Unfiltered {
+					m.list.SetItems(makeItems(m.reg))
+				}
 			}
 			return m, nil
 
