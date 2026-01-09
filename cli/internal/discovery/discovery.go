@@ -35,6 +35,7 @@ type Worktree struct {
 	// Activity indicators
 	HasServer bool `json:"has_server"` // We have a server registered for this
 	HasClaude bool `json:"has_claude"` // Claude Code is active (detected via socket/process)
+	HasGemini bool `json:"has_gemini"` // Gemini CLI is active
 	HasVSCode bool `json:"has_vscode"` // VS Code is open (detected via process)
 	GitDirty  bool `json:"git_dirty"`  // Has uncommitted changes
 
@@ -162,7 +163,8 @@ func DetectActivity(wt *Worktree) error {
 	wg.Wait()
 
 	wt.Agent = agent
-	wt.HasClaude = agent != nil
+	wt.HasClaude = agent != nil && agent.Type == "claude"
+	wt.HasGemini = agent != nil && agent.Type == "gemini"
 	wt.HasVSCode = hasVSCode
 	wt.GitDirty = gitDirty
 
@@ -176,7 +178,7 @@ func DetectActivity(wt *Worktree) error {
 	}
 
 	// Update last activity time if any activity detected
-	if wt.HasClaude || wt.HasVSCode || wt.GitDirty {
+	if wt.Agent != nil || wt.HasVSCode || wt.GitDirty {
 		wt.LastActivity = time.Now()
 	}
 
@@ -190,7 +192,51 @@ func detectAgent(path string) *AgentInfo {
 		return agent
 	}
 
+	// Check for Gemini CLI
+	if agent := detectGeminiAgent(path); agent != nil {
+		return agent
+	}
+
 	// Add other agent detection here in the future (Cursor, Copilot, etc.)
+
+	return nil
+}
+
+// detectGeminiAgent checks for Gemini CLI activity
+func detectGeminiAgent(path string) *AgentInfo {
+	// Find Gemini CLI processes using ps aux
+	// Pattern matches "gemini" or "gemini-cli"
+	cmd := exec.Command("bash", "-c", "ps aux | grep -E '[g]emini(-cli)?\\s*(--|-|$)' | awk '{print $2}'")
+	output, err := cmd.Output()
+	if err != nil {
+		return nil
+	}
+
+	pids := strings.Fields(strings.TrimSpace(string(output)))
+	if len(pids) == 0 {
+		return nil
+	}
+
+	// Check each gemini process's working directory using lsof
+	for _, pidStr := range pids {
+		cwd := getProcessCwd(pidStr)
+		if cwd != "" && cwd == path {
+			pid := 0
+			_, _ = fmt.Sscanf(pidStr, "%d", &pid)
+
+			// Get process start time and command
+			startTime := getProcessStartTime(pidStr)
+			command := getProcessCommand(pidStr)
+
+			return &AgentInfo{
+				Type:      "gemini",
+				PID:       pid,
+				Path:      cwd,
+				StartTime: startTime,
+				Command:   command,
+			}
+		}
+	}
 
 	return nil
 }

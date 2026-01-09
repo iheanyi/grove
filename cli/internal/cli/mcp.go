@@ -53,15 +53,18 @@ var mcpInstallCmd = &cobra.Command{
 
 Supported providers:
   - claude-code (default): Installs to Claude Code (~/.claude/settings.json)
+  - gemini: Installs to Gemini CLI (~/.gemini/settings.json)
   - opencode: Installs to OpenCode config (opencode.json)
   - cursor: Installs to Cursor IDE (~/.cursor/mcp.json)
   - codex: Installs to OpenAI Codex CLI (~/.codex/config.toml)
 
-For OpenCode and Cursor, use --global to install to the global config
+For OpenCode, Cursor, and Gemini, use --global to install to the global config
 instead of the local project config.
 
 Examples:
   grove mcp install                      # Install for Claude Code
+  grove mcp install -p gemini            # Install for Gemini (local)
+  grove mcp install -p gemini --global   # Install for Gemini (global)
   grove mcp install -p opencode          # Install for OpenCode (local)
   grove mcp install -p opencode --global # Install for OpenCode (global)
   grove mcp install -p cursor            # Install for Cursor (local)
@@ -81,8 +84,8 @@ func init() {
 	rootCmd.AddCommand(mcpCmd)
 	mcpCmd.AddCommand(mcpInstallCmd)
 
-	mcpInstallCmd.Flags().StringVarP(&mcpInstallProvider, "provider", "p", "claude-code", "Provider to install for (claude-code, opencode, cursor, codex)")
-	mcpInstallCmd.Flags().BoolVarP(&mcpInstallGlobal, "global", "g", false, "Install globally (for opencode and cursor)")
+	mcpInstallCmd.Flags().StringVarP(&mcpInstallProvider, "provider", "p", "claude-code", "Provider to install for (claude-code, gemini, opencode, cursor, codex)")
+	mcpInstallCmd.Flags().BoolVarP(&mcpInstallGlobal, "global", "g", false, "Install globally (for opencode, cursor, and gemini)")
 }
 
 func runMCPInstall(cmd *cobra.Command, args []string) error {
@@ -105,6 +108,8 @@ func runMCPInstall(cmd *cobra.Command, args []string) error {
 	switch mcpInstallProvider {
 	case "claude-code":
 		return installForClaudeCode(grovePath)
+	case "gemini":
+		return installForGemini(grovePath, mcpInstallGlobal)
 	case "opencode":
 		return installForOpenCode(grovePath, mcpInstallGlobal)
 	case "cursor":
@@ -112,7 +117,7 @@ func runMCPInstall(cmd *cobra.Command, args []string) error {
 	case "codex":
 		return installForCodex(grovePath)
 	default:
-		return fmt.Errorf("unknown provider: %s (supported: claude-code, opencode, cursor, codex)", mcpInstallProvider)
+		return fmt.Errorf("unknown provider: %s (supported: claude-code, gemini, opencode, cursor, codex)", mcpInstallProvider)
 	}
 }
 
@@ -133,6 +138,81 @@ func installForClaudeCode(grovePath string) error {
 	fmt.Printf("✓ Installed grove MCP server in Claude Code\n\n")
 	fmt.Printf("  Binary path: %s\n\n", grovePath)
 	fmt.Println("The MCP server is now available. Run 'claude mcp list' to verify.")
+	printMCPTools()
+
+	return nil
+}
+
+func installForGemini(grovePath string, global bool) error {
+	var configPath string
+
+	if global {
+		// Global config: ~/.gemini/settings.json
+		homeDir, err := os.UserHomeDir()
+		if err != nil {
+			return fmt.Errorf("failed to get home directory: %w", err)
+		}
+		configDir := filepath.Join(homeDir, ".gemini")
+		if err := os.MkdirAll(configDir, 0755); err != nil {
+			return fmt.Errorf("failed to create config directory: %w", err)
+		}
+		configPath = filepath.Join(configDir, "settings.json")
+	} else {
+		// Local config: .gemini/settings.json in current directory
+		configDir := ".gemini"
+		if err := os.MkdirAll(configDir, 0755); err != nil {
+			return fmt.Errorf("failed to create config directory: %w", err)
+		}
+		configPath = filepath.Join(configDir, "settings.json")
+	}
+
+	// Read existing config or create new one
+	config := make(map[string]interface{})
+	if data, err := os.ReadFile(configPath); err == nil {
+		if err := json.Unmarshal(data, &config); err != nil {
+			return fmt.Errorf("failed to parse existing config at %s: %w", configPath, err)
+		}
+	}
+
+	// Get or create the mcpServers section
+	mcpServers, ok := config["mcpServers"].(map[string]interface{})
+	if !ok {
+		mcpServers = make(map[string]interface{})
+	}
+
+	// Check if grove already exists
+	if _, exists := mcpServers["grove"]; exists {
+		fmt.Printf("grove MCP server is already configured in %s\n", configPath)
+		fmt.Println("\nTo reinstall, remove the 'grove' entry from the 'mcpServers' section and run this command again.")
+		return nil
+	}
+
+	// Add grove MCP server configuration (Gemini/Cursor format)
+	mcpServers["grove"] = map[string]interface{}{
+		"command": grovePath,
+		"args":    []string{"mcp"},
+	}
+	config["mcpServers"] = mcpServers
+
+	// Write updated config
+	data, err := json.MarshalIndent(config, "", "  ")
+	if err != nil {
+		return fmt.Errorf("failed to marshal config: %w", err)
+	}
+
+	if err := os.WriteFile(configPath, data, 0644); err != nil {
+		return fmt.Errorf("failed to write config to %s: %w", configPath, err)
+	}
+
+	location := "local"
+	if global {
+		location = "global"
+	}
+
+	fmt.Printf("✓ Installed grove MCP server in Gemini (%s)\n\n", location)
+	fmt.Printf("  Config file: %s\n", configPath)
+	fmt.Printf("  Binary path: %s\n\n", grovePath)
+	fmt.Println("Restart Gemini CLI to load the MCP server.")
 	printMCPTools()
 
 	return nil
