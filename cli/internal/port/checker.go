@@ -3,6 +3,9 @@ package port
 import (
 	"fmt"
 	"net"
+	"os/exec"
+	"strconv"
+	"strings"
 	"time"
 )
 
@@ -87,4 +90,29 @@ func FindAvailablePort(minPort, maxPort int) (int, error) {
 		}
 	}
 	return 0, fmt.Errorf("no available ports in range %d-%d", minPort, maxPort)
+}
+
+// GetListenerPID returns the PID of the process listening on the given port.
+// Returns 0 if no process is found or if the detection fails.
+func GetListenerPID(port int) int {
+	// Use lsof to find the process listening on the port
+	cmd := exec.Command("lsof", "-i", fmt.Sprintf(":%d", port), "-sTCP:LISTEN", "-t")
+	output, err := cmd.Output()
+	if err != nil {
+		return 0
+	}
+
+	// Parse the PID from the output (may be multiple lines if multiple PIDs)
+	lines := strings.Split(strings.TrimSpace(string(output)), "\n")
+	if len(lines) == 0 {
+		return 0
+	}
+
+	// Return the first PID
+	pid, err := strconv.Atoi(strings.TrimSpace(lines[0]))
+	if err != nil {
+		return 0
+	}
+
+	return pid
 }

@@ -53,29 +53,36 @@ func runAgentsOnce(jsonOutput bool) error {
 		return fmt.Errorf("failed to load registry: %w", err)
 	}
 
-	// Get all worktrees and detect activity
+	// Get all worktrees
 	worktrees := reg.ListWorktrees()
 
-	// Detect activity for each worktree in parallel
+	// Use batch detection for all agents at once (much faster)
+	allAgents := discovery.DetectAllAgents()
+
+	// Match agents to worktrees, de-duplicating by PID
+	// Multiple worktrees can share the same path (different branches), but we only want to show each agent once
+	seenPIDs := make(map[int]bool)
 	var agents []*agentView
 	for _, wt := range worktrees {
-		// Create a copy for detection
-		wtCopy := &discovery.Worktree{
-			Name:   wt.Name,
-			Path:   wt.Path,
-			Branch: wt.Branch,
-		}
+		if agent, exists := allAgents[wt.Path]; exists {
+			// Skip if we've already seen this PID
+			if seenPIDs[agent.PID] {
+				continue
+			}
+			seenPIDs[agent.PID] = true
 
-		if err := discovery.DetectActivity(wtCopy); err != nil {
-			continue
-		}
+			// Check for active Tasuku task
+			taskID, taskDesc := discovery.GetActiveTask(wt.Path)
+			if taskID != "" {
+				agent.ActiveTask = taskID
+				agent.TaskSummary = taskDesc
+			}
 
-		if wtCopy.Agent != nil {
 			agents = append(agents, &agentView{
 				Worktree: wt.Name,
 				Path:     wt.Path,
 				Branch:   wt.Branch,
-				Agent:    wtCopy.Agent,
+				Agent:    agent,
 			})
 		}
 	}

@@ -4,7 +4,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -577,6 +579,7 @@ type CleanupResult struct {
 	Stopped          []string // Servers whose PIDs are no longer running
 	RemovedServers   []string // Servers whose paths no longer exist
 	RemovedWorktrees []string // Worktrees whose paths no longer exist
+	Started          []string // Servers detected as started externally (for immediate health check)
 }
 
 // Cleanup removes stale entries (workspaces with missing paths, dead PIDs)
@@ -588,6 +591,7 @@ func (r *Registry) Cleanup() (*CleanupResult, error) {
 		Stopped:          []string{},
 		RemovedServers:   []string{},
 		RemovedWorktrees: []string{},
+		Started:          []string{},
 	}
 
 	workspacesToDelete := []string{}
@@ -621,6 +625,26 @@ func (r *Registry) Cleanup() (*CleanupResult, error) {
 					result.Stopped = append(result.Stopped, name)
 				}
 			}
+
+			// For "stopped" servers, check if the port is actually in use (externally started)
+			if ws.Server.Status == StatusStopped && ws.Server.Port > 0 {
+				if port.IsListening(ws.Server.Port) {
+					// Port is in use - verify process belongs to this worktree
+					pid := port.GetListenerPID(ws.Server.Port)
+					if pid > 0 {
+						// Check if process's working directory matches (or is under) the worktree path
+						processCwd := getProcessCwd(pid)
+						if processCwd != "" && (processCwd == ws.Path || strings.HasPrefix(processCwd, ws.Path+"/")) {
+							// Process belongs to this worktree - mark as running
+							ws.Server.Status = StatusRunning
+							ws.Server.PID = pid
+							ws.Server.StartedAt = time.Now() // Best guess
+							result.Started = append(result.Started, name)
+						}
+						// If cwd doesn't match, leave as stopped (different server took the port)
+					}
+				}
+			}
 		}
 	}
 
@@ -629,7 +653,7 @@ func (r *Registry) Cleanup() (*CleanupResult, error) {
 		delete(r.Workspaces, name)
 	}
 
-	if len(result.Stopped) > 0 || len(result.RemovedServers) > 0 || len(result.RemovedWorktrees) > 0 {
+	if len(result.Stopped) > 0 || len(result.RemovedServers) > 0 || len(result.RemovedWorktrees) > 0 || len(result.Started) > 0 {
 		r.mu.Unlock()
 		err := r.Save()
 		r.mu.Lock()
@@ -649,6 +673,24 @@ func isProcessRunning(pid int) bool {
 	// On Unix, FindProcess always succeeds, so we need to send signal 0
 	err = process.Signal(syscall.Signal(0))
 	return err == nil
+}
+
+// getProcessCwd returns the current working directory of a process
+func getProcessCwd(pid int) string {
+	cmd := exec.Command("lsof", "-p", fmt.Sprintf("%d", pid), "-d", "cwd", "-Fn")
+	output, err := cmd.Output()
+	if err != nil {
+		return ""
+	}
+
+	// Parse lsof output - format is "p<pid>\nn<path>"
+	lines := strings.Split(string(output), "\n")
+	for _, line := range lines {
+		if strings.HasPrefix(line, "n") && !strings.HasPrefix(line, "n ") {
+			return strings.TrimPrefix(line, "n")
+		}
+	}
+	return ""
 }
 
 // =============================================================================

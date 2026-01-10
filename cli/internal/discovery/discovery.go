@@ -463,3 +463,180 @@ func FindAll(basePath string, maxDepth int) ([]*Worktree, error) {
 
 	return allWorktrees, nil
 }
+
+// DetectAllAgents finds all active AI agents across all directories.
+// This is more efficient than calling DetectActivity for each worktree
+// because it finds all agent processes once and batches the lsof calls.
+func DetectAllAgents() map[string]*AgentInfo {
+	agents := make(map[string]*AgentInfo)
+
+	// Find all Claude and Gemini processes at once
+	claudeAgents := detectAllClaudeAgents()
+	for path, agent := range claudeAgents {
+		agents[path] = agent
+	}
+
+	geminiAgents := detectAllGeminiAgents()
+	for path, agent := range geminiAgents {
+		if _, exists := agents[path]; !exists {
+			agents[path] = agent
+		}
+	}
+
+	return agents
+}
+
+// detectAllClaudeAgents finds all Claude Code processes and returns a map of path -> AgentInfo
+func detectAllClaudeAgents() map[string]*AgentInfo {
+	agents := make(map[string]*AgentInfo)
+
+	// Find Claude Code processes using ps aux
+	cmd := exec.Command("bash", "-c", "ps aux | grep '[c]laude' | awk '{print $2}'")
+	output, err := cmd.Output()
+	if err != nil {
+		return agents
+	}
+
+	pids := strings.Fields(strings.TrimSpace(string(output)))
+	if len(pids) == 0 {
+		return agents
+	}
+
+	// Get CWDs for all PIDs at once using a single lsof call
+	// lsof -d cwd -a -p PID1,PID2,... is more efficient
+	pidList := strings.Join(pids, ",")
+	lsofCmd := exec.Command("lsof", "-d", "cwd", "-a", "-p", pidList)
+	lsofOutput, err := lsofCmd.Output()
+	if err != nil {
+		// Fall back to individual lookups if batch fails
+		return detectAgentsFallback(pids, "claude")
+	}
+
+	// Parse lsof output to extract PID -> CWD mapping
+	pidToCwd := parseLsofOutput(string(lsofOutput))
+
+	// Build AgentInfo for each unique path
+	for pid, cwd := range pidToCwd {
+		if _, exists := agents[cwd]; exists {
+			continue // Already have an agent for this path
+		}
+
+		startTime := getProcessStartTime(pid)
+		command := getProcessCommand(pid)
+		pidInt := 0
+		_, _ = fmt.Sscanf(pid, "%d", &pidInt)
+
+		agents[cwd] = &AgentInfo{
+			Type:      "claude",
+			PID:       pidInt,
+			Path:      cwd,
+			StartTime: startTime,
+			Command:   command,
+		}
+	}
+
+	return agents
+}
+
+// detectAllGeminiAgents finds all Gemini CLI processes and returns a map of path -> AgentInfo
+func detectAllGeminiAgents() map[string]*AgentInfo {
+	agents := make(map[string]*AgentInfo)
+
+	// Find Gemini CLI processes
+	cmd := exec.Command("bash", "-c", "ps aux | grep -E '[g]emini(-cli)?' | awk '{print $2}'")
+	output, err := cmd.Output()
+	if err != nil {
+		return agents
+	}
+
+	pids := strings.Fields(strings.TrimSpace(string(output)))
+	if len(pids) == 0 {
+		return agents
+	}
+
+	// Get CWDs for all PIDs at once
+	pidList := strings.Join(pids, ",")
+	lsofCmd := exec.Command("lsof", "-d", "cwd", "-a", "-p", pidList)
+	lsofOutput, err := lsofCmd.Output()
+	if err != nil {
+		return detectAgentsFallback(pids, "gemini")
+	}
+
+	// Parse lsof output
+	pidToCwd := parseLsofOutput(string(lsofOutput))
+
+	for pid, cwd := range pidToCwd {
+		if _, exists := agents[cwd]; exists {
+			continue
+		}
+
+		startTime := getProcessStartTime(pid)
+		command := getProcessCommand(pid)
+		pidInt := 0
+		_, _ = fmt.Sscanf(pid, "%d", &pidInt)
+
+		agents[cwd] = &AgentInfo{
+			Type:      "gemini",
+			PID:       pidInt,
+			Path:      cwd,
+			StartTime: startTime,
+			Command:   command,
+		}
+	}
+
+	return agents
+}
+
+// parseLsofOutput parses lsof output to extract PID -> CWD mapping
+func parseLsofOutput(output string) map[string]string {
+	result := make(map[string]string)
+	lines := strings.Split(output, "\n")
+
+	for _, line := range lines {
+		// lsof -d cwd output format: COMMAND PID USER FD TYPE ... NAME
+		// Skip header line
+		if strings.HasPrefix(line, "COMMAND") || line == "" {
+			continue
+		}
+
+		fields := strings.Fields(line)
+		if len(fields) >= 9 {
+			pid := fields[1]
+			cwd := fields[len(fields)-1]
+			result[pid] = cwd
+		}
+	}
+
+	return result
+}
+
+// detectAgentsFallback is a slower fallback that checks each PID individually
+func detectAgentsFallback(pids []string, agentType string) map[string]*AgentInfo {
+	agents := make(map[string]*AgentInfo)
+
+	for _, pid := range pids {
+		cwd := getProcessCwd(pid)
+		if cwd == "" {
+			continue
+		}
+
+		if _, exists := agents[cwd]; exists {
+			continue
+		}
+
+		startTime := getProcessStartTime(pid)
+		command := getProcessCommand(pid)
+		pidInt := 0
+		_, _ = fmt.Sscanf(pid, "%d", &pidInt)
+
+		agents[cwd] = &AgentInfo{
+			Type:      agentType,
+			PID:       pidInt,
+			Path:      cwd,
+			StartTime: startTime,
+			Command:   command,
+		}
+	}
+
+	return agents
+}
