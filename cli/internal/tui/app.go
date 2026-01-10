@@ -204,14 +204,16 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case tea.KeyMsg:
-		// When filtering (or filter applied), let the list handle all keys
-		if m.list.FilterState() != list.Unfiltered {
+		// When actively filtering (typing in filter input), let the list handle most keys
+		// But when filter is just "applied" (showing results), allow action keys
+		if m.list.FilterState() == list.Filtering {
+			// User is typing in the filter - let list handle all keys
 			var cmd tea.Cmd
 			m.list, cmd = m.list.Update(msg)
 			return m, cmd
 		}
 
-		// Only handle our custom keys when NOT filtering
+		// Handle our custom keys (works in both Unfiltered and FilterApplied states)
 		switch {
 		case key.Matches(msg, keys.Quit):
 			return m, tea.Quit

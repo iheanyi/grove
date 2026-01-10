@@ -340,13 +340,21 @@ func (m EnhancedModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Registry file changed - refresh if not filtering
 		if reg, err := registry.Load(); err == nil {
 			m.reg = reg
-			m.reg.Cleanup() //nolint:errcheck // Best effort cleanup during refresh
+			// Cleanup and check for externally-started servers
+			if cleanupResult, err := m.reg.Cleanup(); err == nil && len(cleanupResult.Started) > 0 {
+				// Trigger immediate health checks for newly-detected servers
+				for _, serverName := range cleanupResult.Started {
+					if server, ok := m.reg.Get(serverName); ok {
+						cmds = append(cmds, HealthCheckCmd(server))
+					}
+				}
+			}
 			if m.list.FilterState() == list.Unfiltered {
 				m.list.SetItems(makeEnhancedItems(m.reg))
 			}
 		}
 		// Continue watching for more changes
-		return m, WatchRegistry()
+		return m, tea.Batch(append(cmds, WatchRegistry())...)
 
 	case spinner.TickMsg:
 		var cmd tea.Cmd
@@ -379,15 +387,16 @@ func (m EnhancedModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case tea.KeyMsg:
-		// When filtering (or filter applied), let the list handle all keys
-		// This allows typing characters like 'q', 's', etc. in the filter
-		if m.list.FilterState() != list.Unfiltered {
+		// When actively filtering (typing in filter input), let the list handle most keys
+		// But when filter is just "applied" (showing results), allow action keys
+		if m.list.FilterState() == list.Filtering {
+			// User is typing in the filter - let list handle all keys
 			var cmd tea.Cmd
 			m.list, cmd = m.list.Update(msg)
 			return m, cmd
 		}
 
-		// Only handle our custom keys when NOT filtering
+		// Handle our custom keys (works in both Unfiltered and FilterApplied states)
 		switch {
 		case key.Matches(msg, enhancedKeys.Quit):
 			return m, tea.Quit
