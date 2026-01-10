@@ -1277,8 +1277,8 @@ struct AgentRowView: View {
 
             Spacer()
 
-            // PID badge
-            Text("PID \(agent.pid)")
+            // PID badge (use String() to avoid locale comma formatting)
+            Text("PID " + String(agent.pid))
                 .font(.system(size: 9, design: .monospaced))
                 .foregroundColor(.secondary)
                 .padding(.horizontal, 4)
