@@ -210,7 +210,15 @@ class ServerManager: ObservableObject {
                 }
                 print("[Grove] refresh() JSON parsed in \(String(format: "%.3f", CFAbsoluteTimeGetCurrent() - parseStart))s, \(status.servers.count) servers")
 
-                let newServers = status.servers.sorted { $0.name < $1.name }
+                // Sort servers: running first, then with Claude, then alphabetically
+                let newServers = status.servers.sorted { s1, s2 in
+                    // Running servers come first
+                    if s1.isRunning != s2.isRunning {
+                        return s1.isRunning
+                    }
+                    // Then sort by name
+                    return s1.name < s2.name
+                }
 
                 print("[Grove] refresh() dispatching to main...")
                 DispatchQueue.main.async {
@@ -860,8 +868,16 @@ class ServerManager: ObservableObject {
                     return
                 }
 
+                // Sort agents: those with active tasks first, then by worktree name
+                let sortedAgents = agents.sorted { a1, a2 in
+                    if a1.hasActiveTask != a2.hasActiveTask {
+                        return a1.hasActiveTask
+                    }
+                    return a1.worktree < a2.worktree
+                }
+
                 DispatchQueue.main.async {
-                    self?.agents = agents
+                    self?.agents = sortedAgents
                 }
 
             case .failure:
