@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"sort"
 	"strings"
 	"syscall"
 	"time"
@@ -162,6 +163,15 @@ func New(cfg *config.Config) (*Model, error) {
 
 func makeItems(reg *registry.Registry) []list.Item {
 	servers := reg.List()
+
+	// Sort: running servers first, then by name
+	sort.Slice(servers, func(i, j int) bool {
+		if servers[i].IsRunning() != servers[j].IsRunning() {
+			return servers[i].IsRunning()
+		}
+		return servers[i].Name < servers[j].Name
+	})
+
 	items := make([]list.Item, len(servers))
 	for i, s := range servers {
 		items[i] = ServerItem{server: s}

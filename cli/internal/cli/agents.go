@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"sort"
 	"time"
 
 	"github.com/charmbracelet/lipgloss"
@@ -86,6 +87,16 @@ func runAgentsOnce(jsonOutput bool) error {
 			})
 		}
 	}
+
+	// Sort: agents with active tasks first, then by worktree name
+	sort.Slice(agents, func(i, j int) bool {
+		iHasTask := agents[i].Agent.ActiveTask != ""
+		jHasTask := agents[j].Agent.ActiveTask != ""
+		if iHasTask != jHasTask {
+			return iHasTask
+		}
+		return agents[i].Worktree < agents[j].Worktree
+	})
 
 	if jsonOutput {
 		return outputAgentsJSON(agents)

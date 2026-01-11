@@ -177,8 +177,15 @@ func runLs(cmd *cobra.Command, args []string) error {
 		filtered = append(filtered, view)
 	}
 
-	// Sort by name
+	// Sort: running servers first, then by name (stable sort order)
 	sort.Slice(filtered, func(i, j int) bool {
+		// Running servers come first
+		iRunning := filtered[i].Server != nil && filtered[i].Server.IsRunning()
+		jRunning := filtered[j].Server != nil && filtered[j].Server.IsRunning()
+		if iRunning != jRunning {
+			return iRunning
+		}
+		// Then sort by name
 		return filtered[i].Name < filtered[j].Name
 	})
 

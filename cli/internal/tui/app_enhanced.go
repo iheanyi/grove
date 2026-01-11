@@ -3,6 +3,7 @@ package tui
 import (
 	"fmt"
 	"os"
+	"sort"
 	"strings"
 	"syscall"
 	"time"
@@ -257,6 +258,15 @@ func NewEnhanced(cfg *config.Config) (*EnhancedModel, error) {
 
 func makeEnhancedItems(reg *registry.Registry) []list.Item {
 	servers := reg.List()
+
+	// Sort: running servers first, then by name
+	sort.Slice(servers, func(i, j int) bool {
+		if servers[i].IsRunning() != servers[j].IsRunning() {
+			return servers[i].IsRunning()
+		}
+		return servers[i].Name < servers[j].Name
+	})
+
 	items := make([]list.Item, len(servers))
 	for i, s := range servers {
 		items[i] = EnhancedServerItem{server: s}
