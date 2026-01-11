@@ -640,3 +640,124 @@ func detectAgentsFallback(pids []string, agentType string) map[string]*AgentInfo
 
 	return agents
 }
+
+// DetectAllVSCode finds all VS Code processes and returns a set of paths where VS Code is active.
+// This is more efficient than calling detectVSCode per-worktree since it runs ps aux once.
+func DetectAllVSCode() map[string]bool {
+	vscodePaths := make(map[string]bool)
+
+	// Run ps aux once and look for VS Code processes with path arguments
+	cmd := exec.Command("ps", "aux")
+	output, err := cmd.Output()
+	if err != nil {
+		return vscodePaths
+	}
+
+	lines := strings.Split(string(output), "\n")
+	for _, line := range lines {
+		if !strings.Contains(line, "code") && !strings.Contains(line, "Code") {
+			continue
+		}
+
+		// Extract paths from the command line (look for common path patterns)
+		fields := strings.Fields(line)
+		for _, field := range fields {
+			// Skip if it's not a path
+			if !strings.HasPrefix(field, "/") {
+				continue
+			}
+			// Check if it looks like a project directory (exists and is a directory)
+			if info, err := os.Stat(field); err == nil && info.IsDir() {
+				vscodePaths[field] = true
+			}
+		}
+	}
+
+	return vscodePaths
+}
+
+// DetectActivitiesBatch efficiently detects activities for multiple worktrees.
+// It batches the expensive operations (lsof for agents, ps for VS Code) and
+// parallelizes git status checks.
+func DetectActivitiesBatch(worktrees []*Worktree) {
+	if len(worktrees) == 0 {
+		return
+	}
+
+	// Batch 1: Get all agents at once (single lsof call)
+	agents := DetectAllAgents()
+
+	// Batch 2: Get all VS Code paths at once (single ps call)
+	vscodePaths := DetectAllVSCode()
+
+	// Parallel: Run git status for each worktree
+	var wg sync.WaitGroup
+	results := make(chan struct {
+		idx      int
+		gitDirty bool
+	}, len(worktrees))
+
+	for i, wt := range worktrees {
+		wg.Add(1)
+		go func(idx int, path string) {
+			defer wg.Done()
+			results <- struct {
+				idx      int
+				gitDirty bool
+			}{idx, detectGitDirty(path)}
+		}(i, wt.Path)
+	}
+
+	// Close results channel when all goroutines complete
+	go func() {
+		wg.Wait()
+		close(results)
+	}()
+
+	// Collect git dirty results
+	gitDirty := make([]bool, len(worktrees))
+	for result := range results {
+		gitDirty[result.idx] = result.gitDirty
+	}
+
+	// Apply all results to worktrees
+	for i, wt := range worktrees {
+		// Agent detection
+		if agent, exists := agents[wt.Path]; exists {
+			wt.Agent = agent
+			wt.HasClaude = agent.Type == "claude"
+			wt.HasGemini = agent.Type == "gemini"
+
+			// Check for active Tasuku task
+			taskID, taskDesc := GetActiveTask(wt.Path)
+			if taskID != "" {
+				agent.ActiveTask = taskID
+				agent.TaskSummary = taskDesc
+			}
+		} else {
+			wt.Agent = nil
+			wt.HasClaude = false
+			wt.HasGemini = false
+		}
+
+		// VS Code detection (check for exact match or parent directory)
+		wt.HasVSCode = vscodePaths[wt.Path]
+		if !wt.HasVSCode {
+			// Check if VS Code is open on a parent directory
+			for vsPath := range vscodePaths {
+				if strings.HasPrefix(wt.Path, vsPath+"/") {
+					wt.HasVSCode = true
+					break
+				}
+			}
+		}
+
+		// Git dirty
+		wt.GitDirty = gitDirty[i]
+
+		// Update last activity
+		if wt.Agent != nil || wt.HasVSCode || wt.GitDirty {
+			wt.LastActivity = time.Now()
+		}
+	}
+}
