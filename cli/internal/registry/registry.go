@@ -583,6 +583,7 @@ type CleanupResult struct {
 }
 
 // Cleanup removes stale entries (workspaces with missing paths, dead PIDs)
+// and deduplicates workspaces with the same path.
 func (r *Registry) Cleanup() (*CleanupResult, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -595,6 +596,47 @@ func (r *Registry) Cleanup() (*CleanupResult, error) {
 	}
 
 	workspacesToDelete := []string{}
+
+	// Deduplicate workspaces with the same path
+	// Group workspaces by path
+	pathToNames := make(map[string][]string)
+	for name, ws := range r.Workspaces {
+		if ws.Path != "" {
+			pathToNames[ws.Path] = append(pathToNames[ws.Path], name)
+		}
+	}
+
+	// For paths with multiple workspaces, keep the best name
+	genericNames := map[string]bool{"main": true, "master": true, "develop": true, "dev": true}
+	for path, names := range pathToNames {
+		if len(names) <= 1 {
+			continue
+		}
+
+		// Find the best name to keep (prefer directory name, then non-generic)
+		dirName := filepath.Base(path)
+		bestName := names[0]
+
+		for _, name := range names {
+			// Prefer name that matches directory
+			if name == dirName {
+				bestName = name
+				break
+			}
+			// Prefer non-generic over generic
+			if genericNames[bestName] && !genericNames[name] {
+				bestName = name
+			}
+		}
+
+		// Mark all others for deletion
+		for _, name := range names {
+			if name != bestName {
+				workspacesToDelete = append(workspacesToDelete, name)
+				result.RemovedWorktrees = append(result.RemovedWorktrees, name)
+			}
+		}
+	}
 
 	// Check workspaces
 	for name, ws := range r.Workspaces {
@@ -720,11 +762,53 @@ func (r *Registry) GetWorktree(name string) (*discovery.Worktree, bool) {
 }
 
 // SetWorktree adds or updates a worktree (backward compatible wrapper)
+// Handles deduplication: if another workspace already exists at the same path,
+// it keeps the more descriptive name (prefers directory name over generic branch names).
 func (r *Registry) SetWorktree(wt *discovery.Worktree) error {
 	r.mu.Lock()
 
-	// Check if workspace exists
-	if ws, ok := r.Workspaces[wt.Name]; ok {
+	// Check for duplicate paths - find any existing workspace with the same path
+	var existingName string
+	for name, ws := range r.Workspaces {
+		if ws.Path == wt.Path && name != wt.Name {
+			existingName = name
+			break
+		}
+	}
+
+	if existingName != "" {
+		// Duplicate path found - decide which name to keep
+		// Prefer names that match the directory name over generic branch names like "main", "master", "develop"
+		genericNames := map[string]bool{"main": true, "master": true, "develop": true, "dev": true}
+		dirName := filepath.Base(wt.Path)
+
+		keepNew := false
+		if genericNames[existingName] && !genericNames[wt.Name] {
+			// Existing is generic, new is specific - prefer new
+			keepNew = true
+		} else if wt.Name == dirName && existingName != dirName {
+			// New name matches directory name - prefer new
+			keepNew = true
+		}
+
+		if keepNew {
+			// Remove the old entry, add new one
+			delete(r.Workspaces, existingName)
+			r.Workspaces[wt.Name] = WorkspaceFromWorktree(wt)
+		} else {
+			// Keep existing, update its data
+			ws := r.Workspaces[existingName]
+			ws.Branch = wt.Branch
+			ws.MainRepo = wt.MainRepo
+			ws.GitDirty = wt.GitDirty
+			ws.HasClaude = wt.HasClaude
+			ws.HasVSCode = wt.HasVSCode
+			ws.LastActivity = wt.LastActivity
+			if wt.DiscoveredAt.After(ws.DiscoveredAt) {
+				ws.DiscoveredAt = wt.DiscoveredAt
+			}
+		}
+	} else if ws, ok := r.Workspaces[wt.Name]; ok {
 		// Update existing workspace's worktree data
 		ws.Path = wt.Path
 		ws.Branch = wt.Branch
@@ -783,7 +867,8 @@ func (r *Registry) ListWorktrees() []*discovery.Worktree {
 }
 
 // UpdateWorktreeActivities updates all workspaces with their current activity status.
-// Activity detection is parallelized across all workspaces for performance.
+// Uses batch detection for agents and VS Code (single lsof/ps call each),
+// then parallelizes git status checks.
 func (r *Registry) UpdateWorktreeActivities() error {
 	r.mu.RLock()
 	workspaces := make([]*Workspace, 0, len(r.Workspaces))
@@ -796,58 +881,27 @@ func (r *Registry) UpdateWorktreeActivities() error {
 		return nil
 	}
 
-	// Create a channel to receive results
-	type activityResult struct {
-		ws       *Workspace
-		dirty    bool
-		claude   bool
-		vscode   bool
-		activity time.Time
+	// Create temporary worktrees for batch detection
+	worktrees := make([]*discovery.Worktree, len(workspaces))
+	for i, ws := range workspaces {
+		worktrees[i] = &discovery.Worktree{
+			Name:     ws.Name,
+			Path:     ws.Path,
+			Branch:   ws.Branch,
+			MainRepo: ws.MainRepo,
+		}
 	}
 
-	results := make(chan activityResult, len(workspaces))
-	var wg sync.WaitGroup
+	// Use batch detection (much faster than per-worktree)
+	discovery.DetectActivitiesBatch(worktrees)
 
-	// Launch goroutines for each workspace (parallelized for speed)
-	for _, ws := range workspaces {
-		wg.Add(1)
-		go func(ws *Workspace) {
-			defer wg.Done()
-
-			// Create a temporary worktree to use with DetectActivity
-			wt := &discovery.Worktree{
-				Name:     ws.Name,
-				Path:     ws.Path,
-				Branch:   ws.Branch,
-				MainRepo: ws.MainRepo,
-			}
-			if err := discovery.DetectActivity(wt); err != nil {
-				return
-			}
-
-			results <- activityResult{
-				ws:       ws,
-				dirty:    wt.GitDirty,
-				claude:   wt.HasClaude,
-				vscode:   wt.HasVSCode,
-				activity: wt.LastActivity,
-			}
-		}(ws)
-	}
-
-	// Close results channel when all goroutines complete
-	go func() {
-		wg.Wait()
-		close(results)
-	}()
-
-	// Collect results and update workspaces
+	// Copy results back to workspaces
 	r.mu.Lock()
-	for result := range results {
-		result.ws.GitDirty = result.dirty
-		result.ws.HasClaude = result.claude
-		result.ws.HasVSCode = result.vscode
-		result.ws.LastActivity = result.activity
+	for i, wt := range worktrees {
+		workspaces[i].GitDirty = wt.GitDirty
+		workspaces[i].HasClaude = wt.HasClaude
+		workspaces[i].HasVSCode = wt.HasVSCode
+		workspaces[i].LastActivity = wt.LastActivity
 	}
 	r.mu.Unlock()
 
