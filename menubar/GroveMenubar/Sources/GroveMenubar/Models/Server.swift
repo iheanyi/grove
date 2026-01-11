@@ -93,6 +93,29 @@ struct Server: Identifiable, Codable {
         status ?? "stopped"
     }
 
+    /// Display name that includes branch when it's not obvious from the name.
+    /// Examples: "oru (main)", "feature-auth" (branch obvious)
+    var displayName: String {
+        guard let branch = branch else { return name }
+
+        // Normalize branch name: feature/auth -> feature-auth
+        let normalizedBranch = branch.replacingOccurrences(of: "/", with: "-").lowercased()
+        let normalizedName = name.lowercased()
+
+        // If name matches or contains the normalized branch, don't show branch
+        if normalizedName == normalizedBranch || normalizedName.contains(normalizedBranch) {
+            return name
+        }
+
+        // If branch matches name exactly, don't show
+        if branch.lowercased() == normalizedName {
+            return name
+        }
+
+        // Show branch in parentheses
+        return "\(name) (\(branch))"
+    }
+
     var statusIcon: String {
         switch status {
         case "running":

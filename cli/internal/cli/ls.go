@@ -246,6 +246,36 @@ type WorktreeView struct {
 	Tags      []string
 }
 
+// DisplayName returns a name that includes branch info when not obvious from the name.
+// Examples:
+//   - name="oru", branch="main" -> "oru (main)"
+//   - name="feature-auth", branch="feature/auth" -> "feature-auth" (branch is obvious)
+//   - name="main", branch="main" -> "main" (already matches)
+func (v *WorktreeView) DisplayName() string {
+	if v.Branch == "" {
+		return v.Name
+	}
+
+	// Check if name already implies the branch
+	// Normalize branch name: feature/auth -> feature-auth
+	normalizedBranch := strings.ReplaceAll(v.Branch, "/", "-")
+	normalizedBranch = strings.ToLower(normalizedBranch)
+	normalizedName := strings.ToLower(v.Name)
+
+	// If name matches or contains the normalized branch, don't show branch
+	if normalizedName == normalizedBranch || strings.Contains(normalizedName, normalizedBranch) {
+		return v.Name
+	}
+
+	// If branch matches name exactly, don't show
+	if strings.ToLower(v.Branch) == normalizedName {
+		return v.Name
+	}
+
+	// Show branch in parentheses
+	return fmt.Sprintf("%s (%s)", v.Name, v.Branch)
+}
+
 func outputJSONFormatNew(views []*WorktreeView, proxy *registry.ProxyInfo, fullMode bool, githubInfoMap map[string]*github.BranchInfo, groupBy string) error {
 	type jsonGitHubInfo struct {
 		PRNumber     int    `json:"pr_number,omitempty"`
@@ -465,7 +495,7 @@ func printViewsTable(views []*WorktreeView, fullMode bool, githubInfoMap map[str
 			}
 
 			rows = append(rows, []string{
-				view.Name,
+				view.DisplayName(),
 				status,
 				port,
 				prStatus,
@@ -476,7 +506,7 @@ func printViewsTable(views []*WorktreeView, fullMode bool, githubInfoMap map[str
 			})
 		} else {
 			rows = append(rows, []string{
-				view.Name,
+				view.DisplayName(),
 				status,
 				port,
 				claudeStatus,

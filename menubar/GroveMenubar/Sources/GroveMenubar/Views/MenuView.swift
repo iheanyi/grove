@@ -594,7 +594,7 @@ struct ServerRowView: View {
                 // Server info
                 VStack(alignment: .leading, spacing: 2) {
                     HStack(spacing: 6) {
-                        Text(server.name)
+                        Text(server.displayName)
                             .font(.system(.body, design: .monospaced))
                             .lineLimit(1)
 
@@ -1054,7 +1054,7 @@ struct ServerDetailPopover: View {
                     .fill(server.statusColor)
                     .frame(width: 10, height: 10)
 
-                Text(server.name)
+                Text(server.displayName)
                     .font(.system(.headline, design: .monospaced))
                     .textSelection(.enabled)
 

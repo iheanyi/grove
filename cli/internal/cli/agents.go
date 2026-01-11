@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/charmbracelet/lipgloss"
@@ -128,6 +129,31 @@ type agentView struct {
 	Agent    *discovery.AgentInfo
 }
 
+// DisplayWorktree returns a worktree name that includes branch info when not obvious.
+func (a *agentView) DisplayWorktree() string {
+	if a.Branch == "" {
+		return a.Worktree
+	}
+
+	// Normalize branch name: feature/auth -> feature-auth
+	normalizedBranch := strings.ReplaceAll(a.Branch, "/", "-")
+	normalizedBranch = strings.ToLower(normalizedBranch)
+	normalizedName := strings.ToLower(a.Worktree)
+
+	// If name matches or contains the normalized branch, don't show branch
+	if normalizedName == normalizedBranch || strings.Contains(normalizedName, normalizedBranch) {
+		return a.Worktree
+	}
+
+	// If branch matches name exactly, don't show
+	if strings.ToLower(a.Branch) == normalizedName {
+		return a.Worktree
+	}
+
+	// Show branch in parentheses
+	return fmt.Sprintf("%s (%s)", a.Worktree, a.Branch)
+}
+
 func outputAgentsJSON(agents []*agentView) error {
 	type jsonAgent struct {
 		Worktree    string `json:"worktree"`
@@ -189,7 +215,7 @@ func outputAgentsTable(agents []*agentView) error {
 
 		rows = append(rows, []string{
 			a.Agent.Type,
-			a.Worktree,
+			a.DisplayWorktree(),
 			taskDisplay,
 			duration,
 			fmt.Sprintf("%d", a.Agent.PID),
