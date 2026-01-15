@@ -567,7 +567,7 @@ func (s *mcpServer) handleToolsList(req *jsonRPCRequest) {
 	tools := []tool{
 		{
 			Name:        "grove_list",
-			Description: "List all registered dev servers and their URLs. Returns server names, URLs, ports, and status.",
+			Description: "List all registered dev servers and their URLs. Shows server names, URLs, ports, and running status. Use to see what development servers are running or available.",
 			InputSchema: inputSchema{
 				Type:       "object",
 				Properties: map[string]property{},
@@ -575,17 +575,17 @@ func (s *mcpServer) handleToolsList(req *jsonRPCRequest) {
 		},
 		{
 			Name:        "grove_start",
-			Description: "Start a dev server for a git worktree. The server will be accessible at a URL based on the configured mode (port or subdomain).",
+			Description: "Start a dev server for a git worktree. Run development server commands like bin/dev, rails s, npm run dev. Server accessible via URL based on port or subdomain mode.",
 			InputSchema: inputSchema{
 				Type: "object",
 				Properties: map[string]property{
 					"command": {
 						Type:        "string",
-						Description: "The command to run (e.g., 'bin/dev', 'rails s', 'npm run dev')",
+						Description: "The dev server command to run (e.g., 'bin/dev', 'rails s', 'npm run dev', 'yarn dev')",
 					},
 					"path": {
 						Type:        "string",
-						Description: "Path to the project directory (defaults to current directory)",
+						Description: "Path to the project directory or git worktree (defaults to current directory)",
 					},
 				},
 				Required: []string{"command"},
@@ -593,13 +593,13 @@ func (s *mcpServer) handleToolsList(req *jsonRPCRequest) {
 		},
 		{
 			Name:        "grove_stop",
-			Description: "Stop a running dev server by name.",
+			Description: "Stop a running dev server by name. Kills the server process and marks it as stopped.",
 			InputSchema: inputSchema{
 				Type: "object",
 				Properties: map[string]property{
 					"name": {
 						Type:        "string",
-						Description: "Name of the server to stop (from grove_list)",
+						Description: "Name of the dev server to stop (use grove_list to see available servers)",
 					},
 				},
 				Required: []string{"name"},
@@ -607,39 +607,39 @@ func (s *mcpServer) handleToolsList(req *jsonRPCRequest) {
 		},
 		{
 			Name:        "grove_url",
-			Description: "Get the URL for a worktree's dev server. Useful for browser automation.",
+			Description: "Get the URL for a worktree's dev server. Returns the HTTP localhost address for accessing the server. Useful for browser automation and testing.",
 			InputSchema: inputSchema{
 				Type: "object",
 				Properties: map[string]property{
 					"name": {
 						Type:        "string",
-						Description: "Name of the server (optional, defaults to current worktree)",
+						Description: "Name of the dev server (optional, defaults to current worktree)",
 					},
 				},
 			},
 		},
 		{
 			Name:        "grove_status",
-			Description: "Get detailed status of a dev server including health, uptime, and logs path.",
+			Description: "Check detailed status of a dev server including running state, health, uptime, port, process ID, and logs file path.",
 			InputSchema: inputSchema{
 				Type: "object",
 				Properties: map[string]property{
 					"name": {
 						Type:        "string",
-						Description: "Name of the server (optional, defaults to current worktree)",
+						Description: "Name of the dev server to check (optional, defaults to current worktree)",
 					},
 				},
 			},
 		},
 		{
 			Name:        "grove_restart",
-			Description: "Restart a running dev server by name.",
+			Description: "Restart a running dev server by name. Stops and starts the server process with the same command.",
 			InputSchema: inputSchema{
 				Type: "object",
 				Properties: map[string]property{
 					"name": {
 						Type:        "string",
-						Description: "Name of the server to restart (from grove_list)",
+						Description: "Name of the dev server to restart (use grove_list to see available servers)",
 					},
 				},
 				Required: []string{"name"},
@@ -647,21 +647,21 @@ func (s *mcpServer) handleToolsList(req *jsonRPCRequest) {
 		},
 		{
 			Name:        "grove_new",
-			Description: "Create a new git worktree for a branch. Creates the worktree and registers it with grove.",
+			Description: "Create a new git worktree and checkout a branch. Creates an isolated working directory for feature branches. Registers with grove for server management.",
 			InputSchema: inputSchema{
 				Type: "object",
 				Properties: map[string]property{
 					"branch": {
 						Type:        "string",
-						Description: "Name of the branch to create (e.g., 'feature-auth')",
+						Description: "Name of the new branch to create (e.g., 'feature-auth', 'fix-login-bug')",
 					},
 					"base": {
 						Type:        "string",
-						Description: "Base branch to create from (optional, defaults to main/master)",
+						Description: "Base branch to create from (optional, defaults to main or master)",
 					},
 					"path": {
 						Type:        "string",
-						Description: "Path to the main repository (optional, defaults to current directory)",
+						Description: "Path to the git repository (optional, defaults to current directory)",
 					},
 				},
 				Required: []string{"branch"},
