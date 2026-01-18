@@ -12,7 +12,10 @@ let package = Package(
     targets: [
         .executableTarget(
             name: "GroveMenubar",
-            path: "Sources/GroveMenubar"
+            path: "Sources/GroveMenubar",
+            resources: [
+                .process("Resources")
+            ]
         ),
         .testTarget(
             name: "GroveMenubarTests",

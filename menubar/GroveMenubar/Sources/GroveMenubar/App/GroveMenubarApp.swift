@@ -1,4 +1,5 @@
 import SwiftUI
+import AppKit
 
 @main
 struct GroveMenubarApp: App {
@@ -6,6 +7,17 @@ struct GroveMenubarApp: App {
 
     init() {
         print("[Grove] GroveMenubarApp.init() - app starting")
+    }
+
+    private var menuBarIcon: NSImage? {
+        guard let url = Bundle.module.url(forResource: "MenuBarIcon", withExtension: "png"),
+              let image = NSImage(contentsOf: url) else {
+            print("[Grove] Failed to load MenuBarIcon from bundle")
+            return nil
+        }
+        image.isTemplate = true
+        image.size = NSSize(width: 18, height: 18)
+        return image
     }
 
     var body: some Scene {
@@ -20,9 +32,11 @@ struct GroveMenubarApp: App {
                 Text("Grove")
             } icon: {
                 ZStack(alignment: .bottomTrailing) {
-                    Image(systemName: "bolt.fill")
-                        .symbolRenderingMode(.monochrome)
-                        .foregroundStyle(.primary)
+                    if let nsImage = menuBarIcon {
+                        Image(nsImage: nsImage)
+                    } else {
+                        Image(systemName: "tree.fill")
+                    }
 
                     if serverManager.hasCrashedServers {
                         Circle()

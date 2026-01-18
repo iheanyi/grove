@@ -89,14 +89,9 @@ struct MenuView: View {
         VStack(alignment: .leading, spacing: 0) {
             // Header with improved loading indicator
             HStack {
-                HStack(spacing: 6) {
-                    Image(systemName: "bolt.fill")
-                        .foregroundColor(.grovePrimary)
-                        .font(.system(size: 14))
-                    Text("Grove")
-                        .font(.headline)
-                        .foregroundColor(.grovePrimary)
-                }
+                Text("Grove")
+                    .font(.headline)
+                    .foregroundColor(.grovePrimary)
 
                 Spacer()
 
