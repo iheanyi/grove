@@ -64,6 +64,19 @@ jobs:
           git tag -a ${{ steps.version.outputs.version }} -m "Release ${{ steps.version.outputs.version }}"
           git push origin ${{ steps.version.outputs.version }}
 
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: cli/internal/dashboard/web/package-lock.json
+
+      - name: Build dashboard web assets
+        working-directory: cli/internal/dashboard/web
+        run: |
+          npm ci
+          npm run build
+
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
