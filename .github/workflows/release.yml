@@ -88,7 +88,8 @@ jobs:
         with:
           distribution: goreleaser
           version: latest
-          args: release --clean ${{ inputs.prerelease && '--prerelease' || '' }}
+          # --dirty allows release despite generated web/build files
+          args: release --clean --dirty ${{ inputs.prerelease && '--prerelease' || '' }}
           workdir: cli
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

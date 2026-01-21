@@ -2,6 +2,11 @@ version: 2
 
 project_name: grove
 
+# Allow dirty git state because web dashboard is built during CI
+git:
+  ignore_tags:
+    - menubar-*
+
 before:
   hooks:
     - go mod tidy
