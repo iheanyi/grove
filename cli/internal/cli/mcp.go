@@ -199,6 +199,7 @@ func installForCopilot(grovePath string, global bool) error {
 	mcpServers["grove"] = map[string]interface{}{
 		"command": grovePath,
 		"args":    []string{"mcp"},
+		"type":    "stdio",
 	}
 	config["mcpServers"] = mcpServers
 
@@ -270,10 +271,11 @@ func installForGemini(grovePath string, global bool) error {
 		return nil
 	}
 
-	// Add grove MCP server configuration (Gemini/Cursor format)
+	// Add grove MCP server configuration (Gemini format)
 	mcpServers["grove"] = map[string]interface{}{
 		"command": grovePath,
 		"args":    []string{"mcp"},
+		"type":    "stdio",
 	}
 	config["mcpServers"] = mcpServers
 
