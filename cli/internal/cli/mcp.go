@@ -507,9 +507,8 @@ func printMCPTools() {
 	fmt.Println("  - grove_status:  Get detailed status of a dev server")
 	fmt.Println("  - grove_restart: Restart a running dev server")
 	fmt.Println("  - grove_new:     Create a new git worktree")
-	fmt.Println("\nNote: For task management, use a dedicated task MCP server:")
-	fmt.Println("  - Tasuku: tk_list, tk_start, tk_done, tk_learn, etc.")
-	fmt.Println("  - Beads:  bd_list, bd_start, bd_done, etc.")
+	fmt.Println("\nNote: For task management, use Tasuku MCP server:")
+	fmt.Println("  - tk_list, tk_start, tk_done, tk_learn, etc.")
 }
 
 // JSON-RPC types
