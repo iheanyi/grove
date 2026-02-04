@@ -14,4 +14,5 @@ _Auto-synced from .tasuku/context/learnings.md_
 ## Insights
 
 - When using bubbles/list with filtering: (1) Don't use SetShowHelp(false) as it hides the filter input bar, (2) Check `FilterState() != list.Unfiltered` not just `== list.Filtering` to handle both active filtering AND applied filter states, (3) Don't intercept `esc` key - the list uses it to cancel filtering.
+- When documenting cross-tool AI assistant parity, focus on: (1) Configuration schema differences (JSON vs TOML, different keys), (2) Instruction file systems (CLAUDE.md, AGENTS.md, .cursorrules), (3) MCP as common denominator, (4) Tool-specific exclusive features that have no parity. AGENTS.md is emerging as the vendor-neutral standard with Linux Foundation backing.
 

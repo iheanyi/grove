@@ -52,5 +52,10 @@
     "text": "In bubbletea, goroutines started in tea.Cmd functions cannot communicate back to the TUI directly. Use a subscription pattern instead: (1) tea.Cmd returns a message when an event occurs, (2) Update() handles the message and starts a new tea.Cmd to watch for the next event. Never start a long-running goroutine that tries to modify model state - this causes race conditions and broken UIs.",
     "is_rule": true,
     "created_at": "2026-01-09T17:21:02.871423Z"
+  },
+  {
+    "id": "0ce5eb",
+    "text": "When documenting cross-tool AI assistant parity, focus on: (1) Configuration schema differences (JSON vs TOML, different keys), (2) Instruction file systems (CLAUDE.md, AGENTS.md, .cursorrules), (3) MCP as common denominator, (4) Tool-specific exclusive features that have no parity. AGENTS.md is emerging as the vendor-neutral standard with Linux Foundation backing.",
+    "created_at": "2026-01-21T00:28:12.501184Z"
   }
 ]
