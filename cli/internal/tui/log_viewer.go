@@ -158,7 +158,7 @@ func tailFile(file *os.File, n int) []string {
 
 	// For small files, just read everything
 	if stat.Size() < 64*1024 { // Less than 64KB
-		file.Seek(0, io.SeekStart)
+		_, _ = file.Seek(0, io.SeekStart)
 		lines := readLines(file)
 		if len(lines) > n {
 			return lines[len(lines)-n:]
@@ -180,7 +180,7 @@ func tailFile(file *os.File, n int) []string {
 		}
 
 		// Read chunk
-		file.Seek(chunkStart, io.SeekStart)
+		_, _ = file.Seek(chunkStart, io.SeekStart)
 		chunk := make([]byte, offset-chunkStart)
 		bytesRead, err := file.Read(chunk)
 		if err != nil && err != io.EOF {
@@ -355,11 +355,11 @@ func (m *LogViewerModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		case key.Matches(msg, logViewerKeys.PageUp):
 			m.autoScroll = false
-			m.viewport.ViewUp()
+			m.viewport.PageUp()
 			return m, nil
 
 		case key.Matches(msg, logViewerKeys.PageDown):
-			m.viewport.ViewDown()
+			m.viewport.PageDown()
 			return m, nil
 		}
 	}

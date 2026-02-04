@@ -205,11 +205,11 @@ func (m *MultiLogViewerModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		case key.Matches(msg, logViewerKeys.PageUp):
 			m.autoScroll = false
-			m.viewport.ViewUp()
+			m.viewport.PageUp()
 			return m, nil
 
 		case key.Matches(msg, logViewerKeys.PageDown):
-			m.viewport.ViewDown()
+			m.viewport.PageDown()
 			return m, nil
 		}
 	}
@@ -311,12 +311,6 @@ func (m *MultiLogViewerModel) View() string {
 	scrollPercent := 0
 	if m.viewport.TotalLineCount() > 0 {
 		scrollPercent = int(m.viewport.ScrollPercent() * 100)
-	}
-
-	// List running servers
-	var serverNames []string
-	for _, s := range m.servers {
-		serverNames = append(serverNames, s.Name)
 	}
 
 	statusParts := []string{
