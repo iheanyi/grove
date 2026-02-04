@@ -422,6 +422,7 @@ func installForCursor(grovePath string, global bool) error {
 	mcpServers["grove"] = map[string]interface{}{
 		"command": grovePath,
 		"args":    []string{"mcp"},
+		"type":    "stdio",
 	}
 	config["mcpServers"] = mcpServers
 
