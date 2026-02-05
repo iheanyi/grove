@@ -621,14 +621,17 @@ func (s *mcpServer) handleRequest(req *jsonRPCRequest) {
 	switch req.Method {
 	case "initialize":
 		s.handleInitialize(req)
-	case "initialized":
-		// No response needed
+	case "initialized", "notifications/initialized":
+		// No response needed for notifications
 	case "tools/list":
 		s.handleToolsList(req)
 	case "tools/call":
 		s.handleToolsCall(req)
 	default:
-		s.sendError(req.ID, -32601, "Method not found", req.Method)
+		// Don't send errors for notifications (no ID means it's a notification)
+		if req.ID != nil && !strings.HasPrefix(req.Method, "notifications/") {
+			s.sendError(req.ID, -32601, "Method not found", req.Method)
+		}
 	}
 }
 
