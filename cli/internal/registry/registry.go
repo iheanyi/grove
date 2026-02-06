@@ -855,7 +855,7 @@ func batchGetProcessCwds(pids map[int]bool) map[int]string {
 	for _, line := range strings.Split(string(output), "\n") {
 		if strings.HasPrefix(line, "p") {
 			pidStr := strings.TrimPrefix(line, "p")
-			fmt.Sscanf(pidStr, "%d", &currentPID)
+			_, _ = fmt.Sscanf(pidStr, "%d", &currentPID)
 		} else if strings.HasPrefix(line, "n") && !strings.HasPrefix(line, "n ") && currentPID > 0 {
 			result[currentPID] = strings.TrimPrefix(line, "n")
 		}

@@ -199,15 +199,15 @@ const (
 
 // EnhancedModel is the enhanced TUI model
 type EnhancedModel struct {
-	list         list.Model
-	reg          *registry.Registry
-	cfg          *config.Config
-	width        int
-	height       int
-	showHelp     bool
-	notification *Notification
-	spinner      spinner.Model
-	actionPanel  *ActionPanel
+	list           list.Model
+	reg            *registry.Registry
+	cfg            *config.Config
+	width          int
+	height         int
+	showHelp       bool
+	notification   *Notification
+	spinner        spinner.Model
+	actionPanel    *ActionPanel
 	serverHealth   map[string]registry.HealthStatus
 	starting       map[string]bool // Track servers currently starting
 	healthChecking bool            // True when health checks are in progress

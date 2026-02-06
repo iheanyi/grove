@@ -40,8 +40,8 @@ type MultiLogViewerModel struct {
 // multiLogLinesMsg is sent when log lines are loaded/updated
 type multiLogLinesMsg struct {
 	entries     []logEntry
-	initial     bool               // true for initial load, false for incremental
-	fileOffsets map[string]int64   // updated file offsets after reading
+	initial     bool             // true for initial load, false for incremental
+	fileOffsets map[string]int64 // updated file offsets after reading
 }
 
 // multiLogFileChangedMsg is sent when any log file changes

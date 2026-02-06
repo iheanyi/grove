@@ -336,6 +336,9 @@ final class ServerParsingTests: XCTestCase {
             prURL: "https://github.com/owner/repo/pull/123",
             prState: "open",
             ciStatus: .success,
+            reviewStatus: nil,
+            commentCount: 0,
+            hasMergeConflicts: false,
             lastUpdated: Date()
         )
 

@@ -203,4 +203,3 @@ func (c *Config) SubdomainURL(name string) string {
 func (c *Config) IsSubdomainMode() bool {
 	return c.URLMode == URLModeSubdomain
 }
-
