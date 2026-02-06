@@ -36,6 +36,7 @@ func init() {
 	dashboardCmd.Flags().Bool("no-browser", false, "Don't open browser automatically")
 	dashboardCmd.Flags().Bool("dev", false, "Development mode: proxy to Vite dev server")
 	dashboardCmd.Flags().String("dev-url", "http://localhost:5173", "Vite dev server URL (used with --dev)")
+	dashboardCmd.GroupID = "monitoring"
 	rootCmd.AddCommand(dashboardCmd)
 }
 

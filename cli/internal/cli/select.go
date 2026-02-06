@@ -34,6 +34,7 @@ Useful with shell functions:
 }
 
 func init() {
+	selectCmd.GroupID = "server"
 	rootCmd.AddCommand(selectCmd)
 }
 

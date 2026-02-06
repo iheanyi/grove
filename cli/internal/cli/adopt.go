@@ -32,6 +32,7 @@ Examples:
 func init() {
 	adoptCmd.Flags().Bool("dry-run", false, "Show what would be adopted without making changes")
 	adoptCmd.Flags().Bool("all", false, "Show all detected servers, including unmatched ones")
+	adoptCmd.GroupID = "server"
 	rootCmd.AddCommand(adoptCmd)
 }
 

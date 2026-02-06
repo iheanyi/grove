@@ -37,41 +37,86 @@ func init() {
 
 	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is $XDG_CONFIG_HOME/grove/config.yaml)")
 
-	// Add subcommands
+	// Define command groups
+	rootCmd.AddGroup(
+		&cobra.Group{ID: "server", Title: "Server Management:"},
+		&cobra.Group{ID: "worktree", Title: "Worktree Management:"},
+		&cobra.Group{ID: "monitoring", Title: "Logs & Monitoring:"},
+		&cobra.Group{ID: "config", Title: "Configuration:"},
+		&cobra.Group{ID: "proxy", Title: "Proxy:"},
+		&cobra.Group{ID: "maintenance", Title: "Maintenance:"},
+	)
+
+	// Server Management
+	startCmd.GroupID = "server"
+	stopCmd.GroupID = "server"
+	restartCmd.GroupID = "server"
+	lsCmd.GroupID = "server"
+	statusCmd.GroupID = "server"
+	urlCmd.GroupID = "server"
+	openCmd.GroupID = "server"
+	attachCmd.GroupID = "server"
+	detachCmd.GroupID = "server"
+	tagCmd.GroupID = "server"
+
 	rootCmd.AddCommand(startCmd)
 	rootCmd.AddCommand(stopCmd)
 	rootCmd.AddCommand(restartCmd)
 	rootCmd.AddCommand(lsCmd)
+	rootCmd.AddCommand(statusCmd)
 	rootCmd.AddCommand(urlCmd)
 	rootCmd.AddCommand(openCmd)
+	rootCmd.AddCommand(attachCmd)
+	rootCmd.AddCommand(detachCmd)
+	rootCmd.AddCommand(tagCmd)
+
+	// Worktree Management
+	newCmd.GroupID = "worktree"
+	switchCmd.GroupID = "worktree"
+	cloneCmd.GroupID = "worktree"
+	cdCmd.GroupID = "worktree"
+	deleteCmd.GroupID = "worktree"
+	infoCmd.GroupID = "worktree"
+	pruneCmd.GroupID = "worktree"
+
+	rootCmd.AddCommand(newCmd)
+	rootCmd.AddCommand(switchCmd)
+	rootCmd.AddCommand(cloneCmd)
+	rootCmd.AddCommand(cdCmd)
+	rootCmd.AddCommand(deleteCmd)
+	rootCmd.AddCommand(infoCmd)
+	rootCmd.AddCommand(pruneCmd)
+
+	// Logs & Monitoring
+	logsCmd.GroupID = "monitoring"
+
 	rootCmd.AddCommand(logsCmd)
-	rootCmd.AddCommand(statusCmd)
+
+	// Configuration
+	initCmd.GroupID = "config"
+	setupCmd.GroupID = "config"
+
 	rootCmd.AddCommand(initCmd)
-	rootCmd.AddCommand(proxyCmd)
 	rootCmd.AddCommand(setupCmd)
-	rootCmd.AddCommand(cleanupCmd)
+
+	// Proxy
+	proxyCmd.GroupID = "proxy"
+
+	rootCmd.AddCommand(proxyCmd)
+
+	// Maintenance
+	doctorCmd.GroupID = "maintenance"
+	cleanupCmd.GroupID = "maintenance"
+	uiCmd.GroupID = "maintenance"
+	versionCmd.GroupID = "maintenance"
+	completionCmd.GroupID = "maintenance"
+	menubarCmd.GroupID = "maintenance"
+
 	rootCmd.AddCommand(doctorCmd)
+	rootCmd.AddCommand(cleanupCmd)
 	rootCmd.AddCommand(uiCmd)
 	rootCmd.AddCommand(versionCmd)
 	rootCmd.AddCommand(completionCmd)
-
-	// Worktree management commands
-	rootCmd.AddCommand(newCmd)
-	rootCmd.AddCommand(switchCmd)
-	rootCmd.AddCommand(pruneCmd)
-	rootCmd.AddCommand(cloneCmd)
-	rootCmd.AddCommand(infoCmd)
-	rootCmd.AddCommand(cdCmd)
-	rootCmd.AddCommand(deleteCmd)
-
-	// Server attachment commands
-	rootCmd.AddCommand(attachCmd)
-	rootCmd.AddCommand(detachCmd)
-
-	// Tagging commands
-	rootCmd.AddCommand(tagCmd)
-
-	// Menubar app management (macOS only)
 	rootCmd.AddCommand(menubarCmd)
 }
 

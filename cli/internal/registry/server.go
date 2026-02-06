@@ -1,6 +1,7 @@
 package registry
 
 import (
+	"fmt"
 	"time"
 )
 
@@ -138,7 +139,7 @@ func formatDuration(value int, unit string) string {
 	if value == 0 {
 		return ""
 	}
-	return string(rune('0'+value/10)) + string(rune('0'+value%10)) + unit
+	return fmt.Sprintf("%02d%s", value, unit)
 }
 
 // ProxyInfo contains information about the proxy daemon

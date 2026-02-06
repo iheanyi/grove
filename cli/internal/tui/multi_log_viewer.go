@@ -26,19 +26,22 @@ type logEntry struct {
 
 // MultiLogViewerModel represents the multi-server log viewer
 type MultiLogViewerModel struct {
-	viewport   viewport.Model
-	servers    []*registry.Server
-	entries    []logEntry
-	autoScroll bool
-	ready      bool
-	err        error
-	width      int
-	height     int
+	viewport    viewport.Model
+	servers     []*registry.Server
+	entries     []logEntry
+	autoScroll  bool
+	ready       bool
+	err         error
+	width       int
+	height      int
+	fileOffsets map[string]int64 // tracks read position per log file
 }
 
 // multiLogLinesMsg is sent when log lines are loaded/updated
 type multiLogLinesMsg struct {
-	entries []logEntry
+	entries     []logEntry
+	initial     bool               // true for initial load, false for incremental
+	fileOffsets map[string]int64   // updated file offsets after reading
 }
 
 // multiLogFileChangedMsg is sent when any log file changes
@@ -47,21 +50,23 @@ type multiLogFileChangedMsg struct{}
 // NewMultiLogViewer creates a new multi-server log viewer
 func NewMultiLogViewer(servers []*registry.Server) *MultiLogViewerModel {
 	return &MultiLogViewerModel{
-		servers:    servers,
-		entries:    []logEntry{},
-		autoScroll: true,
+		servers:     servers,
+		entries:     []logEntry{},
+		autoScroll:  true,
+		fileOffsets: make(map[string]int64),
 	}
 }
 
 // Init initializes the multi-log viewer
 func (m *MultiLogViewerModel) Init() tea.Cmd {
-	return m.loadAllLogs()
+	return m.loadInitialLogs()
 }
 
-// loadAllLogs loads logs from all servers
-func (m *MultiLogViewerModel) loadAllLogs() tea.Cmd {
+// loadInitialLogs reads the last N lines from each log file (first load only, N scales with server count)
+func (m *MultiLogViewerModel) loadInitialLogs() tea.Cmd {
 	return func() tea.Msg {
 		var entries []logEntry
+		offsets := make(map[string]int64)
 
 		for _, server := range m.servers {
 			if server.LogFile == "" {
@@ -89,12 +94,24 @@ func (m *MultiLogViewerModel) loadAllLogs() tea.Cmd {
 				}
 				lines = append(lines, strings.TrimSuffix(line, "\n"))
 			}
+
+			// Record file offset for incremental reads
+			offset, _ := file.Seek(0, io.SeekCurrent)
+			offsets[server.LogFile] = offset
 			file.Close()
 
-			// Take last 100 lines
+			// Scale lines per server based on number of servers
+			linesPerServer := 500 / max(len(m.servers), 1)
+			if linesPerServer < 100 {
+				linesPerServer = 100
+			}
+			if linesPerServer > 500 {
+				linesPerServer = 500
+			}
+
 			start := 0
-			if len(lines) > 100 {
-				start = len(lines) - 100
+			if len(lines) > linesPerServer {
+				start = len(lines) - linesPerServer
 			}
 
 			for _, line := range lines[start:] {
@@ -105,7 +122,77 @@ func (m *MultiLogViewerModel) loadAllLogs() tea.Cmd {
 			}
 		}
 
-		return multiLogLinesMsg{entries: entries}
+		return multiLogLinesMsg{entries: entries, initial: true, fileOffsets: offsets}
+	}
+}
+
+// loadNewLines reads only new content since the last read offset
+func (m *MultiLogViewerModel) loadNewLines() tea.Cmd {
+	// Capture current offsets to avoid races
+	offsets := make(map[string]int64, len(m.fileOffsets))
+	for k, v := range m.fileOffsets {
+		offsets[k] = v
+	}
+
+	return func() tea.Msg {
+		var newEntries []logEntry
+
+		for _, server := range m.servers {
+			if server.LogFile == "" {
+				continue
+			}
+
+			file, err := os.Open(server.LogFile)
+			if err != nil {
+				continue
+			}
+
+			// Seek to last known offset
+			lastOffset := offsets[server.LogFile]
+			if lastOffset > 0 {
+				fileInfo, err := file.Stat()
+				if err != nil {
+					file.Close()
+					continue
+				}
+				// If file was truncated (e.g. log rotation), reset offset
+				if fileInfo.Size() < lastOffset {
+					lastOffset = 0
+				}
+				if _, err := file.Seek(lastOffset, io.SeekStart); err != nil {
+					file.Close()
+					continue
+				}
+			}
+
+			reader := bufio.NewReader(file)
+			for {
+				line, err := reader.ReadString('\n')
+				if err != nil {
+					if err == io.EOF {
+						if len(line) > 0 {
+							newEntries = append(newEntries, logEntry{
+								serverName: server.Name,
+								line:       strings.TrimSuffix(line, "\n"),
+							})
+						}
+						break
+					}
+					break
+				}
+				newEntries = append(newEntries, logEntry{
+					serverName: server.Name,
+					line:       strings.TrimSuffix(line, "\n"),
+				})
+			}
+
+			// Update offset
+			newOffset, _ := file.Seek(0, io.SeekCurrent)
+			offsets[server.LogFile] = newOffset
+			file.Close()
+		}
+
+		return multiLogLinesMsg{entries: newEntries, initial: false, fileOffsets: offsets}
 	}
 }
 
@@ -170,7 +257,17 @@ func (m *MultiLogViewerModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case multiLogLinesMsg:
-		m.entries = msg.entries
+		if msg.initial {
+			// Replace all entries on initial load
+			m.entries = msg.entries
+		} else {
+			// Append new entries incrementally
+			m.entries = append(m.entries, msg.entries...)
+		}
+		// Update file offsets from the message
+		for k, v := range msg.fileOffsets {
+			m.fileOffsets[k] = v
+		}
 		m.updateViewport()
 		if m.autoScroll {
 			m.viewport.GotoBottom()
@@ -179,7 +276,7 @@ func (m *MultiLogViewerModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, tea.Batch(cmds...)
 
 	case multiLogFileChangedMsg:
-		cmds = append(cmds, m.loadAllLogs())
+		cmds = append(cmds, m.loadNewLines())
 		return m, tea.Batch(cmds...)
 
 	case tea.KeyMsg:
@@ -340,7 +437,7 @@ func (m *MultiLogViewerModel) View() string {
 
 	// Help
 	helpStyle := lipgloss.NewStyle().Foreground(mutedColor)
-	help := helpStyle.Render("  [a]auto-scroll  [↑↓/jk]scroll  [shift+↑↓/bf]page  [g/G]top/bottom  [q/esc]back")
+	help := helpStyle.Render("  [a]auto-scroll  [↑↓/jk]scroll  [pgup/b]page up  [pgdn/f/space]page down  [g/G]top/bottom  [q/esc]back")
 	b.WriteString(help)
 
 	return b.String()

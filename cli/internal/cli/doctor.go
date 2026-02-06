@@ -30,6 +30,7 @@ func runDoctor(cmd *cobra.Command, args []string) error {
 	fmt.Println()
 
 	allGood := true
+	needsProxy := cfg.IsSubdomainMode()
 
 	// Check 1: Config directory
 	fmt.Print("Config directory... ")
@@ -40,15 +41,19 @@ func runDoctor(cmd *cobra.Command, args []string) error {
 		fmt.Printf("OK (%s)\n", config.ConfigDir())
 	}
 
-	// Check 2: Caddy installed
-	fmt.Print("Caddy installed... ")
-	caddyPath, err := exec.LookPath("caddy")
-	if err != nil {
-		fmt.Println("NOT FOUND")
-		fmt.Println("  Run: brew install caddy (macOS) or apt install caddy (Linux)")
-		allGood = false
+	// Check 2: Caddy installed (only relevant in subdomain mode)
+	if needsProxy {
+		fmt.Print("Caddy installed... ")
+		caddyPath, err := exec.LookPath("caddy")
+		if err != nil {
+			fmt.Println("NOT FOUND")
+			fmt.Println("  Run: brew install caddy (macOS) or apt install caddy (Linux)")
+			allGood = false
+		} else {
+			fmt.Printf("OK (%s)\n", caddyPath)
+		}
 	} else {
-		fmt.Printf("OK (%s)\n", caddyPath)
+		fmt.Println("Caddy installed... SKIPPED (not needed in port mode)")
 	}
 
 	// Check 3: Registry loadable
@@ -61,43 +66,47 @@ func runDoctor(cmd *cobra.Command, args []string) error {
 		fmt.Printf("OK (%d servers registered)\n", len(reg.List()))
 	}
 
-	// Check 4: Proxy status
-	fmt.Print("Proxy... ")
-	if reg != nil {
-		proxy := reg.GetProxy()
-		if proxy.IsRunning() && isProcessRunning(proxy.PID) {
-			fmt.Printf("RUNNING (PID: %d)\n", proxy.PID)
+	// Check 4: Proxy status (only relevant in subdomain mode)
+	if needsProxy {
+		fmt.Print("Proxy... ")
+		if reg != nil {
+			proxy := reg.GetProxy()
+			if proxy.IsRunning() && isProcessRunning(proxy.PID) {
+				fmt.Printf("RUNNING (PID: %d)\n", proxy.PID)
+			} else {
+				fmt.Println("NOT RUNNING")
+				fmt.Println("  Run: grove proxy start")
+				allGood = false
+			}
 		} else {
-			fmt.Println("NOT RUNNING")
-			fmt.Println("  Run: grove proxy start")
+			fmt.Println("UNKNOWN (registry not loaded)")
+		}
+
+		// Check 5: HTTP port available (or in use by proxy)
+		fmt.Printf("HTTP port (%d)... ", cfg.ProxyHTTPPort)
+		if port.IsAvailable(cfg.ProxyHTTPPort) {
+			fmt.Println("AVAILABLE")
+		} else if reg != nil && reg.GetProxy().IsRunning() {
+			fmt.Println("IN USE (by proxy)")
+		} else {
+			fmt.Println("IN USE (by another process)")
+			fmt.Printf("  Another process is using this port. Check with: lsof -i :%d\n", cfg.ProxyHTTPPort)
+			allGood = false
+		}
+
+		// Check 6: HTTPS port available (or in use by proxy)
+		fmt.Printf("HTTPS port (%d)... ", cfg.ProxyHTTPSPort)
+		if port.IsAvailable(cfg.ProxyHTTPSPort) {
+			fmt.Println("AVAILABLE")
+		} else if reg != nil && reg.GetProxy().IsRunning() {
+			fmt.Println("IN USE (by proxy)")
+		} else {
+			fmt.Println("IN USE (by another process)")
+			fmt.Printf("  Another process is using this port. Check with: lsof -i :%d\n", cfg.ProxyHTTPSPort)
 			allGood = false
 		}
 	} else {
-		fmt.Println("UNKNOWN (registry not loaded)")
-	}
-
-	// Check 5: HTTP port available (or in use by proxy)
-	fmt.Printf("HTTP port (%d)... ", cfg.ProxyHTTPPort)
-	if port.IsAvailable(cfg.ProxyHTTPPort) {
-		fmt.Println("AVAILABLE")
-	} else if reg != nil && reg.GetProxy().IsRunning() {
-		fmt.Println("IN USE (by proxy)")
-	} else {
-		fmt.Println("IN USE (by another process)")
-		fmt.Println("  Another process is using this port. Check with: lsof -i :80")
-		allGood = false
-	}
-
-	// Check 6: HTTPS port available (or in use by proxy)
-	fmt.Printf("HTTPS port (%d)... ", cfg.ProxyHTTPSPort)
-	if port.IsAvailable(cfg.ProxyHTTPSPort) {
-		fmt.Println("AVAILABLE")
-	} else if reg != nil && reg.GetProxy().IsRunning() {
-		fmt.Println("IN USE (by proxy)")
-	} else {
-		fmt.Println("IN USE (by another process)")
-		fmt.Println("  Another process is using this port. Check with: lsof -i :443")
-		allGood = false
+		fmt.Println("Proxy... SKIPPED (not needed in port mode)")
 	}
 
 	// Check 7: Running servers health

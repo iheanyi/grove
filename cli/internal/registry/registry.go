@@ -16,6 +16,9 @@ import (
 	"github.com/iheanyi/grove/internal/port"
 )
 
+// cleanupInterval is the minimum time between cleanup runs
+const cleanupInterval = 5 * time.Second
+
 // Workspace represents a unified view of a git worktree with optional server state.
 // This is the primary data structure for tracking development environments.
 type Workspace struct {
@@ -244,6 +247,9 @@ type Registry struct {
 
 	// Internal flag to track if we migrated
 	migrated bool
+
+	// lastCleanup tracks when cleanup last ran to avoid excessive subprocess spawning
+	lastCleanup time.Time
 }
 
 // New creates a new registry instance
@@ -263,10 +269,23 @@ func Load() (*Registry, error) {
 	return r, r.load()
 }
 
-// load reads the registry from disk
+// load reads the registry from disk with file-level locking for concurrent access safety.
 func (r *Registry) load() error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
+
+	// Use file-level locking for concurrent process safety
+	lockPath := r.path + ".lock"
+	lockFile, err := os.OpenFile(lockPath, os.O_CREATE|os.O_RDWR, 0644)
+	if err != nil {
+		// If we can't create the lock file, proceed without locking
+		// (directory may not exist yet on first run)
+	} else {
+		defer lockFile.Close()
+		if err := syscall.Flock(int(lockFile.Fd()), syscall.LOCK_SH); err == nil {
+			defer syscall.Flock(int(lockFile.Fd()), syscall.LOCK_UN) //nolint:errcheck
+		}
+	}
 
 	data, err := os.ReadFile(r.path)
 	if err != nil {
@@ -333,7 +352,7 @@ func (r *Registry) migrateToWorkspaces() {
 	r.migrated = true
 }
 
-// Save saves the registry to disk
+// Save saves the registry to disk with file-level locking for concurrent access safety.
 func (r *Registry) Save() error {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
@@ -350,6 +369,19 @@ func (r *Registry) Save() error {
 	if err != nil {
 		return fmt.Errorf("failed to marshal registry: %w", err)
 	}
+
+	// Use file-level locking for concurrent process safety
+	lockPath := r.path + ".lock"
+	lockFile, err := os.OpenFile(lockPath, os.O_CREATE|os.O_RDWR, 0644)
+	if err != nil {
+		return fmt.Errorf("failed to create lock file: %w", err)
+	}
+	defer lockFile.Close()
+
+	if err := syscall.Flock(int(lockFile.Fd()), syscall.LOCK_EX); err != nil {
+		return fmt.Errorf("failed to acquire file lock: %w", err)
+	}
+	defer syscall.Flock(int(lockFile.Fd()), syscall.LOCK_UN) //nolint:errcheck
 
 	if err := os.WriteFile(r.path, data, 0644); err != nil {
 		return fmt.Errorf("failed to write registry: %w", err)
@@ -584,9 +616,22 @@ type CleanupResult struct {
 
 // Cleanup removes stale entries (workspaces with missing paths, dead PIDs)
 // and deduplicates workspaces with the same path.
+// Cleanup is throttled to avoid excessive subprocess spawning — it will
+// skip if called again within cleanupInterval of the last run.
 func (r *Registry) Cleanup() (*CleanupResult, error) {
 	r.mu.Lock()
-	defer r.mu.Unlock()
+
+	// Throttle: skip if last cleanup was recent
+	if !r.lastCleanup.IsZero() && time.Since(r.lastCleanup) < cleanupInterval {
+		r.mu.Unlock()
+		return &CleanupResult{
+			Stopped:          []string{},
+			RemovedServers:   []string{},
+			RemovedWorktrees: []string{},
+			Started:          []string{},
+		}, nil
+	}
+	r.lastCleanup = time.Now()
 
 	result := &CleanupResult{
 		Stopped:          []string{},
@@ -638,6 +683,13 @@ func (r *Registry) Cleanup() (*CleanupResult, error) {
 		}
 	}
 
+	// Collect PIDs that need CWD lookup for stopped-server-port-check
+	type cwdRequest struct {
+		name string
+		pid  int
+	}
+	var cwdRequests []cwdRequest
+
 	// Check workspaces
 	for name, ws := range r.Workspaces {
 		// Check if the path still exists
@@ -654,6 +706,18 @@ func (r *Registry) Cleanup() (*CleanupResult, error) {
 		if ws.Server != nil {
 			// Check if PID is still running
 			if ws.Server.PID > 0 && !isProcessRunning(ws.Server.PID) {
+				// PID is gone — but check if port is still listening before marking stopped.
+				// The PID may be stale (e.g. shell wrapper PID) while the actual server
+				// replaced it via exec and is still running on a different PID.
+				if ws.Server.Port > 0 && port.IsListening(ws.Server.Port) {
+					// Port is still active — try to find the real PID
+					newPID := port.GetListenerPID(ws.Server.Port)
+					if newPID > 0 {
+						// Queue a CWD check to verify ownership
+						cwdRequests = append(cwdRequests, cwdRequest{name: name, pid: newPID})
+						continue
+					}
+				}
 				ws.Server.Status = StatusStopped
 				ws.Server.PID = 0
 				result.Stopped = append(result.Stopped, name)
@@ -671,21 +735,44 @@ func (r *Registry) Cleanup() (*CleanupResult, error) {
 			// For "stopped" servers, check if the port is actually in use (externally started)
 			if ws.Server.Status == StatusStopped && ws.Server.Port > 0 {
 				if port.IsListening(ws.Server.Port) {
-					// Port is in use - verify process belongs to this worktree
 					pid := port.GetListenerPID(ws.Server.Port)
 					if pid > 0 {
-						// Check if process's working directory matches (or is under) the worktree path
-						processCwd := getProcessCwd(pid)
-						if processCwd != "" && (processCwd == ws.Path || strings.HasPrefix(processCwd, ws.Path+"/")) {
-							// Process belongs to this worktree - mark as running
-							ws.Server.Status = StatusRunning
-							ws.Server.PID = pid
-							ws.Server.StartedAt = time.Now() // Best guess
-							result.Started = append(result.Started, name)
-						}
-						// If cwd doesn't match, leave as stopped (different server took the port)
+						cwdRequests = append(cwdRequests, cwdRequest{name: name, pid: pid})
 					}
 				}
+			}
+		}
+	}
+
+	// Batch CWD lookups: collect unique PIDs and do a single lsof call
+	if len(cwdRequests) > 0 {
+		uniquePIDs := make(map[int]bool)
+		for _, req := range cwdRequests {
+			uniquePIDs[req.pid] = true
+		}
+
+		pidCwdMap := batchGetProcessCwds(uniquePIDs)
+
+		for _, req := range cwdRequests {
+			ws := r.Workspaces[req.name]
+			if ws == nil || ws.Server == nil {
+				continue
+			}
+
+			cwd := pidCwdMap[req.pid]
+			if cwd != "" && ws.Path != "" && (cwd == ws.Path || strings.HasPrefix(cwd, ws.Path+"/")) {
+				// Process belongs to this worktree — mark as running
+				ws.Server.Status = StatusRunning
+				ws.Server.PID = req.pid
+				if ws.Server.StartedAt.IsZero() {
+					ws.Server.StartedAt = time.Now()
+				}
+				result.Started = append(result.Started, req.name)
+			} else if ws.Server.PID > 0 && !isProcessRunning(ws.Server.PID) {
+				// Original PID dead and port owner doesn't match — mark stopped
+				ws.Server.Status = StatusStopped
+				ws.Server.PID = 0
+				result.Stopped = append(result.Stopped, req.name)
 			}
 		}
 	}
@@ -695,10 +782,13 @@ func (r *Registry) Cleanup() (*CleanupResult, error) {
 		delete(r.Workspaces, name)
 	}
 
-	if len(result.Stopped) > 0 || len(result.RemovedServers) > 0 || len(result.RemovedWorktrees) > 0 || len(result.Started) > 0 {
-		r.mu.Unlock()
+	needsSave := len(result.Stopped) > 0 || len(result.RemovedServers) > 0 || len(result.RemovedWorktrees) > 0 || len(result.Started) > 0
+
+	// Release the lock before saving to avoid deadlock (Save() acquires RLock)
+	r.mu.Unlock()
+
+	if needsSave {
 		err := r.Save()
-		r.mu.Lock()
 		return result, err
 	}
 
@@ -733,6 +823,45 @@ func getProcessCwd(pid int) string {
 		}
 	}
 	return ""
+}
+
+// batchGetProcessCwds returns the CWD for multiple PIDs using a single lsof call.
+// This is much more efficient than calling getProcessCwd per-PID.
+func batchGetProcessCwds(pids map[int]bool) map[int]string {
+	result := make(map[int]string, len(pids))
+	if len(pids) == 0 {
+		return result
+	}
+
+	// Build comma-separated PID list for lsof
+	pidStrs := make([]string, 0, len(pids))
+	for pid := range pids {
+		pidStrs = append(pidStrs, fmt.Sprintf("%d", pid))
+	}
+	pidList := strings.Join(pidStrs, ",")
+
+	cmd := exec.Command("lsof", "-d", "cwd", "-a", "-p", pidList, "-Fn")
+	output, err := cmd.Output()
+	if err != nil {
+		// Fall back to individual lookups
+		for pid := range pids {
+			result[pid] = getProcessCwd(pid)
+		}
+		return result
+	}
+
+	// Parse lsof -Fn output: lines alternate between "p<pid>" and "n<path>"
+	var currentPID int
+	for _, line := range strings.Split(string(output), "\n") {
+		if strings.HasPrefix(line, "p") {
+			pidStr := strings.TrimPrefix(line, "p")
+			fmt.Sscanf(pidStr, "%d", &currentPID)
+		} else if strings.HasPrefix(line, "n") && !strings.HasPrefix(line, "n ") && currentPID > 0 {
+			result[currentPID] = strings.TrimPrefix(line, "n")
+		}
+	}
+
+	return result
 }
 
 // =============================================================================

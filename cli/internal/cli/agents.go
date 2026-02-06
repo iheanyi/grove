@@ -34,6 +34,7 @@ Examples:
 func init() {
 	agentsCmd.Flags().Bool("json", false, "Output in JSON format")
 	agentsCmd.Flags().Bool("watch", false, "Continuously update the list")
+	agentsCmd.GroupID = "monitoring"
 	rootCmd.AddCommand(agentsCmd)
 }
 

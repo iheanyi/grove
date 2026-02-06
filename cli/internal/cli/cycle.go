@@ -30,6 +30,7 @@ Examples:
 func init() {
 	cycleCmd.Flags().Bool("reset", false, "Reset cycle index to first server")
 	cycleCmd.Flags().Bool("list", false, "List all servers in cycle order without opening")
+	cycleCmd.GroupID = "server"
 	rootCmd.AddCommand(cycleCmd)
 }
 

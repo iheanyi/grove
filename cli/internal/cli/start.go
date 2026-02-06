@@ -284,7 +284,8 @@ func runDaemon(server *registry.Server, reg *registry.Registry, projConfig *proj
 
 	// Use nohup approach: wrap the command in a shell that uses tail -f /dev/null
 	// to keep stdin open forever. This prevents processes like esbuild --watch
-	// from exiting due to closed stdin.
+	// from exiting due to closed stdin. The `exec` replaces the shell process,
+	// so the recorded PID becomes the actual server process PID.
 	shellCmd := fmt.Sprintf("tail -f /dev/null | exec %s", shellQuoteArgs(server.Command))
 
 	execCmd := exec.Command("/bin/sh", "-c", shellCmd)

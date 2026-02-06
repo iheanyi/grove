@@ -44,6 +44,7 @@ var hooksUninstallCmd = &cobra.Command{
 }
 
 func init() {
+	hooksCmd.GroupID = "config"
 	rootCmd.AddCommand(hooksCmd)
 	hooksCmd.AddCommand(hooksInstallCmd)
 	hooksCmd.AddCommand(hooksUninstallCmd)

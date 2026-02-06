@@ -43,7 +43,7 @@ func init() {
 	pruneCmd.Flags().Bool("merged", false, "Prune git worktrees with merged branches")
 	pruneCmd.Flags().Bool("orphaned", false, "Prune registry entries for non-existent paths")
 	pruneCmd.Flags().Bool("all", false, "Prune everything (stopped + merged + orphaned)")
-	rootCmd.AddCommand(pruneCmd)
+	// Note: pruneCmd is added to rootCmd in root.go with GroupID set there
 }
 
 type pruneResult struct {

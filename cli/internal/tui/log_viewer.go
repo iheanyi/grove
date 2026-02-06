@@ -444,7 +444,7 @@ func (m *LogViewerModel) View() string {
 
 	// Help - compact format
 	helpStyle := lipgloss.NewStyle().Foreground(mutedColor)
-	help := helpStyle.Render("  [a]auto-scroll  [↑↓/jk]scroll  [shift+↑↓/bf]page  [g/G]top/bottom  [q/esc]back")
+	help := helpStyle.Render("  [a]auto-scroll  [↑↓/jk]scroll  [pgup/b]page up  [pgdn/f/space]page down  [g/G]top/bottom  [q/esc]back")
 	b.WriteString(help)
 
 	return b.String()

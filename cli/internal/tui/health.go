@@ -3,12 +3,27 @@ package tui
 import (
 	"context"
 	"fmt"
+	"net"
 	"net/http"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/iheanyi/grove/internal/registry"
 )
+
+// healthClient is a shared http.Client with connection pooling for health checks.
+var healthClient = &http.Client{
+	Timeout: 5 * time.Second,
+	Transport: &http.Transport{
+		MaxIdleConns:        10,
+		IdleConnTimeout:     30 * time.Second,
+		DisableKeepAlives:   false,
+		MaxIdleConnsPerHost: 2,
+		DialContext: (&net.Dialer{
+			Timeout: 3 * time.Second,
+		}).DialContext,
+	},
+}
 
 // HealthCheckMsg is sent when a health check completes
 type HealthCheckMsg struct {
@@ -48,11 +63,7 @@ func performHealthCheck(url string) registry.HealthStatus {
 		return registry.HealthUnknown
 	}
 
-	client := &http.Client{
-		Timeout: 5 * time.Second,
-	}
-
-	resp, err := client.Do(req)
+	resp, err := healthClient.Do(req)
 	if err != nil {
 		return registry.HealthUnhealthy
 	}

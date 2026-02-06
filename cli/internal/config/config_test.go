@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"strconv"
 	"testing"
 )
 
@@ -189,7 +190,7 @@ func TestIsSubdomainMode(t *testing.T) {
 	}
 }
 
-func TestItoa(t *testing.T) {
+func TestStrconvItoa(t *testing.T) {
 	tests := []struct {
 		input    int
 		expected string
@@ -207,9 +208,9 @@ func TestItoa(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.expected, func(t *testing.T) {
-			result := itoa(tt.input)
+			result := strconv.Itoa(tt.input)
 			if result != tt.expected {
-				t.Errorf("itoa(%d) = %q, want %q", tt.input, result, tt.expected)
+				t.Errorf("strconv.Itoa(%d) = %q, want %q", tt.input, result, tt.expected)
 			}
 		})
 	}

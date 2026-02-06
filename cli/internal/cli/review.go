@@ -41,6 +41,7 @@ Examples:
 
 func init() {
 	reviewCmd.Flags().Bool("json", false, "Output as JSON")
+	reviewCmd.GroupID = "worktree"
 	rootCmd.AddCommand(reviewCmd)
 }
 

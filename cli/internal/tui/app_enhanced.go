@@ -208,8 +208,9 @@ type EnhancedModel struct {
 	notification *Notification
 	spinner      spinner.Model
 	actionPanel  *ActionPanel
-	serverHealth map[string]registry.HealthStatus
-	starting     map[string]bool // Track servers currently starting
+	serverHealth   map[string]registry.HealthStatus
+	starting       map[string]bool // Track servers currently starting
+	healthChecking bool            // True when health checks are in progress
 
 	// View switching
 	viewMode       ViewMode
@@ -373,13 +374,18 @@ func (m EnhancedModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case healthCheckTickMsg:
 		// Trigger health checks for running servers
-		for _, server := range m.reg.ListRunning() {
+		running := m.reg.ListRunning()
+		if len(running) > 0 {
+			m.healthChecking = true
+		}
+		for _, server := range running {
 			cmds = append(cmds, HealthCheckCmd(server))
 		}
 		return m, tea.Batch(append(cmds, HealthCheckTicker(10*time.Second))...)
 
 	case HealthCheckMsg:
 		// Update server health
+		m.healthChecking = false
 		if server, ok := m.reg.Get(msg.ServerName); ok {
 			server.Health = msg.Health
 			server.LastHealthCheck = msg.CheckTime
@@ -503,6 +509,13 @@ func (m EnhancedModel) View() string {
 	} else {
 		b.WriteString(statusStoppedStyle.Render("  Proxy: not running (p to start)"))
 	}
+
+	// Health check indicator
+	if m.healthChecking {
+		b.WriteString("  ")
+		b.WriteString(m.spinner.View())
+		b.WriteString(lipgloss.NewStyle().Foreground(mutedColor).Render(" checking health..."))
+	}
 	b.WriteString("\n")
 
 	// Notification (if visible)
@@ -528,7 +541,7 @@ func (m EnhancedModel) View() string {
 		b.WriteString(m.renderHelp())
 	} else {
 		b.WriteString("\n")
-		b.WriteString(helpStyle.Render("  [s]start [x]stop [r]restart [b]browser [c]copy [l]logs [L]all-logs [/]search [?]help [q]quit"))
+		b.WriteString(helpStyle.Render("  [s]start [x]stop [r]restart [b]browser [c]copy [l]logs [L]all-logs [a]actions [/]search [?]help [q]quit"))
 	}
 
 	return b.String()

@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"strconv"
 	"time"
 
 	"github.com/adrg/xdg"
@@ -187,7 +188,7 @@ func (c *Config) ServerURL(name string, port int) string {
 		return "https://" + name + "." + c.TLD
 	}
 	// Default to port mode
-	return "http://localhost:" + itoa(port)
+	return "http://localhost:" + strconv.Itoa(port)
 }
 
 // SubdomainURL returns the wildcard subdomain URL (only meaningful in subdomain mode)
@@ -203,18 +204,3 @@ func (c *Config) IsSubdomainMode() bool {
 	return c.URLMode == URLModeSubdomain
 }
 
-// itoa is a simple int to string converter to avoid importing strconv
-func itoa(i int) string {
-	if i == 0 {
-		return "0"
-	}
-	if i < 0 {
-		return "-" + itoa(-i)
-	}
-	var digits []byte
-	for i > 0 {
-		digits = append([]byte{byte('0' + i%10)}, digits...)
-		i /= 10
-	}
-	return string(digits)
-}

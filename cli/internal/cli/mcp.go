@@ -86,6 +86,7 @@ var (
 )
 
 func init() {
+	mcpCmd.GroupID = "config"
 	rootCmd.AddCommand(mcpCmd)
 	mcpCmd.AddCommand(mcpInstallCmd)
 

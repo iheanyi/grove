@@ -204,9 +204,8 @@ func detectAgent(path string) *AgentInfo {
 
 // detectGeminiAgent checks for Gemini CLI activity
 func detectGeminiAgent(path string) *AgentInfo {
-	// Find Gemini CLI processes using ps aux
-	// The [g] trick prevents grep from matching itself
-	cmd := exec.Command("bash", "-c", "ps aux | grep -E '[g]emini(-cli)?' | awk '{print $2}'")
+	// Find Gemini CLI processes using pgrep (single process instead of ps|grep|awk pipeline)
+	cmd := exec.Command("pgrep", "-f", "gemini(-cli)?")
 	output, err := cmd.Output()
 	if err != nil {
 		return nil
@@ -243,9 +242,8 @@ func detectGeminiAgent(path string) *AgentInfo {
 
 // detectClaudeAgent checks for Claude Code activity
 func detectClaudeAgent(path string) *AgentInfo {
-	// Find Claude Code processes using ps aux
-	// The [c] trick prevents grep from matching itself
-	cmd := exec.Command("bash", "-c", "ps aux | grep '[c]laude' | awk '{print $2}'")
+	// Find Claude Code processes using pgrep (single process instead of ps|grep|awk pipeline)
+	cmd := exec.Command("pgrep", "-f", "claude")
 	output, err := cmd.Output()
 	if err != nil {
 		return nil
@@ -490,8 +488,8 @@ func DetectAllAgents() map[string]*AgentInfo {
 func detectAllClaudeAgents() map[string]*AgentInfo {
 	agents := make(map[string]*AgentInfo)
 
-	// Find Claude Code processes using ps aux
-	cmd := exec.Command("bash", "-c", "ps aux | grep '[c]laude' | awk '{print $2}'")
+	// Find Claude Code processes using pgrep (single process instead of ps|grep|awk pipeline)
+	cmd := exec.Command("pgrep", "-f", "claude")
 	output, err := cmd.Output()
 	if err != nil {
 		return agents
@@ -542,8 +540,8 @@ func detectAllClaudeAgents() map[string]*AgentInfo {
 func detectAllGeminiAgents() map[string]*AgentInfo {
 	agents := make(map[string]*AgentInfo)
 
-	// Find Gemini CLI processes
-	cmd := exec.Command("bash", "-c", "ps aux | grep -E '[g]emini(-cli)?' | awk '{print $2}'")
+	// Find Gemini CLI processes using pgrep (single process instead of ps|grep|awk pipeline)
+	cmd := exec.Command("pgrep", "-f", "gemini(-cli)?")
 	output, err := cmd.Output()
 	if err != nil {
 		return agents

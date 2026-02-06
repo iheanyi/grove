@@ -38,6 +38,7 @@ func init() {
 	discoverCmd.Flags().Bool("register", false, "Register all discovered worktrees")
 	discoverCmd.Flags().Bool("start", false, "Start all discovered worktrees (implies --register)")
 	discoverCmd.Flags().StringP("command", "c", "", "Command to use when starting (default: from .grove.yaml or prompt)")
+	discoverCmd.GroupID = "worktree"
 	rootCmd.AddCommand(discoverCmd)
 }
 
