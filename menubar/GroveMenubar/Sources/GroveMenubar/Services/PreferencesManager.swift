@@ -22,6 +22,10 @@ class PreferencesManager: ObservableObject {
         static let showUptime = "showUptime"
         static let showPort = "showPort"
         static let menubarScope = "menubarScope"
+        static let customGrovePath = "customGrovePath"
+        static let showServerCount = "showServerCount"
+        static let pinnedServers = "pinnedServers"
+        static let enableSounds = "enableSounds"
     }
 
     // Launch at login
@@ -104,6 +108,36 @@ class PreferencesManager: ObservableObject {
         }
     }
 
+    // Custom grove binary path (overrides auto-detection when non-empty)
+    @Published var customGrovePath: String {
+        didSet {
+            defaults.set(customGrovePath, forKey: Keys.customGrovePath)
+        }
+    }
+
+    // Show server count in menubar (e.g. "3/7")
+    @Published var showServerCount: Bool {
+        didSet {
+            defaults.set(showServerCount, forKey: Keys.showServerCount)
+        }
+    }
+
+    // Pinned/favorite server names (JSON-encoded Set<String>)
+    @Published var pinnedServers: Set<String> {
+        didSet {
+            if let data = try? JSONEncoder().encode(pinnedServers) {
+                defaults.set(data, forKey: Keys.pinnedServers)
+            }
+        }
+    }
+
+    // Sound effects on server events
+    @Published var enableSounds: Bool {
+        didSet {
+            defaults.set(enableSounds, forKey: Keys.enableSounds)
+        }
+    }
+
     private init() {
         // Load from defaults
         self.launchAtLogin = defaults.bool(forKey: Keys.launchAtLogin)
@@ -127,8 +161,28 @@ class PreferencesManager: ObservableObject {
         let scopeString = defaults.string(forKey: Keys.menubarScope) ?? MenubarScope.serversOnly.rawValue
         self.menubarScope = MenubarScope(rawValue: scopeString) ?? .serversOnly
 
-        applyTheme()
-        updateDockIcon()
+        // Custom grove binary path - empty means auto-detect
+        self.customGrovePath = defaults.string(forKey: Keys.customGrovePath) ?? ""
+
+        // Show server count in menubar - default ON
+        self.showServerCount = defaults.object(forKey: Keys.showServerCount) as? Bool ?? true
+
+        // Pinned servers - decode from JSON
+        if let data = defaults.data(forKey: Keys.pinnedServers),
+           let decoded = try? JSONDecoder().decode(Set<String>.self, from: data) {
+            self.pinnedServers = decoded
+        } else {
+            self.pinnedServers = []
+        }
+
+        // Sound effects - default OFF
+        self.enableSounds = defaults.object(forKey: Keys.enableSounds) as? Bool ?? false
+
+        // Defer theme/dock icon until NSApp is available
+        DispatchQueue.main.async { [self] in
+            applyTheme()
+            updateDockIcon()
+        }
     }
 
     private func updateLaunchAtLogin() {
@@ -342,6 +396,95 @@ class PreferencesManager: ObservableObject {
             appleScript.executeAndReturnError(&error)
             if let error = error {
                 print("AppleScript error: \(error)")
+            }
+        }
+    }
+
+    func isServerPinned(_ serverName: String) -> Bool {
+        pinnedServers.contains(serverName)
+    }
+
+    func togglePinned(_ serverName: String) {
+        if pinnedServers.contains(serverName) {
+            pinnedServers.remove(serverName)
+        } else {
+            pinnedServers.insert(serverName)
+        }
+    }
+
+    /// Open a terminal at path and run a command
+    func openInTerminalWithCommand(path: String, command: String) {
+        let terminal = defaultTerminal
+
+        DispatchQueue.global(qos: .userInitiated).async {
+            switch terminal {
+            case "com.apple.Terminal":
+                let script = """
+                tell application "Terminal"
+                    activate
+                    do script "cd '\(path)' && \(command)"
+                end tell
+                """
+                Self.runAppleScriptAsync(script)
+            case "com.googlecode.iterm2":
+                let script = """
+                tell application "iTerm"
+                    activate
+                    try
+                        set newWindow to (create window with default profile)
+                        tell current session of newWindow
+                            write text "cd '\(path)' && \(command)"
+                        end tell
+                    on error
+                        tell current window
+                            create tab with default profile
+                            tell current session
+                                write text "cd '\(path)' && \(command)"
+                            end tell
+                        end tell
+                    end try
+                end tell
+                """
+                Self.runAppleScriptAsync(script)
+            case "com.mitchellh.ghostty":
+                let ghosttyPaths = [
+                    "/Applications/Ghostty.app/Contents/MacOS/ghostty",
+                    "/opt/homebrew/bin/ghostty",
+                    "\(NSHomeDirectory())/.local/bin/ghostty"
+                ]
+                var launched = false
+                for ghosttyPath in ghosttyPaths {
+                    if FileManager.default.fileExists(atPath: ghosttyPath) {
+                        let task = Process()
+                        task.executableURL = URL(fileURLWithPath: ghosttyPath)
+                        task.arguments = ["--working-directory=\(path)", "-e", "/bin/bash", "-c", "cd '\(path)' && \(command); exec $SHELL"]
+                        if (try? task.run()) != nil {
+                            launched = true
+                            break
+                        }
+                    }
+                }
+                if !launched {
+                    let script = """
+                    tell application "Ghostty"
+                        activate
+                    end tell
+                    delay 0.5
+                    tell application "System Events"
+                        keystroke "cd '\(path)' && \(command)"
+                        keystroke return
+                    end tell
+                    """
+                    Self.runAppleScriptAsync(script)
+                }
+            default:
+                let script = """
+                tell application "Terminal"
+                    activate
+                    do script "cd '\(path)' && \(command)"
+                end tell
+                """
+                Self.runAppleScriptAsync(script)
             }
         }
     }

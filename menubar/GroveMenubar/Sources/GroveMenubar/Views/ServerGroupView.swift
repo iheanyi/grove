@@ -5,6 +5,9 @@ struct ServerGroupView: View {
     let group: ServerGroup
     var searchText: String = ""
     @State private var isCollapsed: Bool = false
+    @State private var showStopAllConfirmation = false
+    @State private var showRemoveAllConfirmation = false
+    @State private var showNewWorktree = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -41,21 +44,57 @@ struct ServerGroupView: View {
             }
             .buttonStyle(.plain)
             .contextMenu {
+                Button {
+                    showNewWorktree = true
+                } label: {
+                    Label("New Worktree", systemImage: "arrow.triangle.branch")
+                }
+
                 if group.runningCount > 0 {
+                    Divider()
+
                     Button {
-                        serverManager.stopAllServersInGroup(group)
+                        showStopAllConfirmation = true
                     } label: {
                         Label("Stop All in \(group.name)", systemImage: "stop.fill")
                     }
-
-                    Divider()
                 }
 
+                Divider()
+
                 Button(role: .destructive) {
-                    serverManager.removeAllServersInGroup(group)
+                    showRemoveAllConfirmation = true
                 } label: {
                     Label("Remove All from Grove", systemImage: "xmark.circle")
                 }
+            }
+            .confirmationDialog(
+                "Stop All Servers in \(group.name)?",
+                isPresented: $showStopAllConfirmation,
+                titleVisibility: .visible
+            ) {
+                Button("Stop All", role: .destructive) {
+                    serverManager.stopAllServersInGroup(group)
+                }
+                Button("Cancel", role: .cancel) {}
+            } message: {
+                Text("This will stop \(group.runningCount) running server\(group.runningCount == 1 ? "" : "s") in this group.")
+            }
+            .confirmationDialog(
+                "Remove All Servers in \(group.name)?",
+                isPresented: $showRemoveAllConfirmation,
+                titleVisibility: .visible
+            ) {
+                Button("Remove All", role: .destructive) {
+                    serverManager.removeAllServersInGroup(group)
+                }
+                Button("Cancel", role: .cancel) {}
+            } message: {
+                Text("This will remove \(group.totalCount) server\(group.totalCount == 1 ? "" : "s") from Grove. Running servers will be stopped first.")
+            }
+            .popover(isPresented: $showNewWorktree) {
+                NewWorktreeView()
+                    .environmentObject(serverManager)
             }
 
             // Group servers

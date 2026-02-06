@@ -13,6 +13,7 @@ class ServerManager: ObservableObject {
     @Published var logLines: [String] = []
     @Published var isStreamingLogs = false
     @Published var serverHealth: [String: HealthStatus] = [:]  // Track health per server
+    @Published var serverResources: [String: ServerResources] = [:]  // CPU/memory per server
 
     enum HealthStatus: String {
         case healthy
@@ -23,7 +24,7 @@ class ServerManager: ObservableObject {
     private var refreshTimer: Timer?
     private var logTimer: Timer?
     private var lastLogPosition: UInt64 = 0
-    private let grovePath: String
+    private var grovePath: String
     private var previousServerStates: [String: String] = [:]  // Track previous server statuses
     private let githubService = GitHubService.shared
     private let preferences = PreferencesManager.shared
@@ -39,6 +40,8 @@ class ServerManager: ObservableObject {
     var isPortMode: Bool { urlMode == "port" }
     var isSubdomainMode: Bool { urlMode == "subdomain" }
 
+    private var cancellables = Set<AnyCancellable>()
+
     init() {
         let initStart = CFAbsoluteTimeGetCurrent()
         print("[Grove] init() START - thread: \(Thread.isMainThread ? "MAIN" : "bg")")
@@ -48,6 +51,25 @@ class ServerManager: ObservableObject {
         let findStart = CFAbsoluteTimeGetCurrent()
         self.grovePath = Self.findGroveBinaryFast() ?? "/usr/local/bin/grove"
         print("[Grove] findGroveBinaryFast took \(String(format: "%.3f", CFAbsoluteTimeGetCurrent() - findStart))s -> \(grovePath)")
+
+        // If binary wasn't found via fast lookup, try `which` in background
+        if !FileManager.default.fileExists(atPath: grovePath) {
+            DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+                if let found = Self.findGroveBinaryViaWhich() {
+                    DispatchQueue.main.async {
+                        self?.grovePath = found
+                        // Cache for next launch
+                        UserDefaults.standard.set(found, forKey: "cachedGrovePath")
+                        self?.error = nil
+                        self?.refresh()
+                    }
+                } else {
+                    DispatchQueue.main.async {
+                        self?.error = "Grove CLI not found. Install it or set the path in Settings."
+                    }
+                }
+            }
+        }
 
         // Register for sleep/wake notifications to handle network availability
         setupSleepWakeObservers()
@@ -73,6 +95,12 @@ class ServerManager: ObservableObject {
             self?.refresh()
             self?.startAutoRefresh()
         }
+
+        // Observe refresh interval changes to restart the timer
+        preferences.$refreshInterval
+            .dropFirst() // Skip initial value
+            .sink { [weak self] _ in self?.updateRefreshInterval() }
+            .store(in: &cancellables)
 
         print("[Grove] init() END - took \(String(format: "%.3f", CFAbsoluteTimeGetCurrent() - initStart))s")
     }
@@ -202,9 +230,10 @@ class ServerManager: ObservableObject {
                 let parseStart = CFAbsoluteTimeGetCurrent()
                 guard let data = output.data(using: .utf8),
                       let status = try? JSONDecoder().decode(WTStatus.self, from: data) else {
-                    print("[Grove] refresh() JSON parse FAILED")
+                    print("[Grove] refresh() JSON parse FAILED. Output was: \(output.prefix(500))")
                     DispatchQueue.main.async {
                         self?.isLoading = false
+                        self?.error = "Failed to parse server data from Grove CLI"
                     }
                     return
                 }
@@ -237,6 +266,7 @@ class ServerManager: ObservableObject {
                     self.fetchGitHubInfoForServers()
                     self.checkServerHealth()
                     self.fetchAgents()  // Fetch active AI agents
+                    self.fetchResourceUsage()  // Fetch CPU/memory for running servers
                     print("[Grove] refresh() DONE - total \(String(format: "%.3f", CFAbsoluteTimeGetCurrent() - refreshStart))s")
                 }
 
@@ -731,79 +761,50 @@ class ServerManager: ObservableObject {
 
         isHealthCheckInProgress = true
 
-        // Safety timeout
-        DispatchQueue.main.asyncAfter(deadline: .now() + 15) { [weak self] in
-            self?.isHealthCheckInProgress = false
-        }
+        Task {
+            var healthUpdates: [String: HealthStatus] = [:]
 
-        let healthLock = NSLock()
-        var healthUpdates: [String: HealthStatus] = [:]
-        var completedCount = 0
-        let totalCount = runningServers.count
-
-        for server in runningServers {
-            let serverName = server.name
-            let serverURL = server.displayURL
-
-            DispatchQueue.global(qos: .utility).async { [weak self] in
-                let health = self?.pingServer(url: serverURL) ?? .unknown
-
-                healthLock.lock()
-                healthUpdates[serverName] = health
-                completedCount += 1
-                let isComplete = completedCount >= totalCount
-                let currentUpdates = healthUpdates
-                healthLock.unlock()
-
-                if isComplete {
-                    DispatchQueue.main.async {
-                        self?.isHealthCheckInProgress = false
-                        self?.applyHealthUpdates(currentUpdates)
+            await withTaskGroup(of: (String, HealthStatus).self) { group in
+                for server in runningServers {
+                    let serverName = server.name
+                    let serverURL = server.displayURL
+                    group.addTask { [weak self] in
+                        let health = await self?.pingServer(url: serverURL) ?? .unknown
+                        return (serverName, health)
                     }
                 }
+
+                for await (name, health) in group {
+                    healthUpdates[name] = health
+                }
+            }
+
+            await MainActor.run { [weak self] in
+                self?.isHealthCheckInProgress = false
+                self?.applyHealthUpdates(healthUpdates)
             }
         }
     }
 
-    /// Ping a server URL to check if it's responding
-    private func pingServer(url: String) -> HealthStatus {
+    /// Ping a server URL to check if it's responding (async)
+    private func pingServer(url: String) async -> HealthStatus {
         guard let serverURL = URL(string: url) else { return .unknown }
 
         var request = URLRequest(url: serverURL)
         request.httpMethod = "GET"
-        request.timeoutInterval = 3.0  // 3 second timeout
+        request.timeoutInterval = 3.0
 
-        let semaphore = DispatchSemaphore(value: 0)
-        var result: HealthStatus = .unknown
-
-        let task = URLSession.shared.dataTask(with: request) { _, response, error in
-            if let error = error {
-                // Check for connection refused specifically
-                let nsError = error as NSError
-                if nsError.domain == NSURLErrorDomain {
-                    switch nsError.code {
-                    case NSURLErrorCannotConnectToHost, NSURLErrorNetworkConnectionLost, NSURLErrorTimedOut:
-                        result = .unhealthy
-                    default:
-                        result = .unhealthy
-                    }
-                } else {
-                    result = .unhealthy
-                }
-            } else if let httpResponse = response as? HTTPURLResponse {
+        do {
+            let (_, response) = try await URLSession.shared.data(for: request)
+            if let httpResponse = response as? HTTPURLResponse {
                 // Consider 2xx-4xx as healthy (server is responding)
                 // 5xx might indicate server issues but it's still "up"
-                result = httpResponse.statusCode < 500 ? .healthy : .unhealthy
-            } else {
-                result = .unknown
+                return httpResponse.statusCode < 500 ? .healthy : .unhealthy
             }
-            semaphore.signal()
+            return .unknown
+        } catch {
+            return .unhealthy
         }
-
-        task.resume()
-        _ = semaphore.wait(timeout: .now() + 4.0)  // Wait up to 4 seconds
-
-        return result
     }
 
     /// Apply health updates in a single batch
@@ -829,6 +830,111 @@ class ServerManager: ObservableObject {
                 serverHealth.removeValue(forKey: name)
             }
         }
+    }
+
+    // MARK: - Resource Monitoring
+
+    private func fetchResourceUsage() {
+        let runningServers = servers.filter { $0.isRunning && $0.pid != nil }
+        guard !runningServers.isEmpty else {
+            if !serverResources.isEmpty {
+                serverResources.removeAll()
+            }
+            return
+        }
+
+        let pids = runningServers.compactMap { $0.pid }
+        let pidArg = pids.map { String($0) }.joined(separator: ",")
+
+        DispatchQueue.global(qos: .utility).async { [weak self] in
+            let task = Process()
+            task.executableURL = URL(fileURLWithPath: "/bin/ps")
+            task.arguments = ["-p", pidArg, "-o", "pid=,%cpu=,rss="]
+
+            let pipe = Pipe()
+            task.standardOutput = pipe
+            task.standardError = Pipe()
+
+            do {
+                try task.run()
+                let data = pipe.fileHandleForReading.readDataToEndOfFile()
+                task.waitUntilExit()
+
+                guard task.terminationStatus == 0,
+                      let output = String(data: data, encoding: .utf8) else { return }
+
+                // Build a PID -> server name mapping
+                var pidToName: [Int: String] = [:]
+                for server in runningServers {
+                    if let pid = server.pid {
+                        pidToName[pid] = server.name
+                    }
+                }
+
+                var updates: [String: ServerResources] = [:]
+
+                // Parse output: each line is "  PID  %CPU  RSS"
+                for line in output.components(separatedBy: .newlines) {
+                    let parts = line.trimmingCharacters(in: .whitespaces)
+                        .components(separatedBy: .whitespaces)
+                        .filter { !$0.isEmpty }
+                    guard parts.count >= 3,
+                          let pid = Int(parts[0]),
+                          let cpu = Double(parts[1]),
+                          let rssKB = Int(parts[2]),
+                          let name = pidToName[pid] else { continue }
+
+                    let memoryMB = rssKB / 1024
+                    updates[name] = ServerResources(cpuPercent: cpu, memoryMB: memoryMB)
+                }
+
+                DispatchQueue.main.async {
+                    guard let self = self else { return }
+                    // Only update if there are changes
+                    if self.serverResources != updates {
+                        self.serverResources = updates
+                    }
+                }
+            } catch {
+                // Silently ignore ps failures
+            }
+        }
+    }
+
+    // MARK: - Worktree Creation
+
+    func createWorktree(branch: String, baseBranch: String, repoPath: String, completion: @escaping (Result<String, Error>) -> Void) {
+        // Run grove worktree creation from the repo directory
+        runGroveInDirectory(repoPath, args: ["new", "--branch", branch, "--base", baseBranch]) { [weak self] result in
+            DispatchQueue.main.async {
+                switch result {
+                case .success(let output):
+                    self?.refresh()
+                    completion(.success(output))
+                case .failure(let error):
+                    completion(.failure(error))
+                }
+            }
+        }
+    }
+
+    /// Get unique main repo paths from current servers
+    var mainRepoPaths: [String] {
+        let repos = Set(servers.compactMap { $0.mainRepo })
+        return Array(repos).sorted()
+    }
+
+    // MARK: - Quick Command Runner
+
+    func runCommandInWorktree(serverName: String, command: String) {
+        guard let server = servers.first(where: { $0.name == serverName }) else { return }
+
+        // Save to recent commands
+        QuickCommandHistory.shared.addCommand(command, for: serverName)
+
+        // Open terminal with command
+        let path = server.path
+        PreferencesManager.shared.openInTerminalWithCommand(path: path, command: command)
     }
 
     // MARK: - Private
@@ -894,6 +1000,28 @@ class ServerManager: ObservableObject {
 
     var agentCount: Int {
         agents.count
+    }
+
+    /// Find the active agent for a given server (matched by path)
+    func agent(for server: Server) -> Agent? {
+        agents.first { $0.path == server.path }
+    }
+
+    /// Open the tool associated with an agent
+    func openAgent(_ agent: Agent) {
+        switch agent.type {
+        case "cursor":
+            let task = Process()
+            task.executableURL = URL(fileURLWithPath: "/usr/bin/env")
+            task.arguments = ["cursor", agent.path]
+            let pipe = Pipe()
+            task.standardOutput = pipe
+            task.standardError = pipe
+            try? task.run()
+        default:
+            // Claude, Gemini, etc. — open terminal at the worktree
+            PreferencesManager.shared.openInTerminal(path: agent.path)
+        }
     }
 
     private func fetchGitHubInfoForServers() {
@@ -1088,10 +1216,13 @@ class ServerManager: ObservableObject {
         task.standardOutput = pipe
         task.standardError = pipe
 
-        // Set up timeout
+        // Thread-safe timeout flag
+        let timedOutLock = NSLock()
         var timedOut = false
         let timeoutWorkItem = DispatchWorkItem {
+            timedOutLock.lock()
             timedOut = true
+            timedOutLock.unlock()
             print("[Grove] runProcessWithTimeout TIMEOUT after \(timeout)s: \(argsStr)")
             if task.isRunning {
                 task.terminate()
@@ -1106,20 +1237,26 @@ class ServerManager: ObservableObject {
             // Schedule timeout
             DispatchQueue.global().asyncAfter(deadline: .now() + timeout, execute: timeoutWorkItem)
 
+            // Read pipe data FIRST to prevent deadlock when output exceeds pipe buffer (~64KB)
+            print("[Grove] runProcessWithTimeout reading output...")
+            let data = pipe.fileHandleForReading.readDataToEndOfFile()
+
             task.waitUntilExit()
             print("[Grove] runProcessWithTimeout process exited in \(String(format: "%.3f", CFAbsoluteTimeGetCurrent() - processStart))s")
 
             // Cancel timeout if process finished in time
             timeoutWorkItem.cancel()
 
-            if timedOut {
+            timedOutLock.lock()
+            let didTimeout = timedOut
+            timedOutLock.unlock()
+
+            if didTimeout {
                 completion(.failure(NSError(domain: "GroveMenubar", code: -1,
                     userInfo: [NSLocalizedDescriptionKey: "Command timed out after \(Int(timeout)) seconds"])))
                 return
             }
 
-            print("[Grove] runProcessWithTimeout reading output...")
-            let data = pipe.fileHandleForReading.readDataToEndOfFile()
             let output = String(data: data, encoding: .utf8) ?? ""
             print("[Grove] runProcessWithTimeout got \(data.count) bytes, status=\(task.terminationStatus)")
 
@@ -1139,16 +1276,26 @@ class ServerManager: ObservableObject {
     /// Fast path lookup that doesn't spawn any processes - safe for main thread
     /// Uses UserDefaults cache to avoid repeated filesystem checks after wake
     private static func findGroveBinaryFast() -> String? {
-        // Check cache first - much faster than filesystem after wake
+        // Check custom path from preferences first
+        let customPath = PreferencesManager.shared.customGrovePath
+        if !customPath.isEmpty {
+            let expanded = NSString(string: customPath).expandingTildeInPath
+            if FileManager.default.fileExists(atPath: expanded) {
+                return expanded
+            }
+            // Custom path is set but invalid — still return nil so caller can surface error
+            return nil
+        }
+
+        // Check cache - much faster than filesystem after wake
         let cacheKey = "cachedGrovePath"
         if let cached = UserDefaults.standard.string(forKey: cacheKey),
            FileManager.default.fileExists(atPath: cached) {
             return cached
         }
 
+        // Common install locations as fallbacks
         let paths = [
-            "\(NSHomeDirectory())/development/claude-helper/cli/grove",
-            "\(NSHomeDirectory())/development/go/bin/grove",
             "/usr/local/bin/grove",
             "/opt/homebrew/bin/grove",
             "\(NSHomeDirectory())/go/bin/grove",
@@ -1164,5 +1311,29 @@ class ServerManager: ObservableObject {
         }
 
         return nil
+    }
+
+    /// Search PATH for grove binary using /usr/bin/which (runs a subprocess, use off main thread)
+    private static func findGroveBinaryViaWhich() -> String? {
+        let task = Process()
+        task.executableURL = URL(fileURLWithPath: "/usr/bin/which")
+        task.arguments = ["grove"]
+
+        let pipe = Pipe()
+        task.standardOutput = pipe
+        task.standardError = Pipe()
+
+        do {
+            try task.run()
+            task.waitUntilExit()
+
+            guard task.terminationStatus == 0 else { return nil }
+
+            let data = pipe.fileHandleForReading.readDataToEndOfFile()
+            let result = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines)
+            return result?.isEmpty == false ? result : nil
+        } catch {
+            return nil
+        }
     }
 }

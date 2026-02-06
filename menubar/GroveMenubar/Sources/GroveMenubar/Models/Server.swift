@@ -1,6 +1,28 @@
 import Foundation
 import SwiftUI
 
+// MARK: - Resource Monitoring
+
+struct ServerResources: Equatable {
+    let cpuPercent: Double
+    let memoryMB: Int
+
+    var cpuDisplay: String {
+        String(format: "%.0f%%", cpuPercent)
+    }
+
+    var memoryDisplay: String {
+        if memoryMB >= 1024 {
+            return String(format: "%.1fGB", Double(memoryMB) / 1024.0)
+        }
+        return "\(memoryMB)MB"
+    }
+
+    var summary: String {
+        "\(cpuDisplay) · \(memoryDisplay)"
+    }
+}
+
 // MARK: - GitHub Models
 
 struct GitHubInfo: Codable, Equatable {
@@ -8,6 +30,9 @@ struct GitHubInfo: Codable, Equatable {
     let prURL: String?
     let prState: String?
     let ciStatus: CIStatus
+    let reviewStatus: ReviewStatus?
+    let commentCount: Int
+    let hasMergeConflicts: Bool
     let lastUpdated: Date
 
     enum CIStatus: String, Codable {
@@ -35,11 +60,44 @@ struct GitHubInfo: Codable, Equatable {
         }
     }
 
+    enum ReviewStatus: String, Codable {
+        case approved = "APPROVED"
+        case changesRequested = "CHANGES_REQUESTED"
+        case pending = "PENDING"
+
+        var icon: String {
+            switch self {
+            case .approved: return "checkmark.seal.fill"
+            case .changesRequested: return "exclamationmark.bubble.fill"
+            case .pending: return "eyes"
+            }
+        }
+
+        var color: Color {
+            switch self {
+            case .approved: return .green
+            case .changesRequested: return .orange
+            case .pending: return .yellow
+            }
+        }
+
+        var label: String {
+            switch self {
+            case .approved: return "Approved"
+            case .changesRequested: return "Changes Requested"
+            case .pending: return "Review Pending"
+            }
+        }
+    }
+
     static let empty = GitHubInfo(
         prNumber: nil,
         prURL: nil,
         prState: nil,
         ciStatus: .unknown,
+        reviewStatus: nil,
+        commentCount: 0,
+        hasMergeConflicts: false,
         lastUpdated: Date()
     )
 }

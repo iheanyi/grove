@@ -29,6 +29,19 @@ enum ToastType {
             return msg
         }
     }
+
+    /// Duration in seconds before auto-dismiss
+    var duration: TimeInterval {
+        switch self {
+        case .error: return 5.0
+        case .success, .info: return 2.0
+        }
+    }
+
+    var isError: Bool {
+        if case .error = self { return true }
+        return false
+    }
 }
 
 // Environment key for toast notifications
@@ -57,6 +70,7 @@ extension EnvironmentValues {
 
 struct MenuView: View {
     @EnvironmentObject var serverManager: ServerManager
+    @ObservedObject private var preferences = PreferencesManager.shared
     @Environment(\.openWindow) private var openWindow
     @Environment(\.openSettings) private var openSettings
     @State private var selectedServerIndex: Int?
@@ -66,8 +80,14 @@ struct MenuView: View {
     @State private var showCopiedToast = false
     @State private var eventMonitor: Any?
     @State private var currentToast: ToastType?
+    @State private var toastDismissTask: Task<Void, Never>?
+    @State private var errorMessages: [String] = []
     @State private var isRefreshing = false
     @State private var isStoppedCollapsed = false
+    // Keyboard navigation
+    @State private var selectedNavIndex: Int? = nil
+    // Sound tracking - previous server statuses for change detection
+    @State private var previousServerStatuses: [String: String] = [:]
 
     var body: some View {
         mainMenuView
@@ -82,6 +102,50 @@ struct MenuView: View {
             server.name.localizedCaseInsensitiveContains(searchText) ||
             server.path.localizedCaseInsensitiveContains(searchText) ||
             (server.githubInfo?.prNumber.map { "#\($0)".contains(searchText) } ?? false)
+        }
+    }
+
+    // Pinned servers from filtered list
+    private var pinnedFilteredServers: [Server] {
+        filteredServers.filter { preferences.isServerPinned($0.name) }
+    }
+
+    // Non-pinned servers from filtered list
+    private var unpinnedFilteredServers: [Server] {
+        filteredServers.filter { !preferences.isServerPinned($0.name) }
+    }
+
+    // Flat list for keyboard navigation (pinned first, then rest)
+    private var navigableServers: [Server] {
+        pinnedFilteredServers + unpinnedFilteredServers
+    }
+
+    /// Check for server status changes and play sounds
+    private func checkSoundEffects() {
+        guard preferences.enableSounds else { return }
+        for server in serverManager.servers {
+            let prevStatus = previousServerStatuses[server.name]
+            let currentStatus = server.status
+            if let prev = prevStatus, prev != currentStatus {
+                if currentStatus == "running" && prev == "starting" {
+                    NSSound(named: "Glass")?.play()
+                } else if currentStatus == "crashed" {
+                    NSSound(named: "Basso")?.play()
+                }
+            }
+            previousServerStatuses[server.name] = currentStatus
+        }
+    }
+
+    /// Dismiss the current error and show the next one in the queue, if any
+    private func dismissCurrentError() {
+        if !errorMessages.isEmpty {
+            errorMessages.removeFirst()
+        }
+        if let next = errorMessages.first {
+            serverManager.error = next
+        } else {
+            serverManager.error = nil
         }
     }
 
@@ -120,7 +184,7 @@ struct MenuView: View {
             .padding(.horizontal)
             .padding(.vertical, 8)
 
-            // Error banner (if any)
+            // Error banner (shows most recent, with count if multiple)
             if let error = serverManager.error {
                 HStack(spacing: 6) {
                     Image(systemName: "exclamationmark.triangle.fill")
@@ -128,9 +192,20 @@ struct MenuView: View {
                     Text(error)
                         .font(.caption)
                         .lineLimit(2)
+
+                    if errorMessages.count > 1 {
+                        Text("+\(errorMessages.count - 1)")
+                            .font(.caption2)
+                            .foregroundColor(.yellow)
+                            .padding(.horizontal, 4)
+                            .padding(.vertical, 1)
+                            .background(Color.yellow.opacity(0.2))
+                            .cornerRadius(3)
+                    }
+
                     Spacer()
                     Button {
-                        serverManager.error = nil
+                        dismissCurrentError()
                     } label: {
                         Image(systemName: "xmark")
                             .font(.caption)
@@ -148,7 +223,7 @@ struct MenuView: View {
             HStack(spacing: 8) {
                 Image(systemName: "magnifyingglass")
                     .foregroundColor(.secondary)
-                    .font(.system(size: 12))
+                    .font(.system(size: 11))
 
                 TextField("Search servers...", text: $searchText)
                     .textFieldStyle(.plain)
@@ -161,106 +236,142 @@ struct MenuView: View {
                     } label: {
                         Image(systemName: "xmark.circle.fill")
                             .foregroundColor(.secondary)
-                            .font(.system(size: 12))
+                            .font(.system(size: 11))
                     }
                     .buttonStyle(.plain)
                 }
             }
             .padding(.horizontal, 10)
-            .padding(.vertical, 6)
-            .background(Color(NSColor.controlBackgroundColor))
+            .padding(.vertical, 5)
 
             Divider()
 
-            // Quick Actions Bar
-            HStack(spacing: 12) {
-                Button {
-                    serverManager.stopAllServers()
-                } label: {
-                    HStack(spacing: 4) {
-                        Image(systemName: "stop.fill")
-                        Text("Stop All")
-                            .font(.caption)
+            // Compact toolbar
+            HStack(spacing: 10) {
+                if serverManager.hasRunningServers {
+                    Button {
+                        serverManager.stopAllServers()
+                    } label: {
+                        HStack(spacing: 3) {
+                            Image(systemName: "stop.fill")
+                                .font(.system(size: 10))
+                            Text("Stop All")
+                                .font(.system(size: 10, weight: .medium))
+                        }
+                        .foregroundColor(.red.opacity(0.8))
                     }
-                }
-                .buttonStyle(.bordered)
-                .controlSize(.small)
-                .disabled(!serverManager.hasRunningServers)
-                .keyboardShortcut("s", modifiers: [.command, .shift])
+                    .buttonStyle(.plain)
+                    .keyboardShortcut("s", modifiers: [.command, .shift])
 
-                Button {
-                    serverManager.openAllRunningServers()
-                } label: {
-                    HStack(spacing: 4) {
-                        Image(systemName: "arrow.up.right.square")
-                        Text("Open All")
-                            .font(.caption)
+                    Button {
+                        serverManager.openAllRunningServers()
+                    } label: {
+                        HStack(spacing: 3) {
+                            Image(systemName: "arrow.up.right.square")
+                                .font(.system(size: 10))
+                            Text("Open All")
+                                .font(.system(size: 10, weight: .medium))
+                        }
+                        .foregroundColor(.secondary)
                     }
+                    .buttonStyle(.plain)
+                    .keyboardShortcut("o", modifiers: [.command, .shift])
                 }
-                .buttonStyle(.bordered)
-                .controlSize(.small)
-                .disabled(!serverManager.hasRunningServers)
-                .keyboardShortcut("o", modifiers: [.command, .shift])
-
-                Button {
-                    serverManager.refresh()
-                } label: {
-                    HStack(spacing: 4) {
-                        Image(systemName: "arrow.clockwise")
-                        Text("Refresh")
-                            .font(.caption)
-                    }
-                }
-                .buttonStyle(.bordered)
-                .controlSize(.small)
-                .keyboardShortcut("r", modifiers: .command)
 
                 Spacer()
 
                 Button {
-                    // Activate app to bring settings window to foreground
+                    serverManager.refresh()
+                } label: {
+                    Image(systemName: "arrow.clockwise")
+                        .font(.system(size: 11))
+                        .foregroundColor(.secondary)
+                }
+                .buttonStyle(.plain)
+                .keyboardShortcut("r", modifiers: .command)
+                .help("Refresh (⌘R)")
+
+                Button {
+                    NSApp.activate(ignoringOtherApps: true)
+                    openWindow(id: "log-viewer")
+                } label: {
+                    Image(systemName: "doc.text.magnifyingglass")
+                        .font(.system(size: 11))
+                        .foregroundColor(.secondary)
+                }
+                .buttonStyle(.plain)
+                .keyboardShortcut("l", modifiers: .command)
+                .help("View Logs (⌘L)")
+
+                Button {
+                    serverManager.openTUI()
+                } label: {
+                    Image(systemName: "terminal.fill")
+                        .font(.system(size: 11))
+                        .foregroundColor(.secondary)
+                }
+                .buttonStyle(.plain)
+                .help("Open TUI")
+
+                Button {
                     NSApp.activate(ignoringOtherApps: true)
                     openSettings()
                 } label: {
                     Image(systemName: "gear")
+                        .font(.system(size: 11))
+                        .foregroundColor(.secondary)
                 }
                 .buttonStyle(.plain)
                 .help("Settings (⌘,)")
             }
-            .padding(.horizontal)
-            .padding(.vertical, 6)
-            .background(Color(NSColor.controlBackgroundColor))
-
-            Divider()
-
-            // Active Agents Section
-            if !serverManager.agents.isEmpty {
-                AgentsSectionView()
-                Divider()
-            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 4)
 
             // Servers
             if serverManager.servers.isEmpty {
                 // Enhanced empty state with onboarding
                 VStack(spacing: 12) {
-                    Image(systemName: "bolt.badge.clock")
+                    Image(systemName: "tree.fill")
                         .font(.system(size: 36))
                         .foregroundColor(.grovePrimary.opacity(0.6))
 
-                    Text("No worktrees discovered")
+                    Text("No servers found")
                         .font(.headline)
                         .foregroundColor(.primary)
 
-                    Text("Get started with Grove")
+                    Text("Get started by running:")
                         .font(.subheadline)
                         .foregroundColor(.secondary)
 
-                    VStack(alignment: .leading, spacing: 8) {
-                        OnboardingStep(number: 1, text: "Navigate to your project directory")
-                        OnboardingStep(number: 2, text: "Run: grove start <command>")
-                        OnboardingStep(number: 3, text: "Or: grove discover --register")
+                    HStack(spacing: 8) {
+                        Text("grove discover --register")
+                            .font(.system(.caption, design: .monospaced))
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 6)
+                            .background(Color(NSColor.textBackgroundColor))
+                            .cornerRadius(6)
+
+                        Button {
+                            NSPasteboard.general.clearContents()
+                            NSPasteboard.general.setString("grove discover --register", forType: .string)
+                            withAnimation {
+                                currentToast = .success("Copied to clipboard")
+                                showCopiedToast = true
+                            }
+                        } label: {
+                            Image(systemName: "doc.on.doc")
+                                .font(.caption)
+                        }
+                        .buttonStyle(.bordered)
+                        .controlSize(.small)
+                        .help("Copy command")
                     }
-                    .padding(.vertical, 8)
+
+                    Text("This will find your git worktrees\nand register them with Grove.")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                        .multilineTextAlignment(.center)
+                        .padding(.top, 4)
 
                     Button {
                         serverManager.openTUI()
@@ -300,18 +411,37 @@ struct MenuView: View {
             } else {
                 ScrollView {
                     VStack(spacing: 0) {
+                        // Pinned servers section
+                        let pinned = pinnedFilteredServers
+                        if !pinned.isEmpty {
+                            SectionHeader(title: "Pinned", count: pinned.count)
+                            ForEach(Array(pinned.enumerated()), id: \.element.id) { index, server in
+                                let navIdx = index
+                                ServerRowView(
+                                    server: server,
+                                    searchText: searchText,
+                                    isPinned: true,
+                                    isNavSelected: selectedNavIndex == navIdx
+                                )
+                            }
+                        }
+
+                        // Non-pinned servers
+                        let unpinned = unpinnedFilteredServers
+                        let pinOffset = pinned.count
+
                         // Check if servers should be grouped
-                        let shouldGroup = ServerGrouper.shouldGroup(filteredServers)
+                        let shouldGroup = ServerGrouper.shouldGroup(unpinned)
                         if shouldGroup {
                             // Show grouped view
-                            let groups = ServerGrouper.groupServers(filteredServers)
+                            let groups = ServerGrouper.groupServers(unpinned)
                             ForEach(Array(groups.enumerated()), id: \.element.id) { index, group in
                                 ServerGroupView(group: group, searchText: searchText)
                                     .environment(\.groupIndex, index)
                             }
 
                             // Show "Remove All Stopped" if there are stopped servers in grouped view
-                            let stoppedInGroups = filteredServers.filter { !$0.isRunning }
+                            let stoppedInGroups = unpinned.filter { !$0.isRunning }
                             if !stoppedInGroups.isEmpty {
                                 Divider()
                                     .padding(.vertical, 4)
@@ -336,16 +466,22 @@ struct MenuView: View {
                         } else {
                             // Show simple running/stopped sections
                             // Running servers
-                            let running = filteredServers.filter { $0.isRunning }
+                            let running = unpinned.filter { $0.isRunning }
                             if !running.isEmpty {
                                 SectionHeader(title: "Running", count: running.count)
                                 ForEach(Array(running.enumerated()), id: \.element.id) { index, server in
-                                    ServerRowView(server: server, searchText: searchText, displayIndex: index + 1)
+                                    let navIdx = pinOffset + index
+                                    ServerRowView(
+                                        server: server,
+                                        searchText: searchText,
+                                        displayIndex: index + 1,
+                                        isNavSelected: selectedNavIndex == navIdx
+                                    )
                                 }
                             }
 
                             // Stopped servers (collapsible)
-                            let stopped = filteredServers.filter { !$0.isRunning }
+                            let stopped = unpinned.filter { !$0.isRunning }
                             if !stopped.isEmpty {
                                 SectionHeader(
                                     title: "Stopped",
@@ -357,8 +493,15 @@ struct MenuView: View {
                                 )
 
                                 if !isStoppedCollapsed {
+                                    let runningCount = running.count
                                     ForEach(Array(stopped.enumerated()), id: \.element.id) { index, server in
-                                        ServerRowView(server: server, searchText: searchText, displayIndex: running.count + index + 1)
+                                        let navIdx = pinOffset + runningCount + index
+                                        ServerRowView(
+                                            server: server,
+                                            searchText: searchText,
+                                            displayIndex: runningCount + index + 1,
+                                            isNavSelected: selectedNavIndex == navIdx
+                                        )
                                     }
                                 }
                             }
@@ -366,7 +509,7 @@ struct MenuView: View {
                     }
                     .environment(\.showCopiedToast, $showCopiedToast)
                 }
-                .frame(maxHeight: 300)
+                .frame(maxHeight: 450)
             }
 
             // Proxy status - only show in subdomain mode
@@ -378,40 +521,32 @@ struct MenuView: View {
                     .padding(.vertical, 8)
             }
 
+            // Footer
             Divider()
 
-            // Actions with keyboard hints
-            VStack(spacing: 2) {
-                ActionButton(
-                    title: "View Logs",
-                    icon: "doc.text.magnifyingglass",
-                    shortcut: "⌘L",
-                    action: {
-                        NSApp.activate(ignoringOtherApps: true)
-                        openWindow(id: "log-viewer")
-                    }
-                )
+            HStack {
+                // Keyboard hint
+                if !serverManager.servers.isEmpty {
+                    Text("j/k navigate · o open · ⌘F search")
+                        .font(.system(size: 9))
+                        .foregroundColor(.secondary.opacity(0.6))
+                }
 
-                ActionButton(
-                    title: "Open TUI",
-                    icon: "terminal.fill",
-                    action: serverManager.openTUI
-                )
+                Spacer()
 
-                Divider()
-                    .padding(.vertical, 4)
-
-                ActionButton(
-                    title: "Quit Grove",
-                    icon: "power",
-                    destructive: true,
-                    action: { NSApplication.shared.terminate(nil) }
-                )
+                Button {
+                    NSApplication.shared.terminate(nil)
+                } label: {
+                    Text("Quit")
+                        .font(.system(size: 11))
+                        .foregroundColor(.secondary)
+                }
+                .buttonStyle(.plain)
             }
-            .padding(.horizontal, 8)
-            .padding(.vertical, 8)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 6)
         }
-        .frame(width: 320)
+        .frame(width: 340)
         .overlay(alignment: .bottom) {
             // Toast overlay
             if showCopiedToast || currentToast != nil {
@@ -428,23 +563,127 @@ struct MenuView: View {
                 .background(.ultraThinMaterial)
                 .cornerRadius(10)
                 .shadow(color: .black.opacity(0.15), radius: 8, y: 4)
-                .padding(.bottom, 70)
+                .padding(.bottom, 40)
                 .transition(.move(edge: .bottom).combined(with: .opacity))
                 .animation(.spring(response: 0.3), value: showCopiedToast)
+                .onTapGesture {
+                    // Allow manual dismiss of any toast
+                    withAnimation {
+                        currentToast = nil
+                        showCopiedToast = false
+                    }
+                }
             }
         }
+        .onChange(of: currentToast?.message) {
+            // Schedule auto-dismiss with duration based on toast type
+            toastDismissTask?.cancel()
+            if let toast = currentToast {
+                toastDismissTask = Task {
+                    try? await Task.sleep(nanoseconds: UInt64(toast.duration * 1_000_000_000))
+                    if !Task.isCancelled {
+                        await MainActor.run {
+                            withAnimation {
+                                currentToast = nil
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        .onChange(of: serverManager.error) {
+            // Track errors in the queue
+            if let error = serverManager.error, !error.isEmpty {
+                errorMessages.append(error)
+            }
+        }
+        .onChange(of: serverManager.runningCount) {
+            checkSoundEffects()
+        }
+        .onChange(of: serverManager.hasCrashedServers) {
+            checkSoundEffects()
+        }
         .onAppear {
+            // Initialize previous statuses for sound tracking
+            for server in serverManager.servers {
+                previousServerStatuses[server.name] = server.status
+            }
+
             // Set up keyboard shortcuts handler (only once)
             guard eventMonitor == nil else { return }
             eventMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [self] event in
+                // Skip shortcuts when a text field has focus
+                let isTextFieldFocused = isSearchFocused || (NSApp.keyWindow?.firstResponder is NSTextView)
+
                 if event.modifierFlags.contains(.command) {
                     if event.charactersIgnoringModifiers == "f" {
                         isSearchFocused = true
                         return nil
                     }
                 }
-                // Number keys 1-9 for quick-start
-                if let chars = event.charactersIgnoringModifiers,
+
+                // j/k/Enter/o navigation (only when search isn't focused)
+                if !isTextFieldFocused {
+                    let chars = event.charactersIgnoringModifiers ?? ""
+                    let serverCount = navigableServers.count
+
+                    switch chars {
+                    case "j":
+                        // Move down
+                        if serverCount > 0 {
+                            if let idx = selectedNavIndex {
+                                selectedNavIndex = min(idx + 1, serverCount - 1)
+                            } else {
+                                selectedNavIndex = 0
+                            }
+                        }
+                        return nil
+                    case "k":
+                        // Move up
+                        if serverCount > 0 {
+                            if let idx = selectedNavIndex {
+                                selectedNavIndex = max(idx - 1, 0)
+                            } else {
+                                selectedNavIndex = serverCount - 1
+                            }
+                        }
+                        return nil
+                    case "o":
+                        // Open in browser
+                        if let idx = selectedNavIndex, idx < navigableServers.count {
+                            let server = navigableServers[idx]
+                            if server.isRunning {
+                                serverManager.openServer(server)
+                            }
+                        }
+                        return nil
+                    default:
+                        break
+                    }
+
+                    // Enter key
+                    if event.keyCode == 36 {
+                        if let idx = selectedNavIndex, idx < navigableServers.count {
+                            let server = navigableServers[idx]
+                            if server.isRunning {
+                                serverManager.openServer(server)
+                            } else if server.displayStatus == "stopped" && server.hasServer == true {
+                                serverManager.startServer(server)
+                            }
+                        }
+                        return nil
+                    }
+
+                    // Escape clears selection
+                    if event.keyCode == 53 {
+                        selectedNavIndex = nil
+                        return nil
+                    }
+                }
+
+                // Number keys 1-9 for quick-start (only when no text field is focused)
+                if !isTextFieldFocused,
+                   let chars = event.charactersIgnoringModifiers,
                    let num = Int(chars),
                    num >= 1 && num <= 9 {
                     let servers = filteredServers.filter { $0.isRunning || ($0.displayStatus == "stopped" && $0.hasServer == true) }
@@ -467,6 +706,7 @@ struct MenuView: View {
                 NSEvent.removeMonitor(monitor)
                 eventMonitor = nil
             }
+            selectedNavIndex = nil
         }
     }
 }
@@ -491,9 +731,15 @@ struct SectionHeader: View {
     var body: some View {
         HStack {
             HStack(spacing: 6) {
-                Circle()
-                    .fill(title == "Running" ? Color.green : Color.gray.opacity(0.5))
-                    .frame(width: 6, height: 6)
+                if title == "Pinned" {
+                    Image(systemName: "star.fill")
+                        .foregroundColor(.yellow)
+                        .font(.system(size: 8))
+                } else {
+                    Circle()
+                        .fill(title == "Running" ? Color.green : Color.gray.opacity(0.5))
+                        .frame(width: 6, height: 6)
+                }
                 Text(title.uppercased())
                     .font(.caption.weight(.medium))
                     .foregroundColor(.secondary)
@@ -547,6 +793,8 @@ struct ServerRowView: View {
     let server: Server
     var searchText: String = ""
     var displayIndex: Int?
+    var isPinned: Bool = false
+    var isNavSelected: Bool = false
     @State private var isExpanded = false
     @State private var isHovered = false
     @Environment(\.showCopiedToast) private var showCopiedToast
@@ -569,13 +817,45 @@ struct ServerRowView: View {
         return server.statusColor
     }
 
+    /// Returns an SF Symbol name that conveys status through shape (accessibility for color-blind users)
+    private var statusSymbol: String {
+        if server.isRunning {
+            let health = serverManager.healthStatus(for: server)
+            switch health {
+            case .healthy:
+                return "checkmark.circle.fill"
+            case .unhealthy:
+                return "xmark.circle.fill"
+            case .unknown:
+                return "circle.fill"
+            }
+        }
+        switch server.displayStatus {
+        case "crashed":
+            return "exclamationmark.triangle.fill"
+        case "starting":
+            return "circle.dotted"
+        default:
+            return "circle"
+        }
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             // Main row content
             HStack(spacing: 8) {
-                // Status indicator (shows orange if running but unhealthy)
-                Circle()
-                    .fill(effectiveStatusColor)
+                // Pin indicator
+                if isPinned {
+                    Image(systemName: "star.fill")
+                        .foregroundColor(.yellow)
+                        .font(.system(size: 8))
+                        .frame(width: 8)
+                }
+
+                // Status indicator with shape variation for accessibility
+                Image(systemName: statusSymbol)
+                    .foregroundColor(effectiveStatusColor)
+                    .font(.system(size: 8))
                     .frame(width: 8, height: 8)
 
                 // Display index for keyboard shortcuts
@@ -589,9 +869,17 @@ struct ServerRowView: View {
                 // Server info
                 VStack(alignment: .leading, spacing: 2) {
                     HStack(spacing: 6) {
-                        Text(server.displayName)
-                            .font(.system(.body, design: .monospaced))
-                            .lineLimit(1)
+                        HStack(spacing: 2) {
+                            Text(server.displayName)
+                                .font(.system(.body, design: .monospaced))
+                                .lineLimit(1)
+
+                            if preferences.showPort, let port = server.port, port > 0 {
+                                Text(":\(String(port))")
+                                    .font(.system(.caption, design: .monospaced))
+                                    .foregroundColor(.grovePrimary)
+                            }
+                        }
 
                         if preferences.showUptime, let uptime = server.formattedUptime, server.isRunning {
                             Text(uptime)
@@ -646,13 +934,29 @@ struct ServerRowView: View {
                                 .help(ciStatusHelp(github.ciStatus))
                             }
                         }
+
+                        // Agent badge
+                        if let agent = serverManager.agent(for: server) {
+                            Image(systemName: agent.iconName)
+                                .font(.system(size: 9))
+                                .foregroundColor(.purple)
+                                .help("\(agent.displayType) active")
+                        }
+
+                        // Git dirty indicator
+                        if server.gitDirty == true {
+                            Circle()
+                                .fill(Color.orange)
+                                .frame(width: 5, height: 5)
+                                .help("Uncommitted changes")
+                        }
                     }
 
-                    if preferences.showPort, let port = server.port, port > 0 {
-                        Text(":\(String(port))")
-                            .font(.system(.callout, design: .monospaced))
-                            .foregroundColor(.grovePrimary)
-                            .fontWeight(.medium)
+                    // Resource usage hint for running servers
+                    if server.isRunning, let resources = serverManager.serverResources[server.name] {
+                        Text(resources.summary)
+                            .font(.system(size: 9, design: .monospaced))
+                            .foregroundColor(.secondary.opacity(0.8))
                     }
                 }
 
@@ -779,13 +1083,129 @@ struct ServerRowView: View {
                     .fixedSize()
                 }
                 .padding(.horizontal, 12)
-                .padding(.bottom, 10)
-                .transition(.opacity.combined(with: .move(edge: .top)))
+                .padding(.bottom, 8)
+
+                // Resource usage (running servers)
+                if server.isRunning, let resources = serverManager.serverResources[server.name] {
+                    HStack(spacing: 14) {
+                        HStack(spacing: 4) {
+                            Image(systemName: "cpu")
+                                .font(.system(size: 9))
+                                .foregroundColor(.secondary)
+                            Text(resources.cpuDisplay)
+                                .font(.system(size: 10, design: .monospaced))
+                        }
+                        HStack(spacing: 4) {
+                            Image(systemName: "memorychip")
+                                .font(.system(size: 9))
+                                .foregroundColor(.secondary)
+                            Text(resources.memoryDisplay)
+                                .font(.system(size: 10, design: .monospaced))
+                        }
+                    }
+                    .padding(.horizontal, 12)
+                    .padding(.bottom, 6)
+                }
+
+                // Rich GitHub details
+                if let github = server.githubInfo, github.prNumber != nil {
+                    HStack(spacing: 8) {
+                        if let review = github.reviewStatus {
+                            HStack(spacing: 3) {
+                                Image(systemName: review.icon)
+                                    .font(.system(size: 9))
+                                Text(review.label)
+                                    .font(.system(size: 10))
+                            }
+                            .foregroundColor(review.color)
+                        }
+
+                        if github.commentCount > 0 {
+                            HStack(spacing: 3) {
+                                Image(systemName: "bubble.left")
+                                    .font(.system(size: 9))
+                                Text("\(github.commentCount)")
+                                    .font(.system(size: 10))
+                            }
+                            .foregroundColor(.secondary)
+                        }
+
+                        if github.hasMergeConflicts {
+                            HStack(spacing: 3) {
+                                Image(systemName: "exclamationmark.triangle.fill")
+                                    .font(.system(size: 9))
+                                Text("Conflicts")
+                                    .font(.system(size: 10))
+                            }
+                            .foregroundColor(.red)
+                        }
+                    }
+                    .padding(.horizontal, 12)
+                    .padding(.bottom, 6)
+                }
+
+                // Active agent in this worktree
+                if let agent = serverManager.agent(for: server) {
+                    HStack(spacing: 8) {
+                        Image(systemName: agent.iconName)
+                            .font(.system(size: 10))
+                            .foregroundColor(.purple)
+
+                        VStack(alignment: .leading, spacing: 1) {
+                            Text(agent.displayType)
+                                .font(.system(size: 10, weight: .medium))
+                            if let task = agent.shortTaskDisplay {
+                                Text(task)
+                                    .font(.system(size: 9, design: .monospaced))
+                                    .foregroundColor(.orange)
+                                    .lineLimit(1)
+                            }
+                        }
+
+                        if let duration = agent.duration {
+                            Text(duration)
+                                .font(.system(size: 9, design: .monospaced))
+                                .foregroundColor(.secondary)
+                        }
+
+                        Spacer()
+
+                        // Only show "Open" for agents with launchable editors (e.g. Cursor)
+                        if agent.type == "cursor" {
+                            Button {
+                                serverManager.openAgent(agent)
+                            } label: {
+                                HStack(spacing: 3) {
+                                    Image(systemName: "arrow.up.forward.app")
+                                        .font(.system(size: 9))
+                                    Text("Open")
+                                        .font(.system(size: 10))
+                                }
+                                .foregroundColor(.purple)
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 6)
+                    .background(Color.purple.opacity(0.06))
+                    .cornerRadius(4)
+                    .padding(.horizontal, 8)
+                    .padding(.bottom, 8)
+                }
             }
         }
         .background(
             RoundedRectangle(cornerRadius: 6)
-                .fill(isExpanded ? Color.grovePrimary.opacity(0.08) : (isHovered ? Color.grovePrimary.opacity(0.04) : Color.clear))
+                .fill(
+                    isNavSelected ? Color.grovePrimary.opacity(0.15) :
+                    (isExpanded ? Color.grovePrimary.opacity(0.08) :
+                    (isHovered ? Color.grovePrimary.opacity(0.04) : Color.clear))
+                )
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 6)
+                .strokeBorder(isNavSelected ? Color.grovePrimary.opacity(0.4) : Color.clear, lineWidth: 1)
         )
         .onHover { hovering in
             withAnimation(.easeInOut(duration: 0.15)) {
@@ -793,6 +1213,18 @@ struct ServerRowView: View {
             }
         }
         .contextMenu {
+            // Pin/Unpin toggle
+            Button {
+                preferences.togglePinned(server.name)
+            } label: {
+                Label(
+                    preferences.isServerPinned(server.name) ? "Unpin" : "Pin",
+                    systemImage: preferences.isServerPinned(server.name) ? "star.slash" : "star"
+                )
+            }
+
+            Divider()
+
             if server.isRunning {
                 Button {
                     serverManager.openServer(server)
@@ -1045,9 +1477,9 @@ struct ServerDetailPopover: View {
         VStack(alignment: .leading, spacing: 12) {
             // Header with full name
             HStack {
-                Circle()
-                    .fill(server.statusColor)
-                    .frame(width: 10, height: 10)
+                Image(systemName: server.isRunning ? "checkmark.circle.fill" : (server.displayStatus == "crashed" ? "exclamationmark.triangle.fill" : "circle"))
+                    .foregroundColor(server.statusColor)
+                    .font(.system(size: 10))
 
                 Text(server.displayName)
                     .font(.system(.headline, design: .monospaced))
@@ -1162,158 +1594,6 @@ struct DetailRow: View {
                     .lineLimit(1)
             }
         }
-    }
-}
-
-// MARK: - Agents Section
-
-struct AgentsSectionView: View {
-    @EnvironmentObject var serverManager: ServerManager
-    @State private var isCollapsed = false
-
-    var body: some View {
-        VStack(spacing: 0) {
-            // Section header
-            HStack {
-                HStack(spacing: 6) {
-                    Image(systemName: "brain.head.profile")
-                        .foregroundColor(.purple)
-                        .font(.system(size: 10))
-                    Text("ACTIVE AGENTS")
-                        .font(.caption.weight(.medium))
-                        .foregroundColor(.secondary)
-                }
-                Spacer()
-                Text("\(serverManager.agents.count)")
-                    .font(.caption.weight(.semibold))
-                    .foregroundColor(.secondary)
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 2)
-                    .background(Color.purple.opacity(0.15))
-                    .cornerRadius(4)
-
-                Image(systemName: isCollapsed ? "chevron.right" : "chevron.down")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-            }
-            .padding(.horizontal)
-            .padding(.vertical, 6)
-            .background(Color(NSColor.windowBackgroundColor).opacity(0.6))
-            .contentShape(Rectangle())
-            .onTapGesture {
-                withAnimation(.easeInOut(duration: 0.2)) {
-                    isCollapsed.toggle()
-                }
-            }
-
-            if !isCollapsed {
-                ForEach(serverManager.agents) { agent in
-                    AgentRowView(agent: agent)
-                }
-            }
-        }
-    }
-}
-
-struct AgentRowView: View {
-    let agent: Agent
-    @State private var isHovered = false
-
-    var body: some View {
-        HStack(spacing: 8) {
-            // Agent type icon
-            Image(systemName: agent.iconName)
-                .foregroundColor(.purple)
-                .font(.system(size: 12))
-                .frame(width: 16)
-
-            VStack(alignment: .leading, spacing: 2) {
-                HStack(spacing: 6) {
-                    Text(agent.displayType)
-                        .font(.system(.body, design: .default))
-                        .fontWeight(.medium)
-                        .lineLimit(1)
-
-                    if let duration = agent.duration {
-                        Text(duration)
-                            .font(.caption2)
-                            .foregroundColor(.secondary)
-                            .padding(.horizontal, 4)
-                            .padding(.vertical, 1)
-                            .background(Color.secondary.opacity(0.1))
-                            .cornerRadius(3)
-                    }
-                }
-
-                // Show task if present, otherwise show worktree/branch
-                if let task = agent.shortTaskDisplay {
-                    HStack(spacing: 4) {
-                        Image(systemName: "checklist")
-                            .font(.system(size: 9))
-                            .foregroundColor(.orange)
-                        Text(task)
-                            .font(.system(.caption, design: .monospaced))
-                            .foregroundColor(.orange)
-                            .lineLimit(1)
-                    }
-                } else {
-                    HStack(spacing: 4) {
-                        Text(agent.worktree)
-                            .font(.system(.caption, design: .monospaced))
-                            .foregroundColor(.secondary)
-                        Text("•")
-                            .foregroundColor(.secondary.opacity(0.5))
-                        Text(agent.branch)
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                    }
-                }
-            }
-
-            Spacer()
-
-            // PID badge (use String() to avoid locale comma formatting)
-            Text("PID " + String(agent.pid))
-                .font(.system(size: 9, design: .monospaced))
-                .foregroundColor(.secondary)
-                .padding(.horizontal, 4)
-                .padding(.vertical, 2)
-                .background(Color.secondary.opacity(0.1))
-                .cornerRadius(3)
-        }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
-        .background(
-            RoundedRectangle(cornerRadius: 6)
-                .fill(isHovered ? Color.purple.opacity(0.08) : Color.clear)
-        )
-        .onHover { hovering in
-            withAnimation(.easeInOut(duration: 0.15)) {
-                isHovered = hovering
-            }
-        }
-        .contextMenu {
-            Button {
-                NSWorkspace.shared.selectFile(nil, inFileViewerRootedAtPath: agent.path)
-            } label: {
-                Label("Open in Finder", systemImage: "folder")
-            }
-
-            Button {
-                // Open path in terminal
-                PreferencesManager.shared.openInTerminal(path: agent.path)
-            } label: {
-                Label("Open in Terminal", systemImage: "terminal")
-            }
-
-            Button {
-                NSPasteboard.general.clearContents()
-                NSPasteboard.general.setString(agent.path, forType: .string)
-            } label: {
-                Label("Copy Path", systemImage: "doc.on.doc")
-            }
-        }
-        .help(agent.taskSummary ?? "Working in \(agent.worktree)")
     }
 }
 

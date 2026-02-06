@@ -4,36 +4,8 @@ import SwiftUI
 struct LogViewerWindow: View {
     @EnvironmentObject var serverManager: ServerManager
     @State private var selectedServerName: String?
-    @State private var autoScroll = true
-    @State private var searchText = ""
-    @State private var selectedLogLevel: LogLevel? = nil
-    @State private var showLineNumbers = true
-    @State private var fontSize: Double = 11
-
-    enum LogLevel: String, CaseIterable {
-        case error = "ERROR"
-        case warn = "WARN"
-        case info = "INFO"
-        case debug = "DEBUG"
-
-        var color: Color {
-            switch self {
-            case .error: return .red
-            case .warn: return .orange
-            case .info: return .blue
-            case .debug: return .gray
-            }
-        }
-
-        var icon: String {
-            switch self {
-            case .error: return "exclamationmark.triangle.fill"
-            case .warn: return "exclamationmark.circle.fill"
-            case .info: return "info.circle.fill"
-            case .debug: return "ant.circle.fill"
-            }
-        }
-    }
+    @State private var isSplitView = false
+    @State private var splitRightServerName: String?
 
     var body: some View {
         HSplitView {
@@ -42,7 +14,14 @@ struct LogViewerWindow: View {
                 .frame(minWidth: 180, idealWidth: 200, maxWidth: 250)
 
             // Main Content - Logs
-            logContent
+            if isSplitView {
+                splitLogContent
+            } else {
+                LogPaneView(
+                    servers: serverManager.servers,
+                    selectedServerName: $selectedServerName
+                )
+            }
         }
         .frame(minWidth: 800, minHeight: 500)
         .onAppear {
@@ -52,9 +31,38 @@ struct LogViewerWindow: View {
                     selectedServerName = current.name
                 } else if let running = serverManager.servers.first(where: { $0.isRunning }) {
                     selectedServerName = running.name
-                    if let server = serverManager.servers.first(where: { $0.name == running.name }) {
-                        serverManager.startStreamingLogs(for: server)
-                    }
+                    serverManager.startStreamingLogs(for: running)
+                }
+            }
+        }
+    }
+
+    // MARK: - Split Log Content
+
+    private var splitLogContent: some View {
+        HSplitView {
+            LogPaneView(
+                servers: serverManager.servers,
+                selectedServerName: $selectedServerName,
+                isCompact: true
+            )
+            .frame(minWidth: 300)
+
+            Divider()
+
+            LogPaneView(
+                servers: serverManager.servers,
+                selectedServerName: $splitRightServerName,
+                isCompact: true
+            )
+            .frame(minWidth: 300)
+        }
+        .onAppear {
+            // Default the right pane to the second running server
+            if splitRightServerName == nil {
+                let running = serverManager.servers.filter { $0.isRunning }
+                if running.count > 1 {
+                    splitRightServerName = running[1].name
                 }
             }
         }
@@ -70,6 +78,15 @@ struct LogViewerWindow: View {
                     .font(.headline)
                     .foregroundColor(.secondary)
                 Spacer()
+
+                // Split view toggle
+                Toggle(isOn: $isSplitView) {
+                    Image(systemName: "rectangle.split.2x1")
+                }
+                .toggleStyle(.button)
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+                .help("Toggle split view")
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 10)
@@ -107,364 +124,6 @@ struct LogViewerWindow: View {
             .background(Color(NSColor.windowBackgroundColor))
         }
         .background(Color(NSColor.controlBackgroundColor))
-    }
-
-    // MARK: - Log Content
-
-    private var logContent: some View {
-        VStack(spacing: 0) {
-            // Toolbar
-            logToolbar
-
-            Divider()
-
-            // Search and filter bar
-            searchAndFilterBar
-
-            Divider()
-
-            // Log content
-            if selectedServerName != nil {
-                logScrollView
-            } else {
-                emptyState
-            }
-
-            Divider()
-
-            // Status bar
-            statusBar
-        }
-    }
-
-    private var logToolbar: some View {
-        HStack(spacing: 12) {
-            if let serverName = selectedServerName,
-               let server = serverManager.servers.first(where: { $0.name == serverName }) {
-                // Server info
-                HStack(spacing: 8) {
-                    Circle()
-                        .fill(server.statusColor)
-                        .frame(width: 8, height: 8)
-
-                    Text(server.name)
-                        .font(.headline)
-                        .lineLimit(1)
-                        .truncationMode(.middle)
-                        .help(server.name)
-
-                    if server.isRunning, let port = server.port {
-                        Text(":\(String(port))")
-                            .font(.system(.subheadline, design: .monospaced))
-                            .foregroundColor(.grovePrimary)
-                    }
-                }
-            }
-
-            Spacer()
-
-            // Toggle controls
-            HStack(spacing: 8) {
-                Toggle(isOn: $autoScroll) {
-                    Label("Auto-scroll", systemImage: "arrow.down.to.line")
-                }
-                .toggleStyle(.button)
-                .buttonStyle(.bordered)
-                .controlSize(.small)
-
-                Toggle(isOn: $showLineNumbers) {
-                    Label("Lines", systemImage: "list.number")
-                }
-                .toggleStyle(.button)
-                .buttonStyle(.bordered)
-                .controlSize(.small)
-
-                // Font size
-                Menu {
-                    ForEach([9, 10, 11, 12, 13, 14], id: \.self) { size in
-                        Button("\(size) pt") {
-                            fontSize = Double(size)
-                        }
-                    }
-                } label: {
-                    Label("\(Int(fontSize))", systemImage: "textformat.size")
-                }
-                .menuIndicator(.hidden)
-                .fixedSize()
-            }
-
-            Divider()
-                .frame(height: 20)
-
-            // Actions
-            HStack(spacing: 8) {
-                Button {
-                    copyAllLogs()
-                } label: {
-                    Label("Copy", systemImage: "doc.on.doc")
-                }
-                .buttonStyle(.bordered)
-                .controlSize(.small)
-
-                Button {
-                    serverManager.clearLogs()
-                } label: {
-                    Label("Clear", systemImage: "trash")
-                }
-                .buttonStyle(.bordered)
-                .controlSize(.small)
-
-                if let serverName = selectedServerName,
-                   let server = serverManager.servers.first(where: { $0.name == serverName }) {
-                    Button {
-                        serverManager.openLogsInFinder(server)
-                    } label: {
-                        Label("Reveal", systemImage: "folder")
-                    }
-                    .buttonStyle(.bordered)
-                    .controlSize(.small)
-                }
-            }
-        }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 10)
-        .background(Color(NSColor.windowBackgroundColor))
-    }
-
-    private var searchAndFilterBar: some View {
-        HStack(spacing: 12) {
-            // Search field
-            HStack {
-                Image(systemName: "magnifyingglass")
-                    .foregroundColor(.secondary)
-                TextField("Search logs...", text: $searchText)
-                    .textFieldStyle(.plain)
-                if !searchText.isEmpty {
-                    Button {
-                        searchText = ""
-                    } label: {
-                        Image(systemName: "xmark.circle.fill")
-                            .foregroundColor(.secondary)
-                    }
-                    .buttonStyle(.plain)
-                }
-            }
-            .padding(8)
-            .background(Color(NSColor.controlBackgroundColor))
-            .cornerRadius(8)
-            .frame(maxWidth: 300)
-
-            // Log level filters
-            HStack(spacing: 6) {
-                ForEach(LogLevel.allCases, id: \.self) { level in
-                    Button {
-                        if selectedLogLevel == level {
-                            selectedLogLevel = nil
-                        } else {
-                            selectedLogLevel = level
-                        }
-                    } label: {
-                        HStack(spacing: 4) {
-                            Image(systemName: level.icon)
-                                .font(.system(size: 10))
-                            Text(level.rawValue)
-                                .font(.caption)
-                        }
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 5)
-                        .background(selectedLogLevel == level ? level.color.opacity(0.2) : Color.clear)
-                        .foregroundColor(selectedLogLevel == level ? level.color : .secondary)
-                        .cornerRadius(6)
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 6)
-                                .stroke(selectedLogLevel == level ? level.color : Color.secondary.opacity(0.3), lineWidth: 1)
-                        )
-                    }
-                    .buttonStyle(.plain)
-                }
-            }
-
-            Spacer()
-
-            // Match count
-            if !searchText.isEmpty {
-                Text("\(filteredLogs.count) matches")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
-                    .background(Color.secondary.opacity(0.1))
-                    .cornerRadius(4)
-            }
-        }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 8)
-        .background(Color(NSColor.windowBackgroundColor).opacity(0.5))
-    }
-
-    private var logScrollView: some View {
-        ScrollViewReader { proxy in
-            ScrollView {
-                LazyVStack(alignment: .leading, spacing: 0) {
-                    ForEach(Array(filteredLogs.enumerated()), id: \.offset) { index, line in
-                        LogLineRow(
-                            line: line.text,
-                            lineNumber: showLineNumbers ? line.originalIndex + 1 : nil,
-                            fontSize: fontSize,
-                            searchText: searchText
-                        )
-                        .id(index)
-                    }
-                }
-                .padding(.horizontal, 12)
-                .padding(.vertical, 8)
-            }
-            .onChange(of: serverManager.logLines.count) { oldCount, newCount in
-                if autoScroll && newCount > oldCount, let lastIndex = filteredLogs.indices.last {
-                    withAnimation(.easeOut(duration: 0.1)) {
-                        proxy.scrollTo(lastIndex, anchor: .bottom)
-                    }
-                }
-            }
-        }
-        .background(Color(NSColor.textBackgroundColor))
-    }
-
-    private var emptyState: some View {
-        VStack(spacing: 16) {
-            Image(systemName: "doc.text.magnifyingglass")
-                .font(.system(size: 48))
-                .foregroundColor(.secondary.opacity(0.5))
-
-            Text("No Server Selected")
-                .font(.title2)
-                .foregroundColor(.secondary)
-
-            Text("Select a server from the sidebar to view its logs")
-                .font(.subheadline)
-                .foregroundColor(.secondary.opacity(0.8))
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color(NSColor.textBackgroundColor))
-    }
-
-    private var statusBar: some View {
-        HStack {
-            if serverManager.isStreamingLogs {
-                HStack(spacing: 6) {
-                    Circle()
-                        .fill(.green)
-                        .frame(width: 6, height: 6)
-                    Text("Live")
-                        .font(.caption)
-                        .foregroundColor(.green)
-                }
-                .padding(.horizontal, 8)
-                .padding(.vertical, 3)
-                .background(Color.green.opacity(0.1))
-                .cornerRadius(4)
-            } else {
-                HStack(spacing: 6) {
-                    Circle()
-                        .fill(.gray)
-                        .frame(width: 6, height: 6)
-                    Text("Paused")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                }
-            }
-
-            Spacer()
-
-            Text("\(filteredLogs.count) of \(serverManager.logLines.count) lines")
-                .font(.caption)
-                .foregroundColor(.secondary)
-        }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 6)
-        .background(Color(NSColor.windowBackgroundColor))
-    }
-
-    // MARK: - Computed Properties
-
-    private var filteredLogs: [(text: String, originalIndex: Int)] {
-        var logs = serverManager.logLines.enumerated().map { (text: $0.element, originalIndex: $0.offset) }
-
-        if !searchText.isEmpty {
-            logs = logs.filter { $0.text.localizedCaseInsensitiveContains(searchText) }
-        }
-
-        if let level = selectedLogLevel {
-            logs = logs.filter { line in
-                matchesLogLevel(line.text, level: level)
-            }
-        }
-
-        return logs
-    }
-
-    /// Matches log lines against log level filters, including Rails-specific patterns
-    private func matchesLogLevel(_ text: String, level: LogLevel) -> Bool {
-        let upperText = text.uppercased()
-
-        switch level {
-        case .error:
-            // Explicit error markers
-            if upperText.contains("ERROR") || upperText.contains("FATAL") ||
-               upperText.contains("CRITICAL") || upperText.contains("EXCEPTION") {
-                return true
-            }
-            // Rails error patterns
-            if text.contains("Completed 5") ||  // 5xx status codes
-               text.contains("ActionController::RoutingError") ||
-               text.contains("ActiveRecord::") && upperText.contains("ERROR") {
-                return true
-            }
-            return false
-
-        case .warn:
-            if upperText.contains("WARN") || upperText.contains("WARNING") ||
-               upperText.contains("DEPRECAT") {
-                return true
-            }
-            // Rails 4xx responses (client errors, often worth noting)
-            if text.contains("Completed 4") {
-                return true
-            }
-            return false
-
-        case .info:
-            if upperText.contains("INFO") {
-                return true
-            }
-            // Rails request lifecycle
-            if text.contains("Started ") || text.contains("Processing by") ||
-               text.contains("Completed 2") || text.contains("Completed 3") ||
-               text.contains("Rendered ") {
-                return true
-            }
-            return false
-
-        case .debug:
-            if upperText.contains("DEBUG") || upperText.contains("TRACE") {
-                return true
-            }
-            // SQL queries, cache hits, etc.
-            if text.contains("SELECT ") || text.contains("INSERT ") ||
-               text.contains("UPDATE ") || text.contains("DELETE ") ||
-               text.contains("Cache") {
-                return true
-            }
-            return false
-        }
-    }
-
-    // MARK: - Actions
-
-    private func copyAllLogs() {
-        let allLogs = serverManager.logLines.joined(separator: "\n")
-        NSPasteboard.general.clearContents()
-        NSPasteboard.general.setString(allLogs, forType: .string)
     }
 }
 
@@ -553,13 +212,10 @@ struct LogLineRow: View {
 
         // Additionally highlight search matches
         if !searchText.isEmpty {
-            // Use localizedCaseInsensitiveContains to find the match, then use NSRange for safe index handling
             if let range = line.range(of: searchText, options: .caseInsensitive) {
-                // Convert String range to AttributedString range safely
                 let startOffset = line.distance(from: line.startIndex, to: range.lowerBound)
                 let length = line.distance(from: range.lowerBound, to: range.upperBound)
 
-                // Get the AttributedString start index and apply offset
                 var currentIndex = result.startIndex
                 for _ in 0..<startOffset {
                     guard currentIndex < result.endIndex else { break }

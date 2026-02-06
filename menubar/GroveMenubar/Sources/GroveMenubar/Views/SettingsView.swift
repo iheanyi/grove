@@ -54,6 +54,9 @@ struct GeneralSettingsTab: View {
                 Toggle("Show port number", isOn: $preferences.showPort)
                     .help("Shows the port number below each server name")
 
+                Toggle("Show server count in menubar", isOn: $preferences.showServerCount)
+                    .help("Shows running/total count next to the menubar icon")
+
                 LabeledContent("Refresh interval") {
                     Picker("", selection: Binding(
                         get: { Int(preferences.refreshInterval) },
@@ -100,6 +103,15 @@ struct GeneralSettingsTab: View {
                 }
                 .help(preferences.menubarScope.description)
             }
+
+            Section {
+                LabeledContent("Grove CLI path") {
+                    TextField("Auto-detect", text: $preferences.customGrovePath)
+                        .textFieldStyle(.roundedBorder)
+                        .frame(width: 220)
+                }
+                .help("Leave empty to auto-detect. Set a custom path if grove is installed in a non-standard location.")
+            }
         }
         .formStyle(.grouped)
         .padding()
@@ -119,6 +131,13 @@ struct NotificationsSettingsTab: View {
                 Toggle("Server crashed", isOn: $preferences.notifyOnServerCrash)
             } header: {
                 Text("Show notifications when:")
+            }
+
+            Section {
+                Toggle("Sound effects", isOn: $preferences.enableSounds)
+                    .help("Play subtle sounds when servers start or crash")
+            } header: {
+                Text("Sounds")
             }
 
             Section {
@@ -164,16 +183,39 @@ struct AppearanceSettingsTab: View {
 // MARK: - Shortcuts Settings
 
 struct ShortcutsSettingsTab: View {
+    @AppStorage("globalHotkeyEnabled") private var globalHotkeyEnabled = true
+
     var body: some View {
         Form {
             Section {
-                ShortcutInfoRow(shortcut: "1-9", description: "Quick select server by position")
+                HStack {
+                    Toggle("Global hotkey", isOn: $globalHotkeyEnabled)
+                    Spacer()
+                    Text("⌃G")
+                        .font(.system(.body, design: .monospaced))
+                        .foregroundColor(.secondary)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(Color.secondary.opacity(0.1))
+                        .cornerRadius(4)
+                }
+                .help("Toggle the Grove menubar panel from anywhere")
+            } header: {
+                Text("Global Hotkey")
+            }
+
+            Section {
+                ShortcutInfoRow(shortcut: "1-9", description: "Open/start server by position")
                 ShortcutInfoRow(shortcut: "⌘F", description: "Focus search field")
                 ShortcutInfoRow(shortcut: "⌘R", description: "Refresh server list")
                 ShortcutInfoRow(shortcut: "⌘⇧S", description: "Stop all servers")
                 ShortcutInfoRow(shortcut: "⌘⇧O", description: "Open all running servers")
                 ShortcutInfoRow(shortcut: "⌘L", description: "Open log viewer")
                 ShortcutInfoRow(shortcut: "⌘,", description: "Open settings")
+                ShortcutInfoRow(shortcut: "j / k", description: "Navigate servers up/down")
+                ShortcutInfoRow(shortcut: "Enter", description: "Open/start selected server")
+                ShortcutInfoRow(shortcut: "o", description: "Open selected in browser")
+                ShortcutInfoRow(shortcut: "Esc", description: "Clear selection")
             } header: {
                 Text("Keyboard Shortcuts")
             }

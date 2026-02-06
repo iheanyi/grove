@@ -8,31 +8,6 @@ struct LogsView: View {
     @State private var showLineNumbers = false
     @State private var showPopoutWindow = false
 
-    enum LogLevel: String, CaseIterable {
-        case error = "ERROR"
-        case warn = "WARN"
-        case info = "INFO"
-        case debug = "DEBUG"
-
-        var color: Color {
-            switch self {
-            case .error: return .red
-            case .warn: return .orange
-            case .info: return .blue
-            case .debug: return .gray
-            }
-        }
-
-        var icon: String {
-            switch self {
-            case .error: return "exclamationmark.triangle.fill"
-            case .warn: return "exclamationmark.circle.fill"
-            case .info: return "info.circle.fill"
-            case .debug: return "ant.circle.fill"
-            }
-        }
-    }
-
     var body: some View {
         VStack(spacing: 0) {
             // Header
@@ -242,6 +217,35 @@ struct LogsView: View {
 
                 Spacer()
 
+                // Error/warning counts
+                let counts = logCounts
+                if counts.errors > 0 || counts.warnings > 0 {
+                    HStack(spacing: 6) {
+                        if counts.errors > 0 {
+                            HStack(spacing: 2) {
+                                Image(systemName: "exclamationmark.triangle.fill")
+                                    .font(.system(size: 8))
+                                Text("\(counts.errors)")
+                                    .font(.caption2)
+                            }
+                            .foregroundColor(.red)
+                        }
+                        if counts.warnings > 0 {
+                            HStack(spacing: 2) {
+                                Image(systemName: "exclamationmark.circle.fill")
+                                    .font(.system(size: 8))
+                                Text("\(counts.warnings)")
+                                    .font(.caption2)
+                            }
+                            .foregroundColor(.orange)
+                        }
+                    }
+
+                    Text("\u{00B7}")
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                }
+
                 Text("\(filteredLogs.count) / \(serverManager.logLines.count) lines")
                     .font(.caption2)
                     .foregroundColor(.secondary)
@@ -268,14 +272,24 @@ struct LogsView: View {
 
         // Apply log level filter
         if let level = selectedLogLevel {
-            logs = logs.filter { line in
-                line.text.contains(level.rawValue) ||
-                line.text.contains(level.rawValue.lowercased()) ||
-                line.text.contains("[\(level.rawValue.lowercased())]")
-            }
+            logs = logs.filter { level.matches($0.text) }
         }
 
         return logs
+    }
+
+    /// Counts of errors and warnings in current filtered logs
+    private var logCounts: (errors: Int, warnings: Int) {
+        var errors = 0
+        var warnings = 0
+        for entry in filteredLogs {
+            if LogLevel.error.matches(entry.text) {
+                errors += 1
+            } else if LogLevel.warn.matches(entry.text) {
+                warnings += 1
+            }
+        }
+        return (errors, warnings)
     }
 
     // MARK: - Actions
@@ -318,7 +332,7 @@ struct LogsPopoutWindow: View {
     @EnvironmentObject var serverManager: ServerManager
     @State private var autoScroll = true
     @State private var searchText = ""
-    @State private var selectedLogLevel: LogsView.LogLevel? = nil
+    @State private var selectedLogLevel: LogLevel? = nil
     @State private var showLineNumbers = false
     @Environment(\.dismiss) var dismiss
 
@@ -365,7 +379,7 @@ struct LogsPopoutWindow: View {
 
                 // Log level filters
                 HStack(spacing: 8) {
-                    ForEach(LogsView.LogLevel.allCases, id: \.self) { level in
+                    ForEach(LogLevel.allCases, id: \.self) { level in
                         Button {
                             if selectedLogLevel == level {
                                 selectedLogLevel = nil
@@ -489,6 +503,35 @@ struct LogsPopoutWindow: View {
 
                 Spacer()
 
+                // Error/warning counts
+                let counts = popoutLogCounts
+                if counts.errors > 0 || counts.warnings > 0 {
+                    HStack(spacing: 6) {
+                        if counts.errors > 0 {
+                            HStack(spacing: 2) {
+                                Image(systemName: "exclamationmark.triangle.fill")
+                                    .font(.system(size: 8))
+                                Text("\(counts.errors)")
+                                    .font(.caption2)
+                            }
+                            .foregroundColor(.red)
+                        }
+                        if counts.warnings > 0 {
+                            HStack(spacing: 2) {
+                                Image(systemName: "exclamationmark.circle.fill")
+                                    .font(.system(size: 8))
+                                Text("\(counts.warnings)")
+                                    .font(.caption2)
+                            }
+                            .foregroundColor(.orange)
+                        }
+                    }
+
+                    Text("\u{00B7}")
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                }
+
                 Text("\(filteredLogs.count) / \(serverManager.logLines.count) lines")
                     .font(.caption2)
                     .foregroundColor(.secondary)
@@ -511,14 +554,24 @@ struct LogsPopoutWindow: View {
 
         // Apply log level filter
         if let level = selectedLogLevel {
-            logs = logs.filter { line in
-                line.text.contains(level.rawValue) ||
-                line.text.contains(level.rawValue.lowercased()) ||
-                line.text.contains("[\(level.rawValue.lowercased())]")
-            }
+            logs = logs.filter { level.matches($0.text) }
         }
 
         return logs
+    }
+
+    /// Counts of errors and warnings in current filtered logs
+    private var popoutLogCounts: (errors: Int, warnings: Int) {
+        var errors = 0
+        var warnings = 0
+        for entry in filteredLogs {
+            if LogLevel.error.matches(entry.text) {
+                errors += 1
+            } else if LogLevel.warn.matches(entry.text) {
+                warnings += 1
+            }
+        }
+        return (errors, warnings)
     }
 
     // MARK: - Actions

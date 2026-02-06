@@ -4,8 +4,46 @@ class GitHubService {
     static let shared = GitHubService()
 
     private let cache = GitHubCache()
+    private let ghPath: String
 
-    private init() {}
+    private init() {
+        self.ghPath = Self.findGhBinary() ?? "/opt/homebrew/bin/gh"
+    }
+
+    /// Find the gh CLI binary by searching common paths and falling back to `which`
+    private static func findGhBinary() -> String? {
+        let paths = [
+            "/opt/homebrew/bin/gh",
+            "/usr/local/bin/gh",
+            "\(NSHomeDirectory())/bin/gh"
+        ]
+
+        for path in paths {
+            if FileManager.default.fileExists(atPath: path) {
+                return path
+            }
+        }
+
+        // Fallback: try `which gh`
+        let task = Process()
+        task.executableURL = URL(fileURLWithPath: "/usr/bin/which")
+        task.arguments = ["gh"]
+
+        let pipe = Pipe()
+        task.standardOutput = pipe
+        task.standardError = Pipe()
+
+        do {
+            try task.run()
+            task.waitUntilExit()
+            guard task.terminationStatus == 0 else { return nil }
+            let data = pipe.fileHandleForReading.readDataToEndOfFile()
+            let result = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines)
+            return result?.isEmpty == false ? result : nil
+        } catch {
+            return nil
+        }
+    }
 
     // MARK: - Public API
 
@@ -47,13 +85,75 @@ class GitHubService {
         // Fetch CI status
         let ciStatus = fetchCIStatus(at: server.path)
 
+        // Fetch rich PR details if we have a PR number
+        var reviewStatus: GitHubInfo.ReviewStatus? = nil
+        var commentCount = 0
+        var hasMergeConflicts = false
+
+        if let prNumber = prInfo?.number {
+            let richInfo = fetchRichPRInfo(at: server.path, prNumber: prNumber)
+            reviewStatus = richInfo.reviewStatus
+            commentCount = richInfo.commentCount
+            hasMergeConflicts = richInfo.hasMergeConflicts
+        }
+
         return GitHubInfo(
             prNumber: prInfo?.number,
             prURL: prInfo?.url,
             prState: prInfo?.state,
             ciStatus: ciStatus,
+            reviewStatus: reviewStatus,
+            commentCount: commentCount,
+            hasMergeConflicts: hasMergeConflicts,
             lastUpdated: Date()
         )
+    }
+
+    private func fetchRichPRInfo(at path: String, prNumber: Int) -> (reviewStatus: GitHubInfo.ReviewStatus?, commentCount: Int, hasMergeConflicts: Bool) {
+        guard let output = runCommand(ghPath, args: [
+            "pr", "view", String(prNumber),
+            "--json", "reviews,comments,mergeable"
+        ], workingDir: path) else {
+            return (nil, 0, false)
+        }
+
+        guard let data = output.data(using: .utf8),
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            return (nil, 0, false)
+        }
+
+        // Parse review status (latest review per reviewer)
+        var reviewStatus: GitHubInfo.ReviewStatus? = nil
+        if let reviews = json["reviews"] as? [[String: Any]], !reviews.isEmpty {
+            // Get the most recent review state
+            if let lastReview = reviews.last,
+               let state = lastReview["state"] as? String {
+                switch state.uppercased() {
+                case "APPROVED":
+                    reviewStatus = .approved
+                case "CHANGES_REQUESTED":
+                    reviewStatus = .changesRequested
+                case "COMMENTED", "PENDING":
+                    reviewStatus = .pending
+                default:
+                    break
+                }
+            }
+        }
+
+        // Parse comment count
+        var commentCount = 0
+        if let comments = json["comments"] as? [[String: Any]] {
+            commentCount = comments.count
+        }
+
+        // Parse mergeable status
+        var hasMergeConflicts = false
+        if let mergeable = json["mergeable"] as? String {
+            hasMergeConflicts = mergeable == "CONFLICTING"
+        }
+
+        return (reviewStatus, commentCount, hasMergeConflicts)
     }
 
     private func getCurrentBranch(at path: String) -> String? {
@@ -63,14 +163,14 @@ class GitHubService {
 
     private func fetchPRInfo(at path: String, branch: String) -> (number: Int, url: String, state: String)? {
         // Use gh CLI to get PR info
-        guard let output = runCommand("/opt/homebrew/bin/gh", args: [
+        guard let output = runCommand(ghPath, args: [
             "pr", "list",
             "--head", branch,
             "--json", "number,url,state",
             "--repo", ":owner/:repo"
         ], workingDir: path) else {
             // Try without --repo flag (will auto-detect from git remote)
-            guard let output = runCommand("/opt/homebrew/bin/gh", args: [
+            guard let output = runCommand(ghPath, args: [
                 "pr", "list",
                 "--head", branch,
                 "--json", "number,url,state"
@@ -109,7 +209,7 @@ class GitHubService {
         }
 
         // Fetch check runs from GitHub API
-        guard let output = runCommand("/opt/homebrew/bin/gh", args: [
+        guard let output = runCommand(ghPath, args: [
             "api",
             "repos/\(repoInfo.owner)/\(repoInfo.repo)/commits/\(sha)/check-runs",
             "--jq", ".check_runs[].conclusion"
@@ -185,10 +285,13 @@ class GitHubService {
         task.standardOutput = pipe
         task.standardError = Pipe()
 
-        // Set up timeout
+        // Thread-safe timeout flag
+        let timedOutLock = NSLock()
         var timedOut = false
         let timeoutWorkItem = DispatchWorkItem {
+            timedOutLock.lock()
             timedOut = true
+            timedOutLock.unlock()
             if task.isRunning {
                 task.terminate()
             }
@@ -200,19 +303,25 @@ class GitHubService {
             // Schedule timeout
             DispatchQueue.global().asyncAfter(deadline: .now() + Self.commandTimeout, execute: timeoutWorkItem)
 
+            // Read pipe data FIRST to prevent deadlock on large output
+            let data = pipe.fileHandleForReading.readDataToEndOfFile()
+
             task.waitUntilExit()
 
             // Cancel timeout if process finished in time
             timeoutWorkItem.cancel()
 
-            if timedOut {
+            timedOutLock.lock()
+            let didTimeout = timedOut
+            timedOutLock.unlock()
+
+            if didTimeout {
                 print("[GitHubService] Command timed out: \(command) \(args.joined(separator: " "))")
                 return nil
             }
 
             guard task.terminationStatus == 0 else { return nil }
 
-            let data = pipe.fileHandleForReading.readDataToEndOfFile()
             return String(data: data, encoding: .utf8)
         } catch {
             timeoutWorkItem.cancel()

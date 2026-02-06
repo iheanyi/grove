@@ -21,12 +21,12 @@ struct GroveMenubarApp: App {
     }
 
     var body: some Scene {
-        let _ = print("[Grove] GroveMenubarApp.body evaluated")
         // Menubar
         MenuBarExtra {
-            let _ = print("[Grove] MenuBarExtra content evaluated")
+            let _ = { ServerManagerAccessor.shared = serverManager }()
             MenuView()
                 .environmentObject(serverManager)
+                .onOpenURL { url in URLSchemeHandler.shared.handle(url) }
         } label: {
             Label {
                 Text("Grove")
