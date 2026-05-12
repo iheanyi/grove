@@ -986,11 +986,8 @@ func (s *mcpServer) toolStop(args map[string]interface{}) callToolResult {
 		return mcpTextResult(fmt.Sprintf("Server '%s' is not running", name))
 	}
 
-	process, err := os.FindProcess(server.PID)
-	if err == nil {
-		// Best effort kill - process may already be dead
-		process.Kill() //nolint:errcheck // Best effort during shutdown
-	}
+	// Best effort kill - process may already be dead
+	signalServerPID(server.PID, syscall.SIGKILL) //nolint:errcheck // Best effort during shutdown
 
 	server.Status = registry.StatusStopped
 	server.PID = 0
@@ -1118,10 +1115,7 @@ func (s *mcpServer) toolRestart(args map[string]interface{}) callToolResult {
 
 	// Stop if running
 	if server.IsRunning() {
-		process, err := os.FindProcess(server.PID)
-		if err == nil {
-			process.Kill() //nolint:errcheck // Best effort during restart
-		}
+		signalServerPID(server.PID, syscall.SIGKILL) //nolint:errcheck // Best effort during restart
 		time.Sleep(500 * time.Millisecond)
 	}
 
