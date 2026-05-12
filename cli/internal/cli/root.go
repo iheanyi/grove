@@ -93,6 +93,7 @@ func init() {
 	logsCmd.GroupID = "monitoring"
 
 	rootCmd.AddCommand(logsCmd)
+	rootCmd.AddCommand(logWriterCmd)
 
 	// Configuration
 	initCmd.GroupID = "config"

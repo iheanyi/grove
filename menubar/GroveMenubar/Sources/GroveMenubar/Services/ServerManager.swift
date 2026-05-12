@@ -817,6 +817,21 @@ class ServerManager: ObservableObject {
 
     func clearLogs() {
         logLines = []
+        lastLogPosition = 0
+
+        guard let logFile = selectedServerForLogs?.logFile else { return }
+
+        DispatchQueue.global(qos: .utility).async {
+            do {
+                let handle = try FileHandle(forWritingTo: URL(fileURLWithPath: logFile))
+                try handle.truncate(atOffset: 0)
+                try handle.close()
+            } catch {
+                DispatchQueue.main.async {
+                    self.logLines = ["Error clearing log file: \(error.localizedDescription)"]
+                }
+            }
+        }
     }
 
     func openLogsInFinder(_ server: Server) {

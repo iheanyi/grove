@@ -900,19 +900,20 @@ func (s *mcpServer) toolStart(args map[string]interface{}) callToolResult {
 	}
 	logFile := filepath.Join(logDir, fmt.Sprintf("%s.log", wt.Name))
 
-	// Open log file
-	logFH, err := os.OpenFile(logFile, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
-	if err != nil {
+	if err := prepareBoundedLogFile(logFile, cfg.LogMaxSize); err != nil {
 		return mcpErrorResult(fmt.Sprintf("Failed to open log file: %v", err))
+	}
+
+	logWriter, err := logWriterShellCommand(logFile, cfg.LogMaxSize)
+	if err != nil {
+		return mcpErrorResult(fmt.Sprintf("Failed to prepare log writer: %v", err))
 	}
 
 	// Start the process via shell with stdin kept open
 	cmdParts := strings.Fields(command)
-	shellCmd := fmt.Sprintf("tail -f /dev/null | PORT=%d exec %s", serverPort, mcpShellQuoteArgs(cmdParts))
+	shellCmd := fmt.Sprintf("tail -f /dev/null | PORT=%d exec %s 2>&1 | %s", serverPort, mcpShellQuoteArgs(cmdParts), logWriter)
 	cmd := exec.Command("/bin/sh", "-c", shellCmd)
 	cmd.Dir = absPath
-	cmd.Stdout = logFH
-	cmd.Stderr = logFH
 	cmd.Env = os.Environ()
 
 	cmd.SysProcAttr = &syscall.SysProcAttr{
@@ -920,16 +921,14 @@ func (s *mcpServer) toolStart(args map[string]interface{}) callToolResult {
 	}
 
 	if err := cmd.Start(); err != nil {
-		logFH.Close()
 		return mcpErrorResult(fmt.Sprintf("Failed to start server: %v", err))
 	}
 
 	pid := cmd.Process.Pid
 
 	go func() {
-		// Wait for process to exit, close log file regardless of outcome
+		// Wait for process to exit so the shell pipeline is reaped.
 		cmd.Wait() //nolint:errcheck // Process cleanup, error doesn't affect outcome
-		logFH.Close()
 	}()
 
 	time.Sleep(100 * time.Millisecond)
