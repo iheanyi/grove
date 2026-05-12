@@ -25,6 +25,8 @@ class ServerManager: ObservableObject {
     private var refreshTimer: Timer?
     private var logTimer: Timer?
     private var lastLogPosition: UInt64 = 0
+    private var isClearingLogs = false
+    private var logStreamGeneration = 0
     private var grovePath: String
     private var previousServerStates: [String: String] = [:]  // Track previous server statuses
     private let githubService = GitHubService.shared
@@ -703,6 +705,7 @@ class ServerManager: ObservableObject {
         selectedServerForLogs = server
         logLines = []
         lastLogPosition = 0
+        logStreamGeneration += 1
         isStreamingLogs = true
 
         // Initial load of last 100 lines
@@ -721,6 +724,7 @@ class ServerManager: ObservableObject {
         selectedServerForLogs = nil
         logLines = []
         lastLogPosition = 0
+        logStreamGeneration += 1
     }
 
     private func loadInitialLogs(for server: Server) {
@@ -728,6 +732,8 @@ class ServerManager: ObservableObject {
             logLines = ["No log file configured for this server"]
             return
         }
+
+        let generation = logStreamGeneration
 
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             guard let self = self else { return }
@@ -747,11 +753,13 @@ class ServerManager: ObservableObject {
                 let fileSize = attributes[.size] as? UInt64 ?? 0
 
                 DispatchQueue.main.async {
+                    guard generation == self.logStreamGeneration else { return }
                     self.logLines = recentLines.filter { !$0.isEmpty }
                     self.lastLogPosition = fileSize
                 }
             } catch {
                 DispatchQueue.main.async {
+                    guard generation == self.logStreamGeneration else { return }
                     self.logLines = ["Error reading log file: \(error.localizedDescription)"]
                 }
             }
@@ -759,10 +767,13 @@ class ServerManager: ObservableObject {
     }
 
     private func streamNewLogs() {
+        guard !isClearingLogs else { return }
         guard let server = selectedServerForLogs,
               let logFile = server.logFile else { return }
 
         let serverPath = server.path
+        let startPosition = lastLogPosition
+        let generation = logStreamGeneration
 
         // Do ALL file operations on background thread
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
@@ -771,6 +782,7 @@ class ServerManager: ObservableObject {
             // Check if the server's path still exists (worktree might have been deleted)
             guard FileManager.default.fileExists(atPath: serverPath) else {
                 DispatchQueue.main.async {
+                    guard generation == self.logStreamGeneration, !self.isClearingLogs else { return }
                     self.logLines.append("[Server path no longer exists - worktree may have been deleted]")
                     self.stopStreamingLogs()
                 }
@@ -787,11 +799,11 @@ class ServerManager: ObservableObject {
                 let fileSize = attributes[.size] as? UInt64 ?? 0
 
                 // Check if file has new content
-                guard fileSize > self.lastLogPosition else { return }
+                guard fileSize > startPosition else { return }
 
                 // Read new content
                 let handle = try FileHandle(forReadingFrom: URL(fileURLWithPath: logFile))
-                try handle.seek(toOffset: self.lastLogPosition)
+                try handle.seek(toOffset: startPosition)
                 let newData = handle.readDataToEndOfFile()
                 try handle.close()
 
@@ -801,6 +813,7 @@ class ServerManager: ObservableObject {
                         .map { ANSIStripper.strip($0) }  // Strip ANSI escape codes
 
                     DispatchQueue.main.async {
+                        guard generation == self.logStreamGeneration, !self.isClearingLogs else { return }
                         self.logLines.append(contentsOf: newLines)
                         // Keep only last 500 lines to prevent memory issues
                         if self.logLines.count > 500 {
@@ -817,18 +830,24 @@ class ServerManager: ObservableObject {
 
     func clearLogs() {
         logLines = []
-        lastLogPosition = 0
-
         guard let logFile = selectedServerForLogs?.logFile else { return }
 
-        DispatchQueue.global(qos: .utility).async {
+        isClearingLogs = true
+        logStreamGeneration += 1
+
+        DispatchQueue.global(qos: .utility).async { [weak self] in
             do {
                 let handle = try FileHandle(forWritingTo: URL(fileURLWithPath: logFile))
                 try handle.truncate(atOffset: 0)
                 try handle.close()
+                DispatchQueue.main.async {
+                    self?.lastLogPosition = 0
+                    self?.isClearingLogs = false
+                }
             } catch {
                 DispatchQueue.main.async {
-                    self.logLines = ["Error clearing log file: \(error.localizedDescription)"]
+                    self?.isClearingLogs = false
+                    self?.logLines = ["Error clearing log file: \(error.localizedDescription)"]
                 }
             }
         }

@@ -53,6 +53,11 @@ func runLogWriter(logFile string, maxBytes int64, input io.Reader) error {
 		return err
 	}
 
+	trimThreshold := maxBytes * 2
+	if trimThreshold < maxBytes {
+		trimThreshold = maxBytes
+	}
+
 	buffer := make([]byte, 32*1024)
 	for {
 		n, readErr := input.Read(buffer)
@@ -60,11 +65,14 @@ func runLogWriter(logFile string, maxBytes int64, input io.Reader) error {
 			if _, err := file.Write(buffer[:n]); err != nil {
 				return err
 			}
-			if err := trimOpenLogFile(file, maxBytes); err != nil {
+			if err := trimOpenLogFileAbove(file, maxBytes, trimThreshold); err != nil {
 				return err
 			}
 		}
 		if readErr == io.EOF {
+			if err := trimOpenLogFile(file, maxBytes); err != nil {
+				return err
+			}
 			return nil
 		}
 		if readErr != nil {
@@ -93,15 +101,22 @@ func prepareBoundedLogFile(logFile, maxSize string) error {
 }
 
 func trimOpenLogFile(file *os.File, maxBytes int64) error {
+	return trimOpenLogFileAbove(file, maxBytes, maxBytes)
+}
+
+func trimOpenLogFileAbove(file *os.File, maxBytes, thresholdBytes int64) error {
 	if maxBytes <= 0 {
 		maxBytes = defaultLogMaxBytes
+	}
+	if thresholdBytes < maxBytes {
+		thresholdBytes = maxBytes
 	}
 
 	info, err := file.Stat()
 	if err != nil {
 		return err
 	}
-	if info.Size() <= maxBytes {
+	if info.Size() <= thresholdBytes {
 		return nil
 	}
 
