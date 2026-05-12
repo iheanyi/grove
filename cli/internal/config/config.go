@@ -85,7 +85,7 @@ func Default() *Config {
 		ProxyHTTPPort:      80,
 		ProxyHTTPSPort:     443,
 		LogDir:             filepath.Join(xdg.ConfigHome, "grove", "logs"),
-		LogMaxSize:         "10MB",
+		LogMaxSize:         "100MB",
 		LogRetention:       "7d",
 		IdleTimeout:        30 * time.Minute,
 		HealthCheckTimeout: 60 * time.Second,
