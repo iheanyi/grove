@@ -7,25 +7,38 @@ final class LogStreamStateTests: XCTestCase {
         state.position = 128
         let readGeneration = state.generation
 
-        state.beginClear()
+        let clearGeneration = state.beginClear()
 
         XCTAssertTrue(state.isClearing)
         XCTAssertFalse(state.canApply(readGeneration))
         XCTAssertEqual(state.position, 128)
 
-        state.finishClear()
+        XCTAssertTrue(state.finishClear(generation: clearGeneration))
 
         XCTAssertFalse(state.isClearing)
         XCTAssertEqual(state.position, 0)
         XCTAssertTrue(state.canApply(state.generation))
     }
 
-    func testReadOffsetRestartsAfterLogCompaction() {
+    func testReadPlanReplacesDisplayedLinesAfterLogCompaction() {
         var state = LogStreamState()
         state.position = 128
 
-        XCTAssertEqual(state.readOffset(forFileSize: 64), 0)
-        XCTAssertNil(state.readOffset(forFileSize: 128))
-        XCTAssertEqual(state.readOffset(forFileSize: 160), 128)
+        XCTAssertEqual(state.readPlan(forFileSize: 64), .replace)
+        XCTAssertNil(state.readPlan(forFileSize: 128))
+        XCTAssertEqual(state.readPlan(forFileSize: 160), .append(from: 128))
+    }
+
+    func testLateClearCompletionCannotMutateNewStream() {
+        var state = LogStreamState()
+        state.position = 128
+        let clearGeneration = state.beginClear()
+
+        state.reset()
+        state.position = 64
+
+        XCTAssertFalse(state.finishClear(generation: clearGeneration))
+        XCTAssertEqual(state.position, 64)
+        XCTAssertFalse(state.isClearing)
     }
 }

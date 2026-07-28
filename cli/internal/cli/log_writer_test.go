@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"unicode/utf8"
 )
 
 func TestRunLogWriterCapsFileAndKeepsNewestContent(t *testing.T) {
@@ -70,6 +71,37 @@ func TestCompactOpenLogFileCreatesHeadroomAtCap(t *testing.T) {
 	}
 	if trimmed {
 		t.Fatal("log file compacted again before reaching the cap")
+	}
+}
+
+func TestCompactOpenLogFilePreservesValidUTF8(t *testing.T) {
+	logFile := filepath.Join(t.TempDir(), "server.log")
+	file, err := os.OpenFile(logFile, os.O_CREATE|os.O_RDWR|os.O_APPEND, 0644)
+	if err != nil {
+		t.Fatalf("open log file: %v", err)
+	}
+	t.Cleanup(func() {
+		if err := file.Close(); err != nil {
+			t.Errorf("close log file: %v", err)
+		}
+	})
+
+	if _, err := file.WriteString("prefix€tail"); err != nil {
+		t.Fatalf("seed UTF-8 log file: %v", err)
+	}
+	if _, err := compactOpenLogFile(file, 8, 6); err != nil {
+		t.Fatalf("compact UTF-8 log file: %v", err)
+	}
+
+	data, err := os.ReadFile(logFile)
+	if err != nil {
+		t.Fatalf("read compacted UTF-8 log file: %v", err)
+	}
+	if !utf8.Valid(data) {
+		t.Fatalf("compacted log file begins with a partial UTF-8 sequence: %q", data)
+	}
+	if got, want := string(data), "tail"; got != want {
+		t.Fatalf("compacted UTF-8 content = %q, want %q", got, want)
 	}
 }
 

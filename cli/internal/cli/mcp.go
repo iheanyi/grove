@@ -988,7 +988,7 @@ func (s *mcpServer) toolStop(args map[string]interface{}) callToolResult {
 		return mcpTextResult(fmt.Sprintf("Server '%s' is not running", name))
 	}
 
-	if err := signalServerPID(server.PID, syscall.SIGKILL); err != nil && err != syscall.ESRCH {
+	if err := terminateServerPID(server.PID, 2*time.Second, signalServerPID, waitForServerPIDExit); err != nil {
 		return mcpErrorResult(fmt.Sprintf("Failed to stop server process group: %v", err))
 	}
 
@@ -1118,10 +1118,9 @@ func (s *mcpServer) toolRestart(args map[string]interface{}) callToolResult {
 
 	// Stop if running
 	if server.IsRunning() {
-		if err := signalServerPID(server.PID, syscall.SIGKILL); err != nil && err != syscall.ESRCH {
+		if err := terminateServerPID(server.PID, 2*time.Second, signalServerPID, waitForServerPIDExit); err != nil {
 			return mcpErrorResult(fmt.Sprintf("Failed to stop server process group: %v", err))
 		}
-		waitForServerPIDExit(server.PID, 2*time.Second)
 	}
 
 	// Restart using the same command

@@ -1,10 +1,15 @@
 package cli
 
 import (
+	"errors"
+	"fmt"
 	"os"
 	"syscall"
 	"time"
 )
+
+type signalServerPIDFunc func(int, syscall.Signal) error
+type waitForServerPIDExitFunc func(int, time.Duration) bool
 
 func signalServerPID(pid int, sig syscall.Signal) error {
 	if pid <= 0 {
@@ -58,4 +63,33 @@ func waitForServerPIDExit(pid int, timeout time.Duration) bool {
 			return !isServerPIDRunning(pid)
 		}
 	}
+}
+
+func terminateServerPID(
+	pid int,
+	gracefulTimeout time.Duration,
+	signal signalServerPIDFunc,
+	wait waitForServerPIDExitFunc,
+) error {
+	if err := signal(pid, syscall.SIGTERM); err != nil {
+		if errors.Is(err, syscall.ESRCH) {
+			return nil
+		}
+		return fmt.Errorf("send SIGTERM to server process group: %w", err)
+	}
+	if wait(pid, gracefulTimeout) {
+		return nil
+	}
+
+	if err := signal(pid, syscall.SIGKILL); err != nil {
+		if errors.Is(err, syscall.ESRCH) {
+			return nil
+		}
+		return fmt.Errorf("send SIGKILL to server process group: %w", err)
+	}
+	if !wait(pid, 5*time.Second) {
+		return fmt.Errorf("server process group %d is still running after SIGKILL", pid)
+	}
+
+	return nil
 }

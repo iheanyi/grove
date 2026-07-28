@@ -794,12 +794,11 @@ class ServerManager: ObservableObject {
                 let attributes = try FileManager.default.attributesOfItem(atPath: logFile)
                 let fileSize = attributes[.size] as? UInt64 ?? 0
 
-                // Restart at the beginning if the bounded writer compacted the file.
-                guard let startPosition = readState.readOffset(forFileSize: fileSize) else { return }
+                guard let readPlan = readState.readPlan(forFileSize: fileSize) else { return }
 
                 // Read new content
                 let handle = try FileHandle(forReadingFrom: URL(fileURLWithPath: logFile))
-                try handle.seek(toOffset: startPosition)
+                try handle.seek(toOffset: readPlan.offset)
                 let newData = handle.readDataToEndOfFile()
                 try handle.close()
 
@@ -810,7 +809,12 @@ class ServerManager: ObservableObject {
 
                     DispatchQueue.main.async {
                         guard self.logStreamState.canApply(generation) else { return }
-                        self.logLines.append(contentsOf: newLines)
+                        switch readPlan {
+                        case .append:
+                            self.logLines.append(contentsOf: newLines)
+                        case .replace:
+                            self.logLines = newLines
+                        }
                         // Keep only last 500 lines to prevent memory issues
                         if self.logLines.count > 500 {
                             self.logLines = Array(self.logLines.suffix(500))
@@ -829,7 +833,7 @@ class ServerManager: ObservableObject {
 
         guard let logFile = selectedServerForLogs?.logFile else { return }
 
-        logStreamState.beginClear()
+        let clearGeneration = logStreamState.beginClear()
 
         DispatchQueue.global(qos: .utility).async { [weak self] in
             do {
@@ -837,11 +841,11 @@ class ServerManager: ObservableObject {
                 try handle.truncate(atOffset: 0)
                 try handle.close()
                 DispatchQueue.main.async {
-                    self?.logStreamState.finishClear()
+                    self?.logStreamState.finishClear(generation: clearGeneration)
                 }
             } catch {
                 DispatchQueue.main.async {
-                    self?.logStreamState.failClear()
+                    guard self?.logStreamState.failClear(generation: clearGeneration) == true else { return }
                     self?.logLines = ["Error clearing log file: \(error.localizedDescription)"]
                 }
             }

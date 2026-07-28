@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"bytes"
 	"fmt"
 	"io"
 	"os"
@@ -131,7 +132,10 @@ func compactOpenLogFile(file *os.File, maxBytes, retainedBytes int64) (bool, err
 	if err != nil && err != io.EOF {
 		return false, err
 	}
-	retained = retained[:n]
+	retained = bytes.ToValidUTF8(retained[:n], nil)
+	if newline := bytes.IndexByte(retained, '\n'); newline >= 0 {
+		retained = retained[newline+1:]
+	}
 
 	if err := file.Truncate(0); err != nil {
 		return false, err
