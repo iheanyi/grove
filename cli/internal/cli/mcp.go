@@ -1121,6 +1121,10 @@ func (s *mcpServer) toolRestart(args map[string]interface{}) callToolResult {
 		if err := terminateServerPID(server.PID, 2*time.Second, signalServerPID, waitForServerPIDExit); err != nil {
 			return mcpErrorResult(fmt.Sprintf("Failed to stop server process group: %v", err))
 		}
+		prepareServerForRestart(server, time.Now())
+		if err := reg.Set(server); err != nil {
+			return mcpErrorResult(fmt.Sprintf("Failed to update server state for restart: %v", err))
+		}
 	}
 
 	// Restart using the same command
@@ -1135,6 +1139,12 @@ func (s *mcpServer) toolRestart(args map[string]interface{}) callToolResult {
 	}
 
 	return s.toolStart(startArgs)
+}
+
+func prepareServerForRestart(server *registry.Server, stoppedAt time.Time) {
+	server.Status = registry.StatusStopped
+	server.PID = 0
+	server.StoppedAt = stoppedAt
 }
 
 func (s *mcpServer) toolNew(args map[string]interface{}) callToolResult {
