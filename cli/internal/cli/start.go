@@ -189,7 +189,9 @@ func runForeground(server *registry.Server, reg *registry.Registry, projConfig *
 
 	// Save to registry
 	if err := reg.Set(server); err != nil {
-		execCmd.Process.Kill() //nolint:errcheck // Cleanup on error path
+		if killErr := signalServerPID(execCmd.Process.Pid, syscall.SIGKILL); killErr != nil {
+			fmt.Fprintf(os.Stderr, "Warning: failed to stop server process group: %v\n", killErr)
+		}
 		return fmt.Errorf("failed to save to registry: %w", err)
 	}
 

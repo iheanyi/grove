@@ -29,6 +29,50 @@ func TestRunLogWriterCapsFileAndKeepsNewestContent(t *testing.T) {
 	}
 }
 
+func TestCompactOpenLogFileCreatesHeadroomAtCap(t *testing.T) {
+	logFile := filepath.Join(t.TempDir(), "server.log")
+	file, err := os.OpenFile(logFile, os.O_CREATE|os.O_RDWR|os.O_APPEND, 0644)
+	if err != nil {
+		t.Fatalf("open log file: %v", err)
+	}
+	t.Cleanup(func() {
+		if err := file.Close(); err != nil {
+			t.Errorf("close log file: %v", err)
+		}
+	})
+
+	if _, err := file.WriteString("0123456789"); err != nil {
+		t.Fatalf("seed log file: %v", err)
+	}
+
+	trimmed, err := compactOpenLogFile(file, 8, 6)
+	if err != nil {
+		t.Fatalf("compact log file: %v", err)
+	}
+	if !trimmed {
+		t.Fatal("expected over-cap log file to be compacted")
+	}
+
+	data, err := os.ReadFile(logFile)
+	if err != nil {
+		t.Fatalf("read compacted log file: %v", err)
+	}
+	if got, want := string(data), "456789"; got != want {
+		t.Fatalf("compacted content = %q, want %q", got, want)
+	}
+
+	if _, err := file.WriteString("ab"); err != nil {
+		t.Fatalf("append within headroom: %v", err)
+	}
+	trimmed, err = compactOpenLogFile(file, 8, 6)
+	if err != nil {
+		t.Fatalf("check log file within cap: %v", err)
+	}
+	if trimmed {
+		t.Fatal("log file compacted again before reaching the cap")
+	}
+}
+
 func TestParseLogSize(t *testing.T) {
 	tests := map[string]int64{
 		"":     100 * 1024 * 1024,

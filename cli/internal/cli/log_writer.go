@@ -34,7 +34,7 @@ var logWriterCmd = &cobra.Command{
 	},
 }
 
-func runLogWriter(logFile string, maxBytes int64, input io.Reader) error {
+func runLogWriter(logFile string, maxBytes int64, input io.Reader) (returnErr error) {
 	if maxBytes <= 0 {
 		maxBytes = defaultLogMaxBytes
 	}
@@ -47,12 +47,17 @@ func runLogWriter(logFile string, maxBytes int64, input io.Reader) error {
 	if err != nil {
 		return err
 	}
-	defer file.Close()
+	defer func() {
+		if err := file.Close(); returnErr == nil && err != nil {
+			returnErr = err
+		}
+	}()
 
-	if err := trimOpenLogFile(file, maxBytes); err != nil {
+	if _, err := compactOpenLogFile(file, maxBytes, maxBytes); err != nil {
 		return err
 	}
 
+	retainedBytes := logRetainedBytes(maxBytes)
 	buffer := make([]byte, 32*1024)
 	for {
 		n, readErr := input.Read(buffer)
@@ -60,7 +65,7 @@ func runLogWriter(logFile string, maxBytes int64, input io.Reader) error {
 			if _, err := file.Write(buffer[:n]); err != nil {
 				return err
 			}
-			if err := trimOpenLogFile(file, maxBytes); err != nil {
+			if _, err := compactOpenLogFile(file, maxBytes, retainedBytes); err != nil {
 				return err
 			}
 		}
@@ -73,7 +78,7 @@ func runLogWriter(logFile string, maxBytes int64, input io.Reader) error {
 	}
 }
 
-func prepareBoundedLogFile(logFile, maxSize string) error {
+func prepareBoundedLogFile(logFile, maxSize string) (returnErr error) {
 	maxBytes, err := parseLogSize(maxSize)
 	if err != nil {
 		return err
@@ -87,41 +92,59 @@ func prepareBoundedLogFile(logFile, maxSize string) error {
 	if err != nil {
 		return err
 	}
-	defer file.Close()
+	defer func() {
+		if err := file.Close(); returnErr == nil && err != nil {
+			returnErr = err
+		}
+	}()
 
-	return trimOpenLogFile(file, maxBytes)
+	_, err = compactOpenLogFile(file, maxBytes, maxBytes)
+	return err
 }
 
-func trimOpenLogFile(file *os.File, maxBytes int64) error {
+func logRetainedBytes(maxBytes int64) int64 {
+	if maxBytes <= 1 {
+		return maxBytes
+	}
+
+	return maxBytes - maxBytes/4
+}
+
+func compactOpenLogFile(file *os.File, maxBytes, retainedBytes int64) (bool, error) {
 	if maxBytes <= 0 {
 		maxBytes = defaultLogMaxBytes
+	}
+	if retainedBytes <= 0 || retainedBytes > maxBytes {
+		retainedBytes = maxBytes
 	}
 
 	info, err := file.Stat()
 	if err != nil {
-		return err
+		return false, err
 	}
 	if info.Size() <= maxBytes {
-		return nil
+		return false, nil
 	}
 
-	retained := make([]byte, maxBytes)
-	n, err := file.ReadAt(retained, info.Size()-maxBytes)
+	retained := make([]byte, retainedBytes)
+	n, err := file.ReadAt(retained, info.Size()-retainedBytes)
 	if err != nil && err != io.EOF {
-		return err
+		return false, err
 	}
 	retained = retained[:n]
 
 	if err := file.Truncate(0); err != nil {
-		return err
+		return false, err
 	}
 
 	if _, err := file.Seek(0, io.SeekStart); err != nil {
-		return err
+		return false, err
 	}
 
-	_, err = file.Write(retained)
-	return err
+	if _, err = file.Write(retained); err != nil {
+		return false, err
+	}
+	return true, nil
 }
 
 func parseLogSize(value string) (int64, error) {
