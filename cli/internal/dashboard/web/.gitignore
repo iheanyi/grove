@@ -6,7 +6,10 @@ node_modules
 .netlify
 .wrangler
 /.svelte-kit
-# Note: /build is tracked because it's embedded in the Go binary
+# Vite writes _app and hashed assets here. The stub index.html is tracked so
+# go install compiles without Node. Do not commit generated files.
+/build/_app
+/build/agents.html
 
 # OS
 .DS_Store

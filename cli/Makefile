@@ -40,8 +40,8 @@ clean: clean-web ## Remove build artifacts
 	rm -f $(BINARY_NAME)
 	rm -rf dist/
 
-clean-web: ## Remove web build artifacts
-	rm -rf $(WEB_DIR)/build $(WEB_DIR)/node_modules $(WEB_DIR)/.svelte-kit
+clean-web: ## Remove web build artifacts (keeps tracked stub index.html)
+	rm -rf $(WEB_DIR)/node_modules $(WEB_DIR)/.svelte-kit $(WEB_DIR)/build/_app
 
 test: ## Run tests
 	$(GOTEST) -v ./...
