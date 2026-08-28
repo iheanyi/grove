@@ -30,7 +30,7 @@ build: build-web ## Build the grove binary (includes web dashboard)
 build-go: ## Build only the Go binary (skip web build)
 	$(GOBUILD) $(LDFLAGS) -o $(BINARY_NAME) ./cmd/grove
 
-install: build ## Install grove to $GOPATH/bin
+install: build ## Install grove to $$GOPATH/bin
 	cp $(BINARY_NAME) $(GOPATH)/bin/
 
 install-local: build ## Install grove to /usr/local/bin
@@ -40,8 +40,10 @@ clean: clean-web ## Remove build artifacts
 	rm -f $(BINARY_NAME)
 	rm -rf dist/
 
-clean-web: ## Remove web build artifacts (keeps tracked stub index.html)
-	rm -rf $(WEB_DIR)/node_modules $(WEB_DIR)/.svelte-kit $(WEB_DIR)/build/_app
+clean-web: ## Remove generated web assets and restore the tracked stub
+	rm -rf $(WEB_DIR)/node_modules $(WEB_DIR)/.svelte-kit $(WEB_DIR)/build
+	mkdir -p $(WEB_DIR)/build
+	git -C .. restore -- cli/internal/dashboard/web/build/index.html
 
 test: ## Run tests
 	$(GOTEST) -v ./...

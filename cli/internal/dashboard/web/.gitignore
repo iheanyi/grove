@@ -6,10 +6,10 @@ node_modules
 .netlify
 .wrangler
 /.svelte-kit
-# Vite writes _app and hashed assets here. The stub index.html is tracked so
-# go install compiles without Node. Do not commit generated files.
-/build/_app
-/build/agents.html
+# Generated Vite output. The stub index.html is tracked so go install
+# compiles without Node. Do not commit anything else under /build.
+/build/*
+!/build/index.html
 
 # OS
 .DS_Store
