@@ -1,4 +1,3 @@
-import AppKit
 import SwiftUI
 
 // MARK: - Toast System
@@ -73,6 +72,7 @@ struct MenuView: View {
     @EnvironmentObject var serverManager: ServerManager
     @ObservedObject private var preferences = PreferencesManager.shared
     @Environment(\.openWindow) private var openWindow
+    @Environment(\.openSettings) private var openSettings
     @State private var searchText = ""
     @FocusState private var isSearchFocused: Bool
     @State private var showCopiedToast = false
@@ -88,14 +88,6 @@ struct MenuView: View {
 
     var body: some View {
         mainMenuView
-    }
-
-    private func openAppSettings() {
-        NSApp.activate(ignoringOtherApps: true)
-        if NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil) {
-            return
-        }
-        NSApp.sendAction(Selector(("showPreferencesWindow:")), to: nil, from: nil)
     }
 
     // Apply menubar scope before search/filtering.
@@ -210,7 +202,10 @@ struct MenuView: View {
                 isLoading: serverManager.isLoading,
                 isRefreshing: isRefreshing,
                 onRefresh: { serverManager.refresh() },
-                onOpenSettings: openAppSettings,
+                onOpenSettings: {
+                    NSApp.activate(ignoringOtherApps: true)
+                    openSettings()
+                },
                 onQuit: {
                     NSApplication.shared.terminate(nil)
                 }
@@ -240,7 +235,10 @@ struct MenuView: View {
                     openWindow(id: "log-viewer")
                 },
                 onOpenTUI: { serverManager.openTUI() },
-                onOpenSettings: openAppSettings
+                onOpenSettings: {
+                    NSApp.activate(ignoringOtherApps: true)
+                    openSettings()
+                }
             )
 
             // Servers
