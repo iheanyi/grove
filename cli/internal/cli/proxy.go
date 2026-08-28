@@ -10,8 +10,8 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/iheanyi/grove/cli/internal/config"
-	"github.com/iheanyi/grove/cli/internal/registry"
+	"github.com/iheanyi/grove/internal/config"
+	"github.com/iheanyi/grove/internal/registry"
 	"github.com/spf13/cobra"
 )
 

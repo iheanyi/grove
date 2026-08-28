@@ -8,7 +8,7 @@ import (
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/iheanyi/grove/cli/internal/registry"
+	"github.com/iheanyi/grove/internal/registry"
 )
 
 // healthClient is a shared http.Client with connection pooling for health checks.

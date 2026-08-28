@@ -6,7 +6,7 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
-	"github.com/iheanyi/grove/cli/internal/styles"
+	"github.com/iheanyi/grove/internal/styles"
 )
 
 // Colors for different log elements - using shared styles

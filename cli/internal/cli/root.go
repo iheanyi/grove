@@ -5,8 +5,8 @@ import (
 	"os"
 	"time"
 
-	"github.com/iheanyi/grove/cli/internal/config"
-	"github.com/iheanyi/grove/cli/internal/tui"
+	"github.com/iheanyi/grove/internal/config"
+	"github.com/iheanyi/grove/internal/tui"
 	"github.com/spf13/cobra"
 )
 

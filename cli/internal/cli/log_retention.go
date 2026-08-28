@@ -3,9 +3,9 @@ package cli
 import (
 	"time"
 
-	"github.com/iheanyi/grove/cli/internal/config"
-	"github.com/iheanyi/grove/cli/internal/logretention"
-	"github.com/iheanyi/grove/cli/internal/registry"
+	"github.com/iheanyi/grove/internal/config"
+	"github.com/iheanyi/grove/internal/logretention"
+	"github.com/iheanyi/grove/internal/registry"
 )
 
 func cleanupConfiguredLogs(cfg *config.Config, now time.Time) error {

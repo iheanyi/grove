@@ -2,7 +2,7 @@ package tui
 
 import (
 	"github.com/charmbracelet/lipgloss"
-	"github.com/iheanyi/grove/cli/internal/styles"
+	"github.com/iheanyi/grove/internal/styles"
 )
 
 var (

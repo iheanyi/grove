@@ -13,8 +13,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/iheanyi/grove/cli/internal/discovery"
-	"github.com/iheanyi/grove/cli/internal/registry"
+	"github.com/iheanyi/grove/internal/discovery"
+	"github.com/iheanyi/grove/internal/registry"
 )
 
 //go:embed web/build/*

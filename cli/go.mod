@@ -1,4 +1,4 @@
-module github.com/iheanyi/grove/cli
+module github.com/iheanyi/grove
 
 go 1.24.0
 

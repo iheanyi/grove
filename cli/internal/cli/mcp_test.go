@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/iheanyi/grove/cli/internal/registry"
+	"github.com/iheanyi/grove/internal/registry"
 )
 
 func TestPrepareServerForRestartClearsRunningState(t *testing.T) {

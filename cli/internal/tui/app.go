@@ -4,7 +4,7 @@ import (
 	"os"
 	"syscall"
 
-	"github.com/iheanyi/grove/cli/internal/config"
+	"github.com/iheanyi/grove/internal/config"
 )
 
 // Run starts the TUI

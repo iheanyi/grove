@@ -7,9 +7,9 @@ import (
 	"github.com/charmbracelet/bubbles/list"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-	"github.com/iheanyi/grove/cli/internal/discovery"
-	"github.com/iheanyi/grove/cli/internal/registry"
-	"github.com/iheanyi/grove/cli/internal/styles"
+	"github.com/iheanyi/grove/internal/discovery"
+	"github.com/iheanyi/grove/internal/registry"
+	"github.com/iheanyi/grove/internal/styles"
 )
 
 // WorktreeItem represents a worktree in the list

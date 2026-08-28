@@ -10,11 +10,11 @@ import (
 
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/lipgloss/table"
-	"github.com/iheanyi/grove/cli/internal/discovery"
-	"github.com/iheanyi/grove/cli/internal/github"
-	"github.com/iheanyi/grove/cli/internal/registry"
-	"github.com/iheanyi/grove/cli/internal/styles"
-	"github.com/iheanyi/grove/cli/internal/worktree"
+	"github.com/iheanyi/grove/internal/discovery"
+	"github.com/iheanyi/grove/internal/github"
+	"github.com/iheanyi/grove/internal/registry"
+	"github.com/iheanyi/grove/internal/styles"
+	"github.com/iheanyi/grove/internal/worktree"
 	"github.com/spf13/cobra"
 )
 

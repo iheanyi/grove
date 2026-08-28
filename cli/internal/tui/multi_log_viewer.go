@@ -14,8 +14,8 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
 	"github.com/fsnotify/fsnotify"
-	"github.com/iheanyi/grove/cli/internal/loghighlight"
-	"github.com/iheanyi/grove/cli/internal/registry"
+	"github.com/iheanyi/grove/internal/loghighlight"
+	"github.com/iheanyi/grove/internal/registry"
 )
 
 // logEntry represents a single log line with metadata

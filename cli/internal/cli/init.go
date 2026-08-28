@@ -5,8 +5,8 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/iheanyi/grove/cli/internal/project"
-	"github.com/iheanyi/grove/cli/internal/worktree"
+	"github.com/iheanyi/grove/internal/project"
+	"github.com/iheanyi/grove/internal/worktree"
 	"github.com/spf13/cobra"
 )
 

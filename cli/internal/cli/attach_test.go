@@ -3,7 +3,7 @@ package cli
 import (
 	"testing"
 
-	"github.com/iheanyi/grove/cli/internal/registry"
+	"github.com/iheanyi/grove/internal/registry"
 )
 
 func TestAttachAllowsOverwritingStoppedServer(t *testing.T) {

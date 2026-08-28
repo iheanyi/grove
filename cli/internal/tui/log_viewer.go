@@ -13,7 +13,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/fsnotify/fsnotify"
-	"github.com/iheanyi/grove/cli/internal/loghighlight"
+	"github.com/iheanyi/grove/internal/loghighlight"
 )
 
 // LogViewerKeyMap defines keybindings for the log viewer
