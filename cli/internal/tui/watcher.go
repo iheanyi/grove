@@ -5,7 +5,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/fsnotify/fsnotify"
-	"github.com/iheanyi/grove/internal/config"
+	"github.com/iheanyi/grove/cli/internal/config"
 )
 
 // RegistryChangedMsg is sent when the registry file changes

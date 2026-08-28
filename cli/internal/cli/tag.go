@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/iheanyi/grove/internal/registry"
+	"github.com/iheanyi/grove/cli/internal/registry"
 	"github.com/spf13/cobra"
 )
 

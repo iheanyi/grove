@@ -8,8 +8,8 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/x/ansi"
-	"github.com/iheanyi/grove/internal/registry"
-	"github.com/iheanyi/grove/internal/styles"
+	"github.com/iheanyi/grove/cli/internal/registry"
+	"github.com/iheanyi/grove/cli/internal/styles"
 	"github.com/spf13/cobra"
 )
 

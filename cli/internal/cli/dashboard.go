@@ -7,7 +7,7 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/iheanyi/grove/internal/dashboard"
+	"github.com/iheanyi/grove/cli/internal/dashboard"
 	"github.com/spf13/cobra"
 )
 

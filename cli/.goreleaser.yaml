@@ -24,9 +24,9 @@ builds:
       - arm64
     ldflags:
       - -s -w
-      - -X github.com/iheanyi/grove/internal/cli.Version={{.Version}}
-      - -X github.com/iheanyi/grove/internal/cli.Commit={{.ShortCommit}}
-      - -X github.com/iheanyi/grove/internal/cli.Date={{.Date}}
+      - -X github.com/iheanyi/grove/cli/internal/cli.Version={{.Version}}
+      - -X github.com/iheanyi/grove/cli/internal/cli.Commit={{.ShortCommit}}
+      - -X github.com/iheanyi/grove/cli/internal/cli.Date={{.Date}}
 
 archives:
   - formats: [tar.gz]

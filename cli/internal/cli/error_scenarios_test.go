@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/iheanyi/grove/internal/registry"
+	"github.com/iheanyi/grove/cli/internal/registry"
 )
 
 // TestRegistryLoadError tests that CLI commands handle registry load errors gracefully

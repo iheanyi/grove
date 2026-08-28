@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/iheanyi/grove/internal/discovery"
+	"github.com/iheanyi/grove/cli/internal/discovery"
 )
 
 func TestNewRegistry(t *testing.T) {

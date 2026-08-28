@@ -7,9 +7,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/iheanyi/grove/internal/port"
-	"github.com/iheanyi/grove/internal/registry"
-	"github.com/iheanyi/grove/internal/worktree"
+	"github.com/iheanyi/grove/cli/internal/port"
+	"github.com/iheanyi/grove/cli/internal/registry"
+	"github.com/iheanyi/grove/cli/internal/worktree"
 	"github.com/spf13/cobra"
 )
 

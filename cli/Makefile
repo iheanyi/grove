@@ -8,7 +8,7 @@ BINARY_NAME=grove
 VERSION?=$(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
 COMMIT?=$(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown")
 DATE?=$(shell date -u +"%Y-%m-%dT%H:%M:%SZ")
-LDFLAGS=-ldflags "-X github.com/iheanyi/grove/internal/cli.Version=$(VERSION) -X github.com/iheanyi/grove/internal/cli.Commit=$(COMMIT) -X github.com/iheanyi/grove/internal/cli.Date=$(DATE)"
+LDFLAGS=-ldflags "-X github.com/iheanyi/grove/cli/internal/cli.Version=$(VERSION) -X github.com/iheanyi/grove/cli/internal/cli.Commit=$(COMMIT) -X github.com/iheanyi/grove/cli/internal/cli.Date=$(DATE)"
 
 # Go commands
 GO=go

@@ -574,7 +574,7 @@ Or use [dnsmasq](https://thekelleys.org.uk/dnsmasq/doc.html) for wildcard DNS.
 
 ## Requirements
 
-- Go 1.21+
+- Go 1.24+
 - [Caddy](https://caddyserver.com/) (for subdomain mode only)
 - macOS or Linux
 

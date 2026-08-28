@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/iheanyi/grove/internal/config"
-	"github.com/iheanyi/grove/internal/registry"
+	"github.com/iheanyi/grove/cli/internal/config"
+	"github.com/iheanyi/grove/cli/internal/registry"
 )
 
 func TestConfiguredRetentionPreservesRunningServerLog(t *testing.T) {

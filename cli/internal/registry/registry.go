@@ -11,9 +11,9 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/iheanyi/grove/internal/config"
-	"github.com/iheanyi/grove/internal/discovery"
-	"github.com/iheanyi/grove/internal/port"
+	"github.com/iheanyi/grove/cli/internal/config"
+	"github.com/iheanyi/grove/cli/internal/discovery"
+	"github.com/iheanyi/grove/cli/internal/port"
 )
 
 // cleanupInterval is the minimum time between cleanup runs

@@ -3,7 +3,7 @@ package main
 import (
 	"os"
 
-	"github.com/iheanyi/grove/internal/cli"
+	"github.com/iheanyi/grove/cli/internal/cli"
 )
 
 func main() {

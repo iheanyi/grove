@@ -13,10 +13,10 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/x/ansi"
-	"github.com/iheanyi/grove/internal/discovery"
-	"github.com/iheanyi/grove/internal/registry"
-	"github.com/iheanyi/grove/internal/styles"
-	"github.com/iheanyi/grove/pkg/browser"
+	"github.com/iheanyi/grove/cli/internal/discovery"
+	"github.com/iheanyi/grove/cli/internal/registry"
+	"github.com/iheanyi/grove/cli/internal/styles"
+	"github.com/iheanyi/grove/cli/pkg/browser"
 	"github.com/spf13/cobra"
 )
 
