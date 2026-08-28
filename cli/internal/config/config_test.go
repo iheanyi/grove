@@ -4,7 +4,9 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"testing"
+	"time"
 )
 
 func TestURLModeConstants(t *testing.T) {
@@ -36,6 +38,40 @@ func TestDefaultConfig(t *testing.T) {
 	// Verify TLD default
 	if cfg.TLD != "localhost" {
 		t.Errorf("Default TLD = %q, want %q", cfg.TLD, "localhost")
+	}
+}
+
+func TestDefaultLogRetentionParsesAsSevenDays(t *testing.T) {
+	cfg := Default()
+
+	retention, err := cfg.LogRetentionDuration()
+	if err != nil {
+		t.Fatalf("LogRetentionDuration() error = %v", err)
+	}
+	if want := 7 * 24 * time.Hour; retention != want {
+		t.Fatalf("LogRetentionDuration() = %v, want %v", retention, want)
+	}
+}
+
+func TestLogRetentionParsesHourDuration(t *testing.T) {
+	cfg := Default()
+	cfg.LogRetention = "36h"
+
+	retention, err := cfg.LogRetentionDuration()
+	if err != nil {
+		t.Fatalf("LogRetentionDuration() error = %v", err)
+	}
+	if want := 36 * time.Hour; retention != want {
+		t.Fatalf("LogRetentionDuration() = %v, want %v", retention, want)
+	}
+}
+
+func TestLogRetentionRejectsDurationOverflow(t *testing.T) {
+	cfg := Default()
+	cfg.LogRetention = "4294967295d"
+
+	if _, err := cfg.LogRetentionDuration(); err == nil {
+		t.Fatal("LogRetentionDuration() error = nil, want overflow error")
 	}
 }
 
@@ -266,6 +302,21 @@ tld: test.localhost
 	}
 	if cfg.TLD != "test.localhost" {
 		t.Errorf("TLD = %q, want %q", cfg.TLD, "test.localhost")
+	}
+}
+
+func TestLoadConfigRejectsInvalidLogRetention(t *testing.T) {
+	configPath := filepath.Join(t.TempDir(), "config.yaml")
+	if err := os.WriteFile(configPath, []byte("log_retention: forever\n"), 0644); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+
+	_, err := Load(configPath)
+	if err == nil {
+		t.Fatal("Load() error = nil, want invalid log_retention error")
+	}
+	if !strings.Contains(err.Error(), `invalid log_retention "forever"`) {
+		t.Fatalf("Load() error = %q, want invalid value in message", err)
 	}
 }
 

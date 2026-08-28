@@ -3,6 +3,7 @@ package cli
 import (
 	"fmt"
 	"os"
+	"time"
 
 	"github.com/iheanyi/grove/internal/config"
 	"github.com/iheanyi/grove/internal/tui"
@@ -12,6 +13,7 @@ import (
 var (
 	cfgFile string
 	cfg     *config.Config
+	cfgErr  error
 )
 
 var rootCmd = &cobra.Command{
@@ -21,6 +23,18 @@ var rootCmd = &cobra.Command{
 with clean localhost URLs like https://feature-branch.localhost.
 
 When run without arguments, it launches an interactive TUI dashboard.`,
+	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
+		if cmd == logWriterCmd {
+			return nil
+		}
+		if cfgErr != nil {
+			return cfgErr
+		}
+		if err := cleanupConfiguredLogs(cfg, time.Now()); err != nil {
+			fmt.Fprintf(os.Stderr, "Warning: could not apply log retention: %v\n", err)
+		}
+		return nil
+	},
 	RunE: func(cmd *cobra.Command, args []string) error {
 		// Default behavior: launch TUI
 		return runTUI()
@@ -124,11 +138,9 @@ func init() {
 }
 
 func initConfig() {
-	var err error
-	cfg, err = config.Load(cfgFile)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Warning: could not load config: %v\n", err)
-		cfg = config.Default()
+	cfg, cfgErr = config.Load(cfgFile)
+	if cfgErr != nil {
+		cfgErr = fmt.Errorf("failed to load config: %w", cfgErr)
 	}
 }
 
