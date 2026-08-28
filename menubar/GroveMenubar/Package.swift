@@ -22,7 +22,8 @@ let package = Package(
         // target that embeds these sources (see Sources/GroveWidget/README.md).
         .executableTarget(
             name: "GroveWidget",
-            path: "Sources/GroveWidget"
+            path: "Sources/GroveWidget",
+            exclude: ["README.md"]
         ),
         .testTarget(
             name: "GroveMenubarTests",
