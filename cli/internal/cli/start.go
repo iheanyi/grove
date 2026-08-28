@@ -189,7 +189,9 @@ func runForeground(server *registry.Server, reg *registry.Registry, projConfig *
 
 	// Save to registry
 	if err := reg.Set(server); err != nil {
-		execCmd.Process.Kill() //nolint:errcheck // Cleanup on error path
+		if killErr := signalServerPID(execCmd.Process.Pid, syscall.SIGKILL); killErr != nil {
+			fmt.Fprintf(os.Stderr, "Warning: failed to stop server process group: %v\n", killErr)
+		}
 		return fmt.Errorf("failed to save to registry: %w", err)
 	}
 
@@ -276,22 +278,23 @@ func runForeground(server *registry.Server, reg *registry.Registry, projConfig *
 }
 
 func runDaemon(server *registry.Server, reg *registry.Registry, projConfig *project.Config, openBrowser bool) error {
-	// Open log file
-	logFile, err := os.OpenFile(server.LogFile, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
-	if err != nil {
+	if err := prepareBoundedLogFile(server.LogFile, cfg.LogMaxSize); err != nil {
 		return fmt.Errorf("failed to open log file: %w", err)
+	}
+
+	logWriter, err := logWriterShellCommand(server.LogFile, cfg.LogMaxSize)
+	if err != nil {
+		return fmt.Errorf("failed to prepare log writer: %w", err)
 	}
 
 	// Use nohup approach: wrap the command in a shell that uses tail -f /dev/null
 	// to keep stdin open forever. This prevents processes like esbuild --watch
-	// from exiting due to closed stdin. The `exec` replaces the shell process,
-	// so the recorded PID becomes the actual server process PID.
-	shellCmd := fmt.Sprintf("tail -f /dev/null | exec %s", shellQuoteArgs(server.Command))
+	// from exiting due to closed stdin. Output is piped through Grove's bounded
+	// log writer so long-running servers cannot grow logs indefinitely.
+	shellCmd := fmt.Sprintf("tail -f /dev/null | exec %s 2>&1 | %s", shellQuoteArgs(server.Command), logWriter)
 
 	execCmd := exec.Command("/bin/sh", "-c", shellCmd)
 	execCmd.Dir = server.Path
-	execCmd.Stdout = logFile
-	execCmd.Stderr = logFile
 
 	// Set environment
 	execCmd.Env = append(os.Environ(),
@@ -319,7 +322,6 @@ func runDaemon(server *registry.Server, reg *registry.Registry, projConfig *proj
 
 	// Start process
 	if err := execCmd.Start(); err != nil {
-		logFile.Close()
 		return fmt.Errorf("failed to start server: %w", err)
 	}
 
@@ -329,7 +331,6 @@ func runDaemon(server *registry.Server, reg *registry.Registry, projConfig *proj
 	// Save to registry
 	if err := reg.Set(server); err != nil {
 		execCmd.Process.Kill() //nolint:errcheck // Cleanup on error path
-		logFile.Close()
 		return fmt.Errorf("failed to save to registry: %w", err)
 	}
 
@@ -340,7 +341,6 @@ func runDaemon(server *registry.Server, reg *registry.Registry, projConfig *proj
 	if err := execCmd.Process.Release(); err != nil {
 		fmt.Fprintf(os.Stderr, "Warning: failed to release process: %v\n", err)
 	}
-	logFile.Close()
 
 	// Reload proxy to pick up new route (only in subdomain mode)
 	if cfg.IsSubdomainMode() {

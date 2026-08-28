@@ -900,19 +900,20 @@ func (s *mcpServer) toolStart(args map[string]interface{}) callToolResult {
 	}
 	logFile := filepath.Join(logDir, fmt.Sprintf("%s.log", wt.Name))
 
-	// Open log file
-	logFH, err := os.OpenFile(logFile, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
-	if err != nil {
+	if err := prepareBoundedLogFile(logFile, cfg.LogMaxSize); err != nil {
 		return mcpErrorResult(fmt.Sprintf("Failed to open log file: %v", err))
+	}
+
+	logWriter, err := logWriterShellCommand(logFile, cfg.LogMaxSize)
+	if err != nil {
+		return mcpErrorResult(fmt.Sprintf("Failed to prepare log writer: %v", err))
 	}
 
 	// Start the process via shell with stdin kept open
 	cmdParts := strings.Fields(command)
-	shellCmd := fmt.Sprintf("tail -f /dev/null | PORT=%d exec %s", serverPort, mcpShellQuoteArgs(cmdParts))
+	shellCmd := fmt.Sprintf("tail -f /dev/null | PORT=%d exec %s 2>&1 | %s", serverPort, mcpShellQuoteArgs(cmdParts), logWriter)
 	cmd := exec.Command("/bin/sh", "-c", shellCmd)
 	cmd.Dir = absPath
-	cmd.Stdout = logFH
-	cmd.Stderr = logFH
 	cmd.Env = os.Environ()
 
 	cmd.SysProcAttr = &syscall.SysProcAttr{
@@ -920,21 +921,21 @@ func (s *mcpServer) toolStart(args map[string]interface{}) callToolResult {
 	}
 
 	if err := cmd.Start(); err != nil {
-		logFH.Close()
 		return mcpErrorResult(fmt.Sprintf("Failed to start server: %v", err))
 	}
 
 	pid := cmd.Process.Pid
 
 	go func() {
-		// Wait for process to exit, close log file regardless of outcome
-		cmd.Wait() //nolint:errcheck // Process cleanup, error doesn't affect outcome
-		logFH.Close()
+		// Wait for process to exit so the shell pipeline is reaped.
+		if err := cmd.Wait(); err != nil {
+			fmt.Fprintf(os.Stderr, "Warning: server process group exited with error: %v\n", err)
+		}
 	}()
 
 	time.Sleep(100 * time.Millisecond)
 
-	if !mcpIsProcessRunning(pid) {
+	if !isServerPIDRunning(pid) {
 		return mcpErrorResult(fmt.Sprintf("Server process exited immediately. Check logs at: %s", logFile))
 	}
 
@@ -987,10 +988,8 @@ func (s *mcpServer) toolStop(args map[string]interface{}) callToolResult {
 		return mcpTextResult(fmt.Sprintf("Server '%s' is not running", name))
 	}
 
-	process, err := os.FindProcess(server.PID)
-	if err == nil {
-		// Best effort kill - process may already be dead
-		process.Kill() //nolint:errcheck // Best effort during shutdown
+	if err := terminateServerPID(server.PID, 2*time.Second, signalServerPID, waitForServerPIDExit); err != nil {
+		return mcpErrorResult(fmt.Sprintf("Failed to stop server process group: %v", err))
 	}
 
 	server.Status = registry.StatusStopped
@@ -1119,11 +1118,13 @@ func (s *mcpServer) toolRestart(args map[string]interface{}) callToolResult {
 
 	// Stop if running
 	if server.IsRunning() {
-		process, err := os.FindProcess(server.PID)
-		if err == nil {
-			process.Kill() //nolint:errcheck // Best effort during restart
+		if err := terminateServerPID(server.PID, 2*time.Second, signalServerPID, waitForServerPIDExit); err != nil {
+			return mcpErrorResult(fmt.Sprintf("Failed to stop server process group: %v", err))
 		}
-		time.Sleep(500 * time.Millisecond)
+		prepareServerForRestart(server, time.Now())
+		if err := reg.Set(server); err != nil {
+			return mcpErrorResult(fmt.Sprintf("Failed to update server state for restart: %v", err))
+		}
 	}
 
 	// Restart using the same command
@@ -1138,6 +1139,12 @@ func (s *mcpServer) toolRestart(args map[string]interface{}) callToolResult {
 	}
 
 	return s.toolStart(startArgs)
+}
+
+func prepareServerForRestart(server *registry.Server, stoppedAt time.Time) {
+	server.Status = registry.StatusStopped
+	server.PID = 0
+	server.StoppedAt = stoppedAt
 }
 
 func (s *mcpServer) toolNew(args map[string]interface{}) callToolResult {
@@ -1268,15 +1275,6 @@ func mcpShellQuoteArgs(args []string) string {
 		quoted[i] = "'" + escaped + "'"
 	}
 	return strings.Join(quoted, " ")
-}
-
-func mcpIsProcessRunning(pid int) bool {
-	process, err := os.FindProcess(pid)
-	if err != nil {
-		return false
-	}
-	err = process.Signal(syscall.Signal(0))
-	return err == nil
 }
 
 func (s *mcpServer) sendResult(id interface{}, result interface{}) {

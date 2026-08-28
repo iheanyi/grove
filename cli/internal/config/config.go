@@ -1,9 +1,11 @@
 package config
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/adrg/xdg"
@@ -85,7 +87,7 @@ func Default() *Config {
 		ProxyHTTPPort:      80,
 		ProxyHTTPSPort:     443,
 		LogDir:             filepath.Join(xdg.ConfigHome, "grove", "logs"),
-		LogMaxSize:         "10MB",
+		LogMaxSize:         "100MB",
 		LogRetention:       "7d",
 		IdleTimeout:        30 * time.Minute,
 		HealthCheckTimeout: 60 * time.Second,
@@ -101,6 +103,23 @@ func Default() *Config {
 			OnIdleStop: true,
 		},
 	}
+}
+
+// LogRetentionDuration returns the configured age limit for Grove log files.
+func (c *Config) LogRetentionDuration() (time.Duration, error) {
+	value := strings.TrimSpace(c.LogRetention)
+	if strings.HasSuffix(value, "d") {
+		days, err := strconv.ParseUint(strings.TrimSuffix(value, "d"), 10, 32)
+		const day = 24 * time.Hour
+		const maxRetentionDays = uint64((1<<63 - 1) / day)
+		if err == nil && days > 0 && days <= maxRetentionDays {
+			return time.Duration(days) * day, nil
+		}
+	} else if duration, err := time.ParseDuration(value); err == nil && duration > 0 {
+		return duration, nil
+	}
+
+	return 0, fmt.Errorf("invalid log_retention %q (expected a positive duration such as 7d or 168h)", c.LogRetention)
 }
 
 // ConfigDir returns the grove configuration directory
@@ -141,6 +160,9 @@ func Load(path string) (*Config, error) {
 	}
 
 	if err := yaml.Unmarshal(data, cfg); err != nil {
+		return nil, err
+	}
+	if _, err := cfg.LogRetentionDuration(); err != nil {
 		return nil, err
 	}
 

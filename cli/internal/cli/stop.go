@@ -3,7 +3,6 @@ package cli
 import (
 	"fmt"
 	"os"
-	"syscall"
 	"time"
 
 	"github.com/iheanyi/grove/internal/project"
@@ -85,67 +84,18 @@ func stopServer(reg *registry.Registry, name string, timeout time.Duration) erro
 		}
 	}
 
-	// Find the process
-	process, err := os.FindProcess(server.PID)
-	if err != nil {
-		// Process doesn't exist, just update registry
-		server.Status = registry.StatusStopped
-		server.PID = 0
-		server.StoppedAt = time.Now()
-		if err := reg.Set(server); err != nil {
-			fmt.Fprintf(os.Stderr, "Warning: failed to update registry: %v\n", err)
-		}
-		// Reload proxy to remove stale route (only in subdomain mode)
-		if cfg.IsSubdomainMode() {
-			if err := ReloadProxy(); err != nil {
-				fmt.Printf("Warning: failed to reload proxy: %v\n", err)
-			}
-		}
-		fmt.Println("Server process not found, marking as stopped")
-		return nil
-	}
-
 	// Send SIGTERM for graceful shutdown
 	server.Status = registry.StatusStopping
 	if err := reg.Set(server); err != nil {
 		fmt.Fprintf(os.Stderr, "Warning: failed to update registry: %v\n", err)
 	}
 
-	if err := process.Signal(syscall.SIGTERM); err != nil {
-		// Process might already be dead
-		server.Status = registry.StatusStopped
-		server.PID = 0
-		server.StoppedAt = time.Now()
-		if err := reg.Set(server); err != nil {
-			fmt.Fprintf(os.Stderr, "Warning: failed to update registry: %v\n", err)
+	if err := terminateServerPID(server.PID, timeout, signalServerPID, waitForServerPIDExit); err != nil {
+		server.Status = registry.StatusRunning
+		if registryErr := reg.Set(server); registryErr != nil {
+			return fmt.Errorf("failed to stop server: %v; failed to restore registry state: %w", err, registryErr)
 		}
-		// Reload proxy to remove stale route (only in subdomain mode)
-		if cfg.IsSubdomainMode() {
-			if err := ReloadProxy(); err != nil {
-				fmt.Printf("Warning: failed to reload proxy: %v\n", err)
-			}
-		}
-		fmt.Println("Server stopped")
-		return nil
-	}
-
-	// Wait for process to exit
-	done := make(chan error, 1)
-	go func() {
-		_, err := process.Wait()
-		done <- err
-	}()
-
-	select {
-	case <-done:
-		// Process exited gracefully
-	case <-time.After(timeout):
-		// Timeout, force kill
-		fmt.Println("Timeout waiting for graceful shutdown, sending SIGKILL...")
-		if err := process.Signal(syscall.SIGKILL); err != nil {
-			fmt.Fprintf(os.Stderr, "Warning: failed to send SIGKILL: %v\n", err)
-		}
-		<-done
+		return fmt.Errorf("failed to stop server: %w", err)
 	}
 
 	// Update registry
@@ -220,55 +170,18 @@ func stopServerNoReload(reg *registry.Registry, name string, timeout time.Durati
 		}
 	}
 
-	// Find the process
-	process, err := os.FindProcess(server.PID)
-	if err != nil {
-		// Process doesn't exist, just update registry
-		server.Status = registry.StatusStopped
-		server.PID = 0
-		server.StoppedAt = time.Now()
-		if err := reg.Set(server); err != nil {
-			fmt.Fprintf(os.Stderr, "Warning: failed to update registry: %v\n", err)
-		}
-		fmt.Printf("Server '%s' process not found, marking as stopped\n", name)
-		return nil
-	}
-
 	// Send SIGTERM for graceful shutdown
 	server.Status = registry.StatusStopping
 	if err := reg.Set(server); err != nil {
 		fmt.Fprintf(os.Stderr, "Warning: failed to update registry: %v\n", err)
 	}
 
-	if err := process.Signal(syscall.SIGTERM); err != nil {
-		// Process might already be dead
-		server.Status = registry.StatusStopped
-		server.PID = 0
-		server.StoppedAt = time.Now()
-		if err := reg.Set(server); err != nil {
-			fmt.Fprintf(os.Stderr, "Warning: failed to update registry: %v\n", err)
+	if err := terminateServerPID(server.PID, timeout, signalServerPID, waitForServerPIDExit); err != nil {
+		server.Status = registry.StatusRunning
+		if registryErr := reg.Set(server); registryErr != nil {
+			return fmt.Errorf("failed to stop server '%s': %v; failed to restore registry state: %w", name, err, registryErr)
 		}
-		fmt.Printf("Server '%s' stopped\n", name)
-		return nil
-	}
-
-	// Wait for process to exit
-	done := make(chan error, 1)
-	go func() {
-		_, err := process.Wait()
-		done <- err
-	}()
-
-	select {
-	case <-done:
-		// Process exited gracefully
-	case <-time.After(timeout):
-		// Timeout, force kill
-		fmt.Printf("Timeout waiting for '%s' graceful shutdown, sending SIGKILL...\n", name)
-		if err := process.Signal(syscall.SIGKILL); err != nil {
-			fmt.Fprintf(os.Stderr, "Warning: failed to send SIGKILL: %v\n", err)
-		}
-		<-done
+		return fmt.Errorf("failed to stop server '%s': %w", name, err)
 	}
 
 	// Update registry
