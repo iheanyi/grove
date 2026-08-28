@@ -25,9 +25,9 @@ build-web: ## Build the web dashboard
 	cd $(WEB_DIR) && npm install && npm run build
 
 build: build-web ## Build the grove binary (includes web dashboard)
-	$(GOBUILD) $(LDFLAGS) -o $(BINARY_NAME) ./cmd/grove
+	$(GOBUILD) -tags embedui $(LDFLAGS) -o $(BINARY_NAME) ./cmd/grove
 
-build-go: ## Build only the Go binary (skip web build)
+build-go: ## Build only the Go binary (skip web build; stub dashboard)
 	$(GOBUILD) $(LDFLAGS) -o $(BINARY_NAME) ./cmd/grove
 
 install: build ## Install grove to $GOPATH/bin

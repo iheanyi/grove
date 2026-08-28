@@ -1,7 +1,9 @@
 package dashboard
 
+//go:generate npm --prefix web ci
+//go:generate npm --prefix web run build
+
 import (
-	"embed"
 	"fmt"
 	"io/fs"
 	"log"
@@ -16,9 +18,6 @@ import (
 	"github.com/iheanyi/grove/internal/discovery"
 	"github.com/iheanyi/grove/internal/registry"
 )
-
-//go:embed web/build/*
-var webFS embed.FS
 
 // Server represents the dashboard HTTP server
 type Server struct {
@@ -70,7 +69,7 @@ func (s *Server) setupRoutes() {
 	// WebSocket route
 	s.mux.HandleFunc("/ws", s.wsHub.HandleWebSocket)
 
-	// Static files (SvelteKit build)
+	// Static files (embedded dashboard)
 	if s.devMode {
 		// In dev mode, proxy to Vite dev server
 		s.mux.HandleFunc("/", s.proxyToDev)
@@ -80,10 +79,9 @@ func (s *Server) setupRoutes() {
 	}
 }
 
-// handleStatic serves the embedded SvelteKit build
+// handleStatic serves the embedded dashboard (stub or Vite build)
 func (s *Server) handleStatic(w http.ResponseWriter, r *http.Request) {
-	// Get the embedded filesystem, stripping the "web/build" prefix
-	staticFS, err := fs.Sub(webFS, "web/build")
+	staticFS, err := fs.Sub(embeddedWeb, embeddedWebRoot)
 	if err != nil {
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
 		return

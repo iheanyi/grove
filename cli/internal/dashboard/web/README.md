@@ -1,38 +1,33 @@
-# sv
+# Grove dashboard
 
-Everything you need to build a Svelte project, powered by [`sv`](https://github.com/sveltejs/cli).
+This is the embedded dashboard, served by the CLI.
 
-## Creating a project
-
-If you're seeing this, you've probably already done this step. Congrats!
-
-```sh
-# create a new project in the current directory
-npx sv create
-
-# create a new project in my-app
-npx sv create my-app
-```
-
-## Developing
-
-Once you've created a project and installed dependencies with `npm install` (or `pnpm install` or `yarn`), start a development server:
+## Development
 
 ```sh
 npm run dev
-
-# or start the server and open the app in a new browser tab
-npm run dev -- --open
 ```
 
-## Building
-
-To create a production version of your app:
+In another terminal, from `cli/`:
 
 ```sh
-npm run build
+grove dashboard --dev
 ```
 
-You can preview the production build with `npm run preview`.
+Or `make dev-dashboard` (builds the Go binary without the Vite bundle).
 
-> To deploy your app, you may need to install an [adapter](https://svelte.dev/docs/kit/adapters) for your target environment.
+## Production embed
+
+`npm run build` writes `build/`. Then, from `cli/`:
+
+```sh
+go build -tags embedui
+```
+
+`make build` does both (`npm install && npm run build`, then `go build -tags embedui`).
+
+## go install
+
+`go install` embeds `web/stub` only (no Node, no stale Vite bundle). GitHub release and Homebrew binaries embed the real UI via `-tags embedui` after `npm run build`.
+
+Never commit `web/build`.

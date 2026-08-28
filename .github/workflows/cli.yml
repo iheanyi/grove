@@ -24,6 +24,26 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Guard committed dashboard embed
+        run: |
+          set -euo pipefail
+          if git ls-files -- 'cli/internal/dashboard/web/build/**' | grep -q .; then
+            echo "error: generated web/build must not be tracked in git" >&2
+            git ls-files -- 'cli/internal/dashboard/web/build/**'
+            exit 1
+          fi
+          hashed="$(git ls-files -- 'cli/internal/dashboard/web' | grep -E '\.[A-Za-z0-9_-]{8}\.(js|css)$' || true)"
+          if [ -n "$hashed" ]; then
+            echo "error: hashed Vite assets must not be tracked in git" >&2
+            printf '%s\n' "$hashed"
+            exit 1
+          fi
+          stub="cli/internal/dashboard/web/stub/index.html"
+          if ! grep -q 'data-grove-embed="stub"' "$stub"; then
+            echo "error: $stub must contain data-grove-embed=\"stub\"" >&2
+            exit 1
+          fi
+
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
@@ -49,7 +69,7 @@ jobs:
 
       - name: Run tests
         working-directory: cli
-        run: go test -v -race -coverprofile=coverage.txt -covermode=atomic ./...
+        run: go test -tags embedui -v -race -coverprofile=coverage.txt -covermode=atomic ./
 
       - name: Upload coverage
         uses: codecov/codecov-action@v4
@@ -63,6 +83,26 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
+      - name: Guard committed dashboard embed
+        run: |
+          set -euo pipefail
+          if git ls-files -- 'cli/internal/dashboard/web/build/**' | grep -q .; then
+            echo "error: generated web/build must not be tracked in git" >&2
+            git ls-files -- 'cli/internal/dashboard/web/build/**'
+            exit 1
+          fi
+          hashed="$(git ls-files -- 'cli/internal/dashboard/web' | grep -E '\.[A-Za-z0-9_-]{8}\.(js|css)$' || true)"
+          if [ -n "$hashed" ]; then
+            echo "error: hashed Vite assets must not be tracked in git" >&2
+            printf '%s\n' "$hashed"
+            exit 1
+          fi
+          stub="cli/internal/dashboard/web/stub/index.html"
+          if ! grep -q 'data-grove-embed="stub"' "$stub"; then
+            echo "error: $stub must contain data-grove-embed=\"stub\"" >&2
+            exit 1
+          fi
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
@@ -88,6 +128,7 @@ jobs:
         with:
           version: latest
           working-directory: cli
+          args: --build-tags embedui
 
   build:
     name: Build
@@ -98,6 +139,26 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+
+      - name: Guard committed dashboard embed
+        run: |
+          set -euo pipefail
+          if git ls-files -- 'cli/internal/dashboard/web/build/**' | grep -q .; then
+            echo "error: generated web/build must not be tracked in git" >&2
+            git ls-files -- 'cli/internal/dashboard/web/build/**'
+            exit 1
+          fi
+          hashed="$(git ls-files -- 'cli/internal/dashboard/web' | grep -E '\.[A-Za-z0-9_-]{8}\.(js|css)$' || true)"
+          if [ -n "$hashed" ]; then
+            echo "error: hashed Vite assets must not be tracked in git" >&2
+            printf '%s\n' "$hashed"
+            exit 1
+          fi
+          stub="cli/internal/dashboard/web/stub/index.html"
+          if ! grep -q 'data-grove-embed="stub"' "$stub"; then
+            echo "error: $stub must contain data-grove-embed=\"stub\"" >&2
+            exit 1
+          fi
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
@@ -120,7 +181,7 @@ jobs:
 
       - name: Build
         working-directory: cli
-        run: go build -v -o grove ./cmd/grove
+        run: go build -tags embedui -v -o grove ./cmd/grove
 
       - name: Verify binary
         working-directory: cli

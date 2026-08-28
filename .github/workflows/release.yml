@@ -88,7 +88,8 @@ jobs:
         with:
           distribution: goreleaser
           version: latest
-          # --skip=validate allows release despite generated web/build files making git "dirty"
+          # --skip=validate: npm run build writes gitignored web/build, so the
+          # worktree is dirty. Expected. GoReleaser embeds it via tags: [embedui].
           args: release --clean --skip=validate ${{ inputs.prerelease && '--prerelease' || '' }}
           workdir: cli
         env:
