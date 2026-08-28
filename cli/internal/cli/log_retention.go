@@ -22,14 +22,20 @@ func cleanupConfiguredLogsUsingRegistry(cfg *config.Config, reg *registry.Regist
 		return err
 	}
 
-	running := reg.ListRunning()
-	activeLogFiles := make([]string, 0, len(running))
-	for _, server := range running {
-		if server.LogFile != "" {
+	servers := reg.List()
+	activeLogFiles := make([]string, 0, len(servers))
+	for _, server := range servers {
+		if protectsLogFromRetention(server.Status) && server.LogFile != "" {
 			activeLogFiles = append(activeLogFiles, server.LogFile)
 		}
 	}
 
 	_, err = logretention.Cleanup(cfg.LogDir, retention, activeLogFiles, now)
 	return err
+}
+
+func protectsLogFromRetention(status registry.ServerStatus) bool {
+	return status == registry.StatusRunning ||
+		status == registry.StatusStarting ||
+		status == registry.StatusStopping
 }
