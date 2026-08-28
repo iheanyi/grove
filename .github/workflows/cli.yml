@@ -24,6 +24,18 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Assert dashboard stub only in git
+        run: |
+          if git ls-files 'cli/internal/dashboard/web/build/_app' | grep -q .; then
+            echo "generated web/build/_app must not be tracked" >&2
+            exit 1
+          fi
+          if git ls-files 'cli/internal/dashboard/web' | grep -E '\.[A-Za-z0-9_-]{8}\.(js|css)$'; then
+            echo "hashed Vite assets must not be tracked" >&2
+            exit 1
+          fi
+          grep -q 'data-grove-embed="stub"' cli/internal/dashboard/web/build/index.html
+
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:

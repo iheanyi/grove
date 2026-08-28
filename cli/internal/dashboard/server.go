@@ -17,7 +17,10 @@ import (
 	"github.com/iheanyi/grove/internal/registry"
 )
 
-//go:embed web/build/*
+//go:generate npm --prefix web ci
+//go:generate npm --prefix web run build
+
+//go:embed all:web/build
 var webFS embed.FS
 
 // Server represents the dashboard HTTP server

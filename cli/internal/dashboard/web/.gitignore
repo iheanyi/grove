@@ -6,7 +6,10 @@ node_modules
 .netlify
 .wrangler
 /.svelte-kit
-# Note: /build is tracked because it's embedded in the Go binary
+# Generated Vite output. The stub index.html is tracked so go install
+# compiles without Node. Do not commit anything else under /build.
+/build/*
+!/build/index.html
 
 # OS
 .DS_Store

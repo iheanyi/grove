@@ -2,7 +2,7 @@ version: 2
 
 project_name: grove
 
-# Allow dirty git state because web dashboard is built during CI
+# Ignore menubar app tags so CLI releases don't pick them up
 git:
   ignore_tags:
     - menubar-*
@@ -10,6 +10,8 @@ git:
 before:
   hooks:
     - go mod tidy
+    - npm --prefix internal/dashboard/web ci
+    - npm --prefix internal/dashboard/web run build
 
 builds:
   - main: ./cmd/grove
