@@ -158,6 +158,8 @@ release: ## Tag and push a release, usage: make release V=0.10.3
 	@if ! printf '%s\n' "$(V)" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$$'; then echo "V must look like semver, e.g. 0.10.3"; exit 1; fi
 	@if [ "$$(git branch --show-current)" != "main" ]; then echo "Release must be cut from main"; exit 1; fi
 	@if ! git diff --quiet || ! git diff --cached --quiet; then echo "Working tree must be clean"; exit 1; fi
+	git fetch origin
+	@if [ "$$(git rev-parse HEAD)" != "$$(git rev-parse origin/main)" ]; then echo "main is behind/ahead of origin/main"; exit 1; fi
 	@if git rev-parse -q --verify "refs/tags/v$(V)" >/dev/null; then echo "Tag v$(V) already exists locally"; exit 1; fi
 	@if git ls-remote --exit-code --tags origin "refs/tags/v$(V)" >/dev/null 2>&1; then echo "Tag v$(V) already exists on origin"; exit 1; fi
 	git tag -a "v$(V)" -m "Release v$(V)"
