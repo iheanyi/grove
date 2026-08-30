@@ -1,5 +1,5 @@
 ---
-paths: cli/**/*.go
+paths: cmd/**/*.go,internal/**/*.go,pkg/**/*.go
 ---
 
 # Tasuku Learnings

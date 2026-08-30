@@ -4,12 +4,26 @@ on:
   push:
     branches: [main]
     paths:
-      - 'cli/**'
+      - 'cmd/**'
+      - 'internal/**'
+      - 'pkg/**'
+      - 'go.mod'
+      - 'go.sum'
+      - 'Makefile'
+      - '.goreleaser.yaml'
+      - '.golangci.yml'
       - '.github/workflows/cli.yml'
   pull_request:
     branches: [main]
     paths:
-      - 'cli/**'
+      - 'cmd/**'
+      - 'internal/**'
+      - 'pkg/**'
+      - 'go.mod'
+      - 'go.sum'
+      - 'Makefile'
+      - '.goreleaser.yaml'
+      - '.golangci.yml'
       - '.github/workflows/cli.yml'
 
 jobs:
@@ -19,32 +33,32 @@ jobs:
     strategy:
       matrix:
         os: [ubuntu-latest, macos-latest]
-        go: ['1.21', '1.22']
+        go: ['1.24']
 
     steps:
       - uses: actions/checkout@v4
 
       - name: Assert dashboard stub only in git
         run: |
-          if git ls-files 'cli/internal/dashboard/web/build/_app' | grep -q .; then
+          if git ls-files 'internal/dashboard/web/build/_app' | grep -q .; then
             echo "generated web/build/_app must not be tracked" >&2
             exit 1
           fi
-          if git ls-files 'cli/internal/dashboard/web' | grep -E '\.[A-Za-z0-9_-]{8}\.(js|css)$'; then
+          if git ls-files 'internal/dashboard/web' | grep -E '\.[A-Za-z0-9_-]{8}\.(js|css)$'; then
             echo "hashed Vite assets must not be tracked" >&2
             exit 1
           fi
-          grep -q 'data-grove-embed="stub"' cli/internal/dashboard/web/build/index.html
+          grep -q 'data-grove-embed="stub"' internal/dashboard/web/build/index.html
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '20'
           cache: 'npm'
-          cache-dependency-path: cli/internal/dashboard/web/package-lock.json
+          cache-dependency-path: internal/dashboard/web/package-lock.json
 
       - name: Build web assets
-        working-directory: cli/internal/dashboard/web
+        working-directory: internal/dashboard/web
         run: |
           npm ci
           npm run build
@@ -53,21 +67,19 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version: ${{ matrix.go }}
-          cache-dependency-path: cli/go.sum
+          cache-dependency-path: go.sum
 
       - name: Download dependencies
-        working-directory: cli
         run: go mod download
 
       - name: Run tests
-        working-directory: cli
         run: go test -v -race -coverprofile=coverage.txt -covermode=atomic ./...
 
       - name: Upload coverage
         uses: codecov/codecov-action@v4
-        if: matrix.os == 'ubuntu-latest' && matrix.go == '1.22'
+        if: matrix.os == 'ubuntu-latest' && matrix.go == '1.24'
         with:
-          file: cli/coverage.txt
+          file: coverage.txt
           flags: cli
 
   lint:
@@ -81,10 +93,10 @@ jobs:
         with:
           node-version: '20'
           cache: 'npm'
-          cache-dependency-path: cli/internal/dashboard/web/package-lock.json
+          cache-dependency-path: internal/dashboard/web/package-lock.json
 
       - name: Build web assets
-        working-directory: cli/internal/dashboard/web
+        working-directory: internal/dashboard/web
         run: |
           npm ci
           npm run build
@@ -92,14 +104,13 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.22'
-          cache-dependency-path: cli/go.sum
+          go-version: '1.24'
+          cache-dependency-path: go.sum
 
       - name: golangci-lint
         uses: golangci/golangci-lint-action@v4
         with:
           version: latest
-          working-directory: cli
 
   build:
     name: Build
@@ -116,10 +127,10 @@ jobs:
         with:
           node-version: '20'
           cache: 'npm'
-          cache-dependency-path: cli/internal/dashboard/web/package-lock.json
+          cache-dependency-path: internal/dashboard/web/package-lock.json
 
       - name: Build web assets
-        working-directory: cli/internal/dashboard/web
+        working-directory: internal/dashboard/web
         run: |
           npm ci
           npm run build
@@ -127,13 +138,11 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.22'
-          cache-dependency-path: cli/go.sum
+          go-version: '1.24'
+          cache-dependency-path: go.sum
 
       - name: Build
-        working-directory: cli
         run: go build -v -o grove ./cmd/grove
 
       - name: Verify binary
-        working-directory: cli
         run: ./grove version

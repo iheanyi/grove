@@ -240,8 +240,8 @@ func isGroveRepoRoot(dir string) bool {
 		return true
 	}
 
-	// Also check for cli/go.mod with the right module name
-	goModPath := filepath.Join(dir, "cli", "go.mod")
+	// Also check for go.mod with the right module name
+	goModPath := filepath.Join(dir, "go.mod")
 	if data, err := os.ReadFile(goModPath); err == nil {
 		if strings.Contains(string(data), "github.com/iheanyi/grove") {
 			return true

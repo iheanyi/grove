@@ -62,14 +62,14 @@ brew install iheanyi/tap/grove
 ### From source
 
 ```bash
-go install github.com/iheanyi/grove/cli/cmd/grove@latest
+go install github.com/iheanyi/grove/cmd/grove@latest
 ```
 
 ### Build locally
 
 ```bash
 git clone https://github.com/iheanyi/grove.git
-cd grove/cli
+cd grove
 make build
 ```
 

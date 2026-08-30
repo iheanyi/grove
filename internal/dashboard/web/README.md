@@ -10,7 +10,7 @@ Start the Vite dev server:
 npm run dev
 ```
 
-Then from `cli/`, run the dashboard against it:
+Then from the repo root, run the dashboard against it:
 
 ```sh
 grove dashboard --dev
@@ -28,4 +28,4 @@ To package the full dashboard into a local binary:
 make build
 ```
 
-from `cli/`.
+from the repo root.

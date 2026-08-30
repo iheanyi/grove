@@ -495,7 +495,7 @@ Actions:
 
 **Architecture:**
 ```
-cli/
+grove/
 ├── cmd/grove/
 ├── internal/
 │   ├── dashboard/              # Go WebSocket + HTTP server
@@ -504,21 +504,21 @@ cli/
 │   │   ├── api.go              # REST endpoints for dashboard
 │   │   └── embed.go            # //go:embed web/build/*
 │   └── ...
-└── web/                        # SvelteKit project
-    ├── src/
-    │   ├── routes/
-    │   │   ├── +page.svelte         # Main dashboard
-    │   │   ├── +layout.svelte       # Shared layout
-    │   │   ├── agents/+page.svelte  # Agent monitoring
-    │   │   └── review/+page.svelte  # Review queue
-    │   ├── lib/
-    │   │   ├── stores/              # Svelte stores for state
-    │   │   ├── components/          # Reusable components
-    │   │   └── websocket.ts         # WS client for real-time
-    │   └── app.css                  # Tailwind CSS
-    ├── svelte.config.js             # Uses adapter-static
-    ├── tailwind.config.js
-    └── package.json
+│   └── dashboard/web/          # SvelteKit project
+│       ├── src/
+│       │   ├── routes/
+│       │   │   ├── +page.svelte         # Main dashboard
+│       │   │   ├── +layout.svelte       # Shared layout
+│       │   │   ├── agents/+page.svelte  # Agent monitoring
+│       │   │   └── review/+page.svelte  # Review queue
+│       │   ├── lib/
+│       │   │   ├── stores/              # Svelte stores for state
+│       │   │   ├── components/          # Reusable components
+│       │   │   └── websocket.ts         # WS client for real-time
+│       │   └── app.css                  # Tailwind CSS
+│       ├── svelte.config.js           # Uses adapter-static
+│       ├── tailwind.config.js
+│       └── package.json
 ```
 
 **Key Components:**

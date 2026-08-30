@@ -9,13 +9,13 @@
     "id": "fb39f1",
     "text": "Always use `ansi.Truncate(s, width, \"...\")` from `github.com/charmbracelet/x/ansi` instead of custom byte-based truncation. Custom truncation like `s[:n-3] + \"...\"` breaks on: (1) multi-byte UTF-8 characters (cuts emoji/CJK in half), (2) wide characters (CJK = 2 cells), (3) ANSI escape codes (corrupts styling). The ansi package is already an indirect dependency via lipgloss.",
     "is_rule": true,
-    "scope": "cli/**/*.go",
+    "scope": "cmd/**/*.go,internal/**/*.go,pkg/**/*.go",
     "created_at": "2026-01-09T15:36:22.149927Z"
   },
   {
     "id": "7e9da0",
     "text": "When using grep in shell commands, avoid complex patterns with `$` (end anchor) when piping to awk - it doesn't work as expected. Keep grep patterns simple like `grep '[c]laude'` (the bracket trick prevents self-matching). The working directory check via lsof is the real filter anyway.",
-    "scope": "cli/internal/discovery/**/*.go",
+    "scope": "internal/discovery/**/*.go",
     "created_at": "2026-01-09T15:36:22.202661Z"
   },
   {

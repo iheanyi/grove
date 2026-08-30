@@ -1,24 +1,24 @@
 # Grove - Development Guide
 
 Grove is a development server manager for git worktrees with two main components:
-1. **CLI** (`cli/`) - Go CLI with TUI for managing dev servers
+1. **CLI** (repo root Go module) - Go CLI with TUI for managing dev servers
 2. **Menubar** (`menubar/`) - Native macOS menubar app (Swift/SwiftUI)
 
 ## Project Structure
 
 ```
 grove/
-├── cli/                    # Go CLI application
-│   ├── cmd/grove/         # Main entry point
-│   ├── internal/          # Internal packages
-│   │   ├── cli/          # CLI commands (cobra)
-│   │   ├── tui/          # Terminal UI (bubbletea)
-│   │   ├── worktree/     # Git worktree detection
-│   │   ├── port/         # Port allocation
-│   │   ├── registry/     # Server registry (JSON)
-│   │   ├── process/      # Process management
-│   │   └── config/       # Configuration
-│   └── go.mod
+├── cmd/grove/             # CLI entry point
+├── internal/              # Internal Go packages
+│   ├── cli/               # CLI commands (cobra)
+│   ├── tui/               # Terminal UI (bubbletea)
+│   ├── worktree/          # Git worktree detection
+│   ├── port/              # Port allocation
+│   ├── registry/          # Server registry (JSON)
+│   ├── process/           # Process management
+│   └── config/            # Configuration
+├── pkg/                   # Public Go packages
+├── go.mod
 ├── menubar/               # macOS menubar app
 │   └── GroveMenubar/
 │       ├── Sources/GroveMenubar/
@@ -35,7 +35,6 @@ grove/
 ### Build & Run
 
 ```bash
-cd cli
 go build -o grove ./cmd/grove
 ./grove          # Launch TUI
 ./grove ls       # List servers
@@ -61,7 +60,6 @@ go build -o grove ./cmd/grove
 ### Testing
 
 ```bash
-cd cli
 go test ./...
 ```
 
@@ -148,7 +146,7 @@ Important: `grove start` must run from within the worktree directory, not with a
 
 ### Adding a new CLI command
 
-1. Create command file in `cli/internal/cli/`
+1. Create command file in `internal/cli/`
 2. Register in root command
 3. If menubar needs it, update `ServerManager.swift`
 

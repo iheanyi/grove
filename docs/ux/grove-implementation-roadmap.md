@@ -10,7 +10,7 @@ Objective: remove incorrect guidance and obvious UX drift immediately.
 ### Work items
 
 1. Fix TUI messaging for start/restart semantics
-- Update misleading messages in `cli/internal/tui/app_enhanced.go`.
+- Update misleading messages in `internal/tui/app_enhanced.go`.
 - Use actionable guidance that matches CLI behavior.
 
 2. Sync README shortcut documentation with actual keymap

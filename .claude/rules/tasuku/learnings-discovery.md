@@ -1,5 +1,5 @@
 ---
-paths: cli/internal/discovery/**/*.go
+paths: internal/discovery/**/*.go
 ---
 
 # Tasuku Learnings
