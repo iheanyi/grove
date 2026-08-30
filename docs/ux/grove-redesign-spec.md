@@ -143,11 +143,11 @@ flowchart TD
 - `menubar/GroveMenubar/Sources/GroveMenubar/Views/MenuView.swift`
 - `menubar/GroveMenubar/Sources/GroveMenubar/Services/ServerManager.swift`
 - `menubar/GroveMenubar/Sources/GroveMenubar/Views/SettingsView.swift`
-- `cli/internal/tui/app_enhanced.go`
+- `internal/tui/app_enhanced.go`
 - `README.md`
 
 ### Secondary targets
 - `menubar/GroveMenubar/Sources/GroveMenubar/Views/ServerGroupView.swift`
 - `menubar/GroveMenubar/Sources/GroveMenubar/Models/ServerGroup.swift`
-- `cli/internal/cli/discover.go`
-- `cli/internal/cli/root.go`
+- `internal/cli/discover.go`
+- `internal/cli/root.go`

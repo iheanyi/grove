@@ -61,7 +61,7 @@ tools_analyzed:
     scope: global-only
     format: toml
 related_files:
-  - cli/internal/cli/mcp.go
+  - internal/cli/mcp.go
 ---
 
 # MCP/Skills/Plugins Feature Parity Across AI Coding Tools
@@ -180,7 +180,7 @@ ln -s ../mcp-servers.json .cursor/mcp.json
 
 ### Approach 3: Grove's Multi-Provider Installation
 
-Grove demonstrates this pattern in `cli/internal/cli/mcp.go`:
+Grove demonstrates this pattern in `internal/cli/mcp.go`:
 
 ```go
 // grove mcp install --all
@@ -430,8 +430,8 @@ const server = new Server(
 
 ## Related Documentation
 
-- Grove MCP implementation: `cli/internal/cli/mcp.go`
-- Grove agent detection: `cli/internal/discovery/discovery.go`
+- Grove MCP implementation: `internal/cli/mcp.go`
+- Grove agent detection: `internal/discovery/discovery.go`
 - Multi-agent dashboard plans: `.claude/plans/worktree-management-improvements.md`
 
 ## Conclusion

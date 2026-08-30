@@ -51,15 +51,15 @@ Legend:
 ### Critical
 
 1. Incorrect TUI start guidance causes invalid commands and user confusion  
-   - Evidence: `cli/internal/tui/app_enhanced.go` shows `Use 'grove start %s' in terminal` message.  
+   - Evidence: `internal/tui/app_enhanced.go` shows `Use 'grove start %s' in terminal` message.  
    - Impact: Directly teaches a command pattern that is incompatible with current CLI start semantics.
 
 2. Incorrect TUI restart guidance ignores dedicated restart command  
-   - Evidence: `cli/internal/tui/app_enhanced.go` shows `Restart ... with 'grove start %s'`.  
+   - Evidence: `internal/tui/app_enhanced.go` shows `Restart ... with 'grove start %s'`.  
    - Impact: Users take a slower/error-prone path; undermines trust in TUI guidance.
 
 3. Docs vs shipped behavior mismatch on core keybindings  
-   - Evidence: `README.md` lists `enter/space/o`; TUI keymap uses `s/x/b` in `cli/internal/tui/app_enhanced.go`.  
+   - Evidence: `README.md` lists `enter/space/o`; TUI keymap uses `s/x/b` in `internal/tui/app_enhanced.go`.  
    - Impact: Onboarding friction and immediate command failure for new users.
 
 ### High
@@ -159,12 +159,12 @@ Legend:
 - `menubar/GroveMenubar/Sources/GroveMenubar/Services/ServerManager.swift`
 - `menubar/GroveMenubar/Sources/GroveMenubar/Views/SettingsView.swift`
 - `menubar/GroveMenubar/Sources/GroveMenubar/Services/PreferencesManager.swift`
-- `cli/internal/tui/app_enhanced.go`
-- `cli/internal/tui/components.go`
-- `cli/internal/cli/start.go`
-- `cli/internal/cli/restart.go`
-- `cli/internal/cli/stop.go`
-- `cli/internal/cli/discover.go`
-- `cli/internal/cli/ls.go`
-- `cli/internal/cli/root.go`
+- `internal/tui/app_enhanced.go`
+- `internal/tui/components.go`
+- `internal/cli/start.go`
+- `internal/cli/restart.go`
+- `internal/cli/stop.go`
+- `internal/cli/discover.go`
+- `internal/cli/ls.go`
+- `internal/cli/root.go`
 - `README.md`

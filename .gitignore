@@ -11,9 +11,9 @@
 *.dll
 *.so
 *.dylib
-/cli/grove
-/cli/wt
-/cli/bin/
+/grove
+/wt
+/bin/
 
 # Test binary
 *.test
@@ -127,8 +127,8 @@ secrets/
 # Node.js / Web Dashboard
 # =============================================================================
 node_modules/
-/cli/internal/dashboard/web/node_modules/
-/cli/internal/dashboard/web/.svelte-kit/
+/internal/dashboard/web/node_modules/
+/internal/dashboard/web/.svelte-kit/
 
 # =============================================================================
 # Build and Distribution
@@ -142,7 +142,7 @@ release/
 *.app
 
 # GoReleaser
-/cli/dist/
+/dist/
 
 # =============================================================================
 # Logs and Debug
