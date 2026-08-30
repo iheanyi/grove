@@ -11,6 +11,7 @@ grove/
 ├── cmd/grove/             # CLI entry point
 ├── internal/              # Internal Go packages
 │   ├── cli/               # CLI commands (cobra)
+│   ├── dashboard/         # Embedded SvelteKit UI (stub at web/build/index.html)
 │   ├── tui/               # Terminal UI (bubbletea)
 │   ├── worktree/          # Git worktree detection
 │   ├── port/              # Port allocation
