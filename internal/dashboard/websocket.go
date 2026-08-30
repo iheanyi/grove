@@ -31,6 +31,8 @@ type Hub struct {
 	broadcast  chan Message
 	register   chan *Client
 	unregister chan *Client
+	done       chan struct{}
+	stopOnce   sync.Once
 	mu         sync.RWMutex
 }
 
@@ -41,6 +43,7 @@ func NewHub() *Hub {
 		broadcast:  make(chan Message, 256),
 		register:   make(chan *Client),
 		unregister: make(chan *Client),
+		done:       make(chan struct{}),
 	}
 }
 
@@ -73,13 +76,32 @@ func (h *Hub) Run() {
 				}
 			}
 			h.mu.RUnlock()
+
+		case <-h.done:
+			h.mu.Lock()
+			for client := range h.clients {
+				delete(h.clients, client)
+				close(client.send)
+			}
+			h.mu.Unlock()
+			return
 		}
 	}
 }
 
+// Stop stops the hub's main loop.
+func (h *Hub) Stop() {
+	h.stopOnce.Do(func() {
+		close(h.done)
+	})
+}
+
 // Broadcast sends a message to all connected clients
 func (h *Hub) Broadcast(msg Message) {
-	h.broadcast <- msg
+	select {
+	case h.broadcast <- msg:
+	case <-h.done:
+	}
 }
 
 // HandleWebSocket handles WebSocket upgrade and connection
@@ -93,7 +115,11 @@ func (h *Hub) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 			topics: make(map[string]bool),
 		}
 
-		h.register <- client
+		select {
+		case h.register <- client:
+		case <-h.done:
+			return
+		}
 
 		// Start writer goroutine
 		go client.writePump()
@@ -101,7 +127,10 @@ func (h *Hub) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 		// Read messages (mainly for subscription management)
 		client.readPump()
 
-		h.unregister <- client
+		select {
+		case h.unregister <- client:
+		case <-h.done:
+		}
 	}).ServeHTTP(w, r)
 }
 

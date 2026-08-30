@@ -167,6 +167,7 @@ release: ## Tag and push a release, usage: make release V=0.10.3
 	@echo "Release v$(V) pushed. GitHub Actions will build the GitHub Release and update Homebrew."
 
 release-patch: ## Bump the latest v* patch tag and release it
+	git fetch origin --tags
 	@latest=$$(git tag --list 'v[0-9]*.[0-9]*.[0-9]*' --sort=-v:refname | awk 'NR==1 { print; exit }'); \
 	if [ -z "$$latest" ]; then echo "No v* semver tags found"; exit 1; fi; \
 	base=$${latest#v}; base=$${base%%-*}; \

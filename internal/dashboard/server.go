@@ -3,6 +3,7 @@ package dashboard
 import (
 	"embed"
 	"fmt"
+	"io"
 	"io/fs"
 	"log"
 	"net"
@@ -34,6 +35,9 @@ type Server struct {
 	mu        sync.RWMutex
 	server    *http.Server
 	listeners []net.Listener
+	stopOnce  sync.Once
+	stopCh    chan struct{}
+	bgDone    chan struct{}
 }
 
 // Config holds the server configuration
@@ -57,6 +61,8 @@ func NewServer(cfg Config) (*Server, error) {
 		mux:      http.NewServeMux(),
 		wsHub:    NewHub(),
 		registry: reg,
+		stopCh:   make(chan struct{}),
+		bgDone:   make(chan struct{}),
 	}
 
 	s.setupRoutes()
@@ -101,7 +107,7 @@ func (s *Server) handleStatic(w http.ResponseWriter, r *http.Request) {
 		path = "/index.html"
 	}
 
-	// Check if the file exists
+	// Check if the file exists.
 	if _, err := fs.Stat(staticFS, strings.TrimPrefix(path, "/")); err != nil {
 		// File doesn't exist, serve index.html for SPA routing
 		r.URL.Path = "/"
@@ -118,7 +124,19 @@ func (s *Server) proxyToDev(w http.ResponseWriter, r *http.Request) {
 		targetURL += "?" + r.URL.RawQuery
 	}
 
-	resp, err := http.Get(targetURL) //nolint:gosec // G107: URL is constructed from trusted devURL config
+	req, err := http.NewRequestWithContext(r.Context(), http.MethodGet, targetURL, nil)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Failed to create proxy request: %v", err), http.StatusBadGateway)
+		return
+	}
+
+	client := &http.Client{
+		Timeout: 10 * time.Second,
+		CheckRedirect: func(_ *http.Request, _ []*http.Request) error {
+			return http.ErrUseLastResponse
+		},
+	}
+	resp, err := client.Do(req)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("Failed to proxy to dev server: %v", err), http.StatusBadGateway)
 		return
@@ -134,27 +152,11 @@ func (s *Server) proxyToDev(w http.ResponseWriter, r *http.Request) {
 
 	w.WriteHeader(resp.StatusCode)
 
-	// Stream the body
-	buf := make([]byte, 32*1024)
-	for {
-		n, err := resp.Body.Read(buf)
-		if n > 0 {
-			w.Write(buf[:n])
-		}
-		if err != nil {
-			break
-		}
-	}
+	_, _ = io.Copy(w, resp.Body)
 }
 
 // Start starts the dashboard server
 func (s *Server) Start() error {
-	// Start WebSocket hub
-	go s.wsHub.Run()
-
-	// Start background update goroutine
-	go s.backgroundUpdates()
-
 	addr := fmt.Sprintf(":%d", s.port)
 	s.server = &http.Server{
 		Addr:              addr,
@@ -171,11 +173,24 @@ func (s *Server) Start() error {
 
 	log.Printf("Dashboard server starting on http://localhost:%d", s.port)
 
+	// Start goroutines only after the listener is ready.
+	go s.wsHub.Run()
+	go s.backgroundUpdates(2 * time.Second)
+
 	return s.server.Serve(listener)
 }
 
 // Stop stops the dashboard server
 func (s *Server) Stop() error {
+	s.stopOnce.Do(func() {
+		if s.stopCh != nil {
+			close(s.stopCh)
+		}
+		if s.wsHub != nil {
+			s.wsHub.Stop()
+		}
+	})
+
 	if s.server != nil {
 		return s.server.Close()
 	}
@@ -187,12 +202,20 @@ func (s *Server) URL() string {
 	return fmt.Sprintf("http://localhost:%d", s.port)
 }
 
-// backgroundUpdates periodically updates the registry and broadcasts changes
-func (s *Server) backgroundUpdates() {
-	ticker := time.NewTicker(2 * time.Second)
+// backgroundUpdates periodically updates the registry and broadcasts changes.
+func (s *Server) backgroundUpdates(interval time.Duration) {
+	defer close(s.bgDone)
+
+	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 
-	for range ticker.C {
+	for {
+		select {
+		case <-s.stopCh:
+			return
+		case <-ticker.C:
+		}
+
 		// Reload registry
 		s.mu.Lock()
 		reg, err := registry.Load()
