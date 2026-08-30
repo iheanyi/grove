@@ -124,7 +124,7 @@ func (s *Server) proxyToDev(w http.ResponseWriter, r *http.Request) {
 		targetURL += "?" + r.URL.RawQuery
 	}
 
-	req, err := http.NewRequestWithContext(r.Context(), http.MethodGet, targetURL, nil) //nolint:gosec // G107: target URL is constructed from trusted local dev server config
+	req, err := http.NewRequestWithContext(r.Context(), http.MethodGet, targetURL, nil)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("Failed to create proxy request: %v", err), http.StatusBadGateway)
 		return
