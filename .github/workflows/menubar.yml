@@ -20,8 +20,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Select Xcode
-        run: sudo xcode-select -s /Applications/Xcode_16.2.app/Contents/Developer
+      - name: Print toolchain versions
+        run: |
+          xcodebuild -version
+          swift --version
 
       - name: Build
         working-directory: menubar/GroveMenubar
