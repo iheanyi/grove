@@ -1,4 +1,4 @@
-.PHONY: all help build build-cli build-web build-go install install-cli install-local clean clean-cli clean-web clean-menubar test test-coverage lint fmt run run-menubar restart dev deps dev-start dev-ls dev-doctor dev-dashboard dev-web release release-dry release-local release-version release-prerelease release-menubar install-menubar kill
+.PHONY: all help build build-cli build-web build-go install install-cli install-local clean clean-cli clean-web clean-menubar test test-coverage lint fmt run run-menubar restart dev deps dev-start dev-ls dev-doctor dev-dashboard dev-web release release-patch release-dry release-local release-menubar install-menubar kill
 
 # Web dashboard directory
 WEB_DIR=internal/dashboard/web
@@ -152,16 +152,23 @@ release-local: ## Create a release locally
 	goreleaser release --clean
 
 # GitHub release targets
-release: ## Release via GitHub Actions with auto-incremented patch version
-	gh workflow run release.yml --repo iheanyi/grove
-	@echo "Release triggered! Watch with: gh run watch"
+release: ## Tag and push a release, usage: make release V=0.10.3
+	@if [ -z "$(V)" ]; then echo "Usage: make release V=0.10.3"; exit 1; fi
+	@case "$(V)" in v*) echo "Use V without a leading v, e.g. V=0.10.3"; exit 1;; esac
+	@if ! printf '%s\n' "$(V)" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$$'; then echo "V must look like semver, e.g. 0.10.3"; exit 1; fi
+	@if [ "$$(git branch --show-current)" != "main" ]; then echo "Release must be cut from main"; exit 1; fi
+	@if ! git diff --quiet || ! git diff --cached --quiet; then echo "Working tree must be clean"; exit 1; fi
+	@if git rev-parse -q --verify "refs/tags/v$(V)" >/dev/null; then echo "Tag v$(V) already exists locally"; exit 1; fi
+	@if git ls-remote --exit-code --tags origin "refs/tags/v$(V)" >/dev/null 2>&1; then echo "Tag v$(V) already exists on origin"; exit 1; fi
+	git tag -a "v$(V)" -m "Release v$(V)"
+	git push origin "v$(V)"
+	@echo "Release v$(V) pushed. GitHub Actions will build the GitHub Release and update Homebrew."
 
-release-version: ## Release specific version, usage: make release-version V=0.3.0
-	@if [ -z "$(V)" ]; then echo "Usage: make release-version V=0.3.0"; exit 1; fi
-	gh workflow run release.yml --repo iheanyi/grove -f version=$(V)
-	@echo "Release $(V) triggered! Watch with: gh run watch"
-
-release-prerelease: ## Release pre-release, usage: make release-prerelease V=0.3.0-beta.1
-	@if [ -z "$(V)" ]; then echo "Usage: make release-prerelease V=0.3.0-beta.1"; exit 1; fi
-	gh workflow run release.yml --repo iheanyi/grove -f version=$(V) -f prerelease=true
-	@echo "Pre-release $(V) triggered! Watch with: gh run watch"
+release-patch: ## Bump the latest v* patch tag and release it
+	@latest=$$(git tag --list 'v[0-9]*.[0-9]*.[0-9]*' --sort=-v:refname | awk 'NR==1 { print; exit }'); \
+	if [ -z "$$latest" ]; then echo "No v* semver tags found"; exit 1; fi; \
+	base=$${latest#v}; base=$${base%%-*}; \
+	major=$$(printf '%s\n' "$$base" | cut -d. -f1); \
+	minor=$$(printf '%s\n' "$$base" | cut -d. -f2); \
+	patch=$$(printf '%s\n' "$$base" | cut -d. -f3); \
+	$(MAKE) release V=$$major.$$minor.$$((patch + 1))

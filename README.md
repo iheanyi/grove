@@ -65,6 +65,8 @@ brew install iheanyi/tap/grove
 go install github.com/iheanyi/grove/cmd/grove@latest
 ```
 
+`go install` compiles without Node and embeds the stub dashboard; Homebrew and GitHub Release binaries run `npm run build` first so they ship the real UI. `go install` binaries also print version `dev` because ldflags are not injected; brew/release binaries are stamped.
+
 ### Build locally
 
 ```bash
@@ -574,7 +576,7 @@ Or use [dnsmasq](https://thekelleys.org.uk/dnsmasq/doc.html) for wildcard DNS.
 
 ## Requirements
 
-- Go 1.21+
+- Go 1.24+
 - [Caddy](https://caddyserver.com/) (for subdomain mode only)
 - macOS or Linux
 
